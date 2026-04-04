@@ -161,7 +161,7 @@ export const generateDailyPlan = async (req, res) => {
 
 export const getDailyPlan = async (req, res) => {
   try {
-    const { project_id } = req.params;
+   const project_id = Number(req.params.project_id);
 
     const data = await DailyPlan.findAll({
       where: { project_id },
@@ -176,7 +176,7 @@ export const getDailyPlan = async (req, res) => {
 
 export const getWeeklyReport = async (req, res) => {
   try {
-    const { project_id } = req.params;
+   const project_id = Number(req.params.project_id);
 
     const data = await DailyPlan.findAll({
       where: { project_id },
@@ -209,13 +209,13 @@ export const getWeeklyReport = async (req, res) => {
       const total = Number(items[0].bobot_mingguan);
 
       kumulatif += total;
-      kumulatif = Number(kumulatif.toFixed(2));
+      kumulatif = Number(kumulatif.toFixed(3));
 
       result.push({
         minggu_ke: Number(minggu),
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
-        bobot_mingguan: Number(total.toFixed(2)),
+        bobot_mingguan: Number(total.toFixed(3)),
         kumulatif,
       });
     });
@@ -234,8 +234,8 @@ export const getWeeklyReport = async (req, res) => {
 
 export const getMonthlyReport = async (req, res) => {
   try {
-    const { project_id } = req.params;
-
+    const project_id = Number(req.params.project_id);
+    
     const data = await DailyPlan.findAll({
       where: { project_id },
       order: [["tanggal", "ASC"]],
@@ -281,7 +281,7 @@ export const getMonthlyReport = async (req, res) => {
         bulan_ke: Number(bulan),
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
-        bobot_bulanan: Number(total.toFixed(2)),
+        bobot_bulanan: Number(total.toFixed(3)),
       });
     });
 
@@ -293,7 +293,7 @@ export const getMonthlyReport = async (req, res) => {
         total += result[i].bobot_bulanan;
       }
 
-      item.kumulatif = Number(total.toFixed(2));
+      item.kumulatif = Number(total.toFixed(3));
     });
 
     // 🔥 paksa 100

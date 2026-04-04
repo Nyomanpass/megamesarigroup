@@ -113,6 +113,13 @@ export default function ProjectDetail() {
             👷 Tenaga Kerja
           </button>
 
+          <button
+            onClick={() => navigate(`/project/${id}/peralatan`)}
+            className="bg-blue-500 text-white p-4 rounded-lg"
+          >
+            🛠️ Peralatan
+          </button>
+
         </div>
 
       </div>

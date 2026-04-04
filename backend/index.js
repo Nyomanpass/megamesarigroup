@@ -12,16 +12,26 @@ import { LoginLog } from "./models/auth/LoginLogModel.js";
 import "./models/auth/OtpModel.js";
 import "./models/ProjectModel.js";
 import "./models/BoqModel.js";
-import "./models/ScheduleModel.js";
 import "./models/DailyPlanModel.js";
 import "./models/DailyProgressModel.js";
 import "./models/ProjectWeekModel.js";
+import "./models/ProjectPeriodModel.js";
+import "./models/MaterialModel.js";
+import "./models/Pekerja.js";
+import "./models/PeralatanModel.js";
+import "./models/DailyPekerja.js";
+import "./models/DailyPeralatan.js";
+import "./models/DailyMaterial.js";
 
 
 
 import ScheduleRoutes from "./routes/scheduleRoutes.js";
 import DailyPlanRoute from "./routes/DailyPlanRoute.js";
 import DailyProgressRoutes from "./routes/DailyProgressRoutes.js";
+import ReportRoutes from "./routes/ReportRoutes.js";
+import MaterialRoutes from "./routes/MaterialRoutes.js";
+import PekerjaRoutes from "./routes/PekerjaRoutes.js";
+import PeralatanRoutes from "./routes/PeralatanRoutes.js";
 
 
 const app = express();
@@ -48,7 +58,10 @@ app.use("/api", BoqRoutes);
 app.use("/api", ProjectRoutes);
 app.use("/api", DailyPlanRoute);
 app.use("/api", DailyProgressRoutes);
-
+app.use("/api", ReportRoutes);
+app.use("/api", MaterialRoutes);
+app.use("/api", PekerjaRoutes);
+app.use("/api", PeralatanRoutes);
 
 // koneksi database
 const startServer = async () => {

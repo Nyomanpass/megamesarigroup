@@ -4,12 +4,20 @@ import Header from "./Header";
 
 export default function Layout({ children, user, onLogout }) {
   return (
-    <div className="flex">
+    <div className="flex h-screen overflow-hidden">
+      
+      {/* SIDEBAR */}
       <Sidebar />
 
-      <div className="flex-1 bg-gray-100 min-h-screen">
+      {/* MAIN CONTENT */}
+      <div className="flex-1 bg-gray-100 overflow-y-auto">
+
         <Header user={user} onLogout={onLogout} />
-        <div className="p-6">{children}</div>
+
+        <div className="p-6 max-w-[1400px] mx-auto">
+          {children}
+        </div>
+
       </div>
     </div>
   );
