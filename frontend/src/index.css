@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+@theme {
+   --color-primary: #0d202d;
+   --color-secondary: #ff5511;
+   --color-accent: #fff0ea;
+   --color-background: #f4f7f9;
+   --color-neutral: #ffffff;
+   --color-muted-gray: #e2e8f0;
+   --color-text-primary: #1a2b39;
+
+   --color-success: #22c55e;
+   --color-warning: #facc15;
+   --color-danger: #ef4444;
+   --color-info: #3b82f6;
+
+   --font-roboto: "Roboto", sans-serif;
+}

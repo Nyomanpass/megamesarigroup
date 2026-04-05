@@ -1,28 +1,24 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
-import Layout from "../components/layout/Layout";
-import { jwtDecode } from "jwt-decode";
+import { ArrowLeft, CalendarDays, Zap, Save, AlertCircle } from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area
+} from 'recharts';
 
 export default function SchedulePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
-  const [user, setUser] = useState(null);
   const [boq, setBoq] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [schedule, setSchedule] = useState([]);
-  const [loadingGenerate, setLoadingGenerate] = useState(false); // State loading khusus generate
+  const [loadingGenerate, setLoadingGenerate] = useState(false);
 
-  // 🔥 ambil user
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      setUser(jwtDecode(token));
-    }
     fetchAll();
   }, [id]);
 
-  // 🔥 ambil semua data
   const fetchAll = async () => {
     try {
       const boqRes = await api.get(`/boq/project/${id}`);
@@ -38,17 +34,15 @@ export default function SchedulePage() {
     }
   };
 
-  // 🔥 FUNGSI GENERATE WEEKS (Pengganti Postman)
   const handleGenerateWeeks = async () => {
     const confirm = window.confirm("Sistem akan membuat daftar minggu otomatis berdasarkan tanggal mulai dan selesai proyek. Lanjutkan?");
     if (!confirm) return;
 
     setLoadingGenerate(true);
     try {
-      // Menembak endpoint: http://localhost:5004/api/schedule/generate-weeks/{id}
       await api.post(`/schedule/generate-weeks/${id}`);
       alert("✅ Daftar Minggu Berhasil Dibuat!");
-      fetchAll(); // Refresh agar kolom minggu langsung muncul
+      fetchAll();
     } catch (err) {
       alert(err.response?.data?.message || "Gagal Generate Weeks");
     } finally {
@@ -132,122 +126,242 @@ export default function SchedulePage() {
     return akumulasi;
   });
 
+  // Chart Data Preparation
+  const chartData = weeks.map((w, idx) => ({
+    name: `M${w.minggu_ke}`,
+    target: rencanaKomulatif[idx] || 0,
+    mingguan: rencanaPerMinggu[idx] || 0
+  }));
+
+  const isComplete = akumulasi > 99.9 && akumulasi < 100.1;
+
   return (
-    <Layout user={user}>
-      <div className="p-6">
+    <>
+      <div className="p-6 max-w-[100vw] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-x-hidden">
         
         {/* HEADER & ACTION BUTTONS */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-600 gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">📅 Schedule Proyek</h1>
-            <p className="text-sm text-gray-500 italic">Atur bobot rencana mingguan di sini.</p>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate(`/project/${id}`)} 
+              className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
+            >
+              <ArrowLeft size={24} className="text-gray-600" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <CalendarDays className="text-red-500"/> Schedule Proyek (Time Schedule)
+              </h1>
+              <p className="text-sm text-gray-500">Buat Kurva S Rencana dan jadwalkan bobot bobot pekerjaan</p>
+            </div>
           </div>
 
           <div className="flex gap-2">
-            {/* 🔥 TOMBOL GENERATE WEEKS */}
             <button 
               onClick={handleGenerateWeeks}
               disabled={loadingGenerate}
               className={`${
-                loadingGenerate ? "bg-gray-400" : "bg-indigo-600 hover:bg-indigo-700"
-              } text-white px-4 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all active:scale-95 text-sm`}
+                loadingGenerate ? "bg-gray-200 text-gray-500" : "bg-white border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+              } px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2 text-sm`}
             >
-              {loadingGenerate ? "⏳ Memproses..." : "⚡ Generate Kolom Minggu"}
+              <Zap size={18} /> {loadingGenerate ? "Memproses..." : "Generate Kolom Minggu"}
             </button>
 
-            {/* TOMBOL SIMPAN */}
             <button 
               onClick={handleSaveSchedule}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all active:scale-95 text-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition-all active:scale-95 flex items-center gap-2 text-sm"
             >
-              💾 Simpan Jadwal
+              <Save size={18} /> Simpan Jadwal Permanen
             </button>
           </div>
         </div>
 
-        {/* TABLE SECTION */}
-        <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-blue-600 text-white">
-              <tr>
-                <th className="p-3 border border-blue-700">Kode</th>
-                <th className="p-3 border border-blue-700 text-left">Uraian Pekerjaan</th>
-                <th className="p-3 border border-blue-700">Bobot (%)</th>
-
-                {weeks.length > 0 ? weeks.map(w => (
-                  <th key={w.id} className="p-2 border border-blue-700 text-center min-w-[80px] font-normal text-[10px]">
-                    M{w.minggu_ke}<br/>
-                    {new Date(w.start_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
-                    <br />-<br />
-                    {new Date(w.end_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
-                  </th>
-                )) : (
-                  <th className="p-3 border border-blue-700 italic text-blue-200">Klik 'Generate Kolom Minggu'</th>
+        {/* OVERVIEW CHARTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          
+          <div className="lg:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+             <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Kurva S Rencana Kumulatif (%)</h3>
+                  <p className="text-sm text-gray-500">Visualisasi bobot pekerjaan yang harus diselesaikan tiap minggu</p>
+                </div>
+                {!isComplete && akumulasi > 0 && (
+                   <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                     <AlertCircle size={14}/> Total Belum 100% ({akumulasi.toFixed(2)}%)
+                   </span>
                 )}
-              </tr>
-            </thead>
+                {isComplete && (
+                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                     Kurva S Lengkap (100%)
+                   </span>
+                )}
+             </div>
+             
+             <div className="w-full h-[250px]">
+               {chartData.length > 0 ? (
+                 <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <RechartsTooltip 
+                      cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                    />
+                    <Area type="monotone" dataKey="target" name="Komulatif Target (%)" stroke="#4F46E5" strokeWidth={3} fill="url(#colorTarget)" />
+                  </AreaChart>
+                 </ResponsiveContainer>
+               ) : (
+                 <div className="flex h-full items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 font-medium bg-gray-50">
+                    Klik 'Generate Kolom Minggu' lalu isi bobot di tabel
+                 </div>
+               )}
+             </div>
+          </div>
 
-            <tbody>
-              {boq.map((item) => {
-                const bobotResmi = Number(Number(item.bobot || 0).toFixed(3));
-                return (
-                  <tr key={item.id} className="odd:bg-white even:bg-gray-50/50 hover:bg-blue-50 transition-colors">
-                    <td className="p-2 border text-center font-mono text-[10px] text-gray-500">{item.kode}</td>
-                    <td className="p-2 border min-w-[250px]">
-                      <div className="flex justify-between items-center group">
-                        <span className="text-xs font-medium">{item.uraian}</span>
-                        <button
-                          onClick={() => handleBagiRata(item)}
-                          className="opacity-0 group-hover:opacity-100 text-[9px] bg-blue-50 border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded hover:bg-blue-600 hover:text-white transition-all font-bold"
-                        >
-                          ⚡ AUTO
-                        </button>
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Review Kinerja Bobot</h3>
+            <p className="text-sm text-gray-500 mb-6">Ringkasan hasil plot rancangan kurva.</p>
+            
+            <div className="flex-1 flex flex-col justify-center space-y-6">
+              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
+                <span className="text-sm font-bold text-gray-600">Total Durasi</span>
+                <span className="text-2xl font-black text-blue-600">{weeks.length} <span className="text-sm font-bold opacity-70">Minggu</span></span>
+              </div>
+              
+              <div className={`p-4 rounded-2xl border flex items-center justify-between ${isComplete ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                <span className="text-sm font-bold text-gray-600">Total Komulatif</span>
+                <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{akumulasi.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* TABLE SECTION / GANTT CHART ALIAS */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-12">
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="font-bold text-gray-700">Tabel Rancangan Barchart (Interactive)</h3>
+            <span className="text-xs text-gray-500 font-medium">Auto-save tidak diaktifkan, pastikan klik Simpan.</span>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-sm border-collapse min-w-[800px]">
+              <thead className="bg-white text-gray-600 shadow-sm relative z-10">
+                <tr>
+                  <th className="p-4 border-b border-r border-gray-200 sticky left-0 bg-white z-20 w-[300px]">
+                    <div className="text-left uppercase font-black text-xs tracking-wider">Uraian Pekerjaan</div>
+                  </th>
+                  <th className="p-4 border-b border-r border-gray-200 text-center uppercase font-black text-xs tracking-wider w-[80px]">Bobot</th>
+
+                  {weeks.length > 0 ? weeks.map(w => (
+                    <th key={w.id} className="p-3 border-b border-r border-gray-100 text-center min-w-[70px] font-medium text-xs bg-gray-50/50">
+                      <div className="font-bold text-blue-600">W{w.minggu_ke}</div>
+                      <div className="text-[10px] text-gray-400 mt-1 whitespace-nowrap">
+                        {new Date(w.start_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
                       </div>
-                    </td>
-                    <td className="p-2 text-center font-bold border bg-gray-50 text-orange-600 font-mono text-xs">
-                      {bobotResmi.toFixed(3)}%
-                    </td>
+                    </th>
+                  )) : (
+                    <th className="p-4 border-b border-gray-200 text-center italic text-gray-400 font-normal">Buat kolom minggu terlebih dahulu.</th>
+                  )}
+                </tr>
+              </thead>
 
-                    {weeks.map((w) => {
-                      const cellData = schedule.find(s => Number(s.boq_id) === Number(item.id) && Number(s.minggu_ke) === Number(w.minggu_ke));
-                      const val = cellData && Number(cellData.bobot) !== 0 ? Number(cellData.bobot).toFixed(3) : "";
-                      return (
-                        <td key={w.id} className="border p-0 relative">
-                          <input
-                            type="number" step="0.001" value={val}
-                            onChange={(e) => handleSingleCellChange(item.id, w.minggu_ke, e.target.value)}
-                            className={`w-full text-center p-2 outline-none font-mono text-[11px] bg-transparent focus:bg-yellow-50 focus:ring-1 focus:ring-blue-400 ${val ? "font-bold text-blue-700" : ""}`}
-                            placeholder="0.000"
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="sticky bottom-0 bg-white">
-              <tr className="bg-gray-100 font-bold">
-                <td colSpan={3} className="p-2 border text-right uppercase text-xs">Rencana Mingguan (%)</td>
-                {rencanaPerMinggu.map((total, idx) => (
-                  <td key={idx} className="p-2 border text-center font-mono text-blue-600 text-xs">
-                    {total.toFixed(3)}
-                  </td>
-                ))}
-              </tr>
-              <tr className="bg-blue-50 font-bold">
-                <td colSpan={3} className="p-2 border text-right uppercase text-xs font-black">Komulatif (%)</td>
-                {rencanaKomulatif.map((total, idx) => (
-                  <td key={idx} className={`p-2 border text-center font-mono text-xs ${total > 100.001 ? 'text-red-600' : 'text-green-700'}`}>
-                    {total.toFixed(3)}
-                  </td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
+              <tbody>
+                {boq.map((item) => {
+                  const bobotResmi = Number(Number(item.bobot || 0).toFixed(3));
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
+                      <td className="p-3 border-b border-r border-gray-100 sticky left-0 bg-white group-hover:bg-gray-50 transition-colors z-10 flex flex-col justify-center min-h-[52px]">
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-xs font-semibold text-gray-700 truncate" title={item.uraian}>{item.uraian}</span>
+                          <button
+                            onClick={() => handleBagiRata(item)}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 text-[10px] bg-blue-100 border border-transparent text-blue-700 px-2 py-1 rounded-md hover:bg-blue-600 hover:text-white transition-all font-bold"
+                            title="Bagi rata bobot ke beberapa minggu"
+                          >
+                             AUTO
+                          </button>
+                        </div>
+                      </td>
+                      <td className="p-2 border-b border-r border-gray-100 text-center font-bold bg-amber-50/50 text-amber-700 font-mono text-[11px]">
+                        {bobotResmi.toFixed(3)}
+                      </td>
+
+                      {weeks.map((w) => {
+                        const cellData = schedule.find(s => Number(s.boq_id) === Number(item.id) && Number(s.minggu_ke) === Number(w.minggu_ke));
+                        const val = cellData && Number(cellData.bobot) !== 0 ? Number(cellData.bobot).toFixed(3) : "";
+                        const isActive = val !== "";
+                        
+                        return (
+                          <td key={w.id} className="border-b border-r border-gray-100 p-1 relative min-w-[70px]">
+                            {/* Gantt Bar Style Background */}
+                            <div className={`absolute inset-1 rounded-md transition-all -z-10 ${isActive ? 'bg-blue-200 shadow-sm border border-blue-300' : 'bg-transparent'}`}></div>
+                            
+                            <input
+                              type="number" step="0.001" value={val}
+                              onChange={(e) => handleSingleCellChange(item.id, w.minggu_ke, e.target.value)}
+                              className={`w-full text-center h-[34px] rounded-md outline-none font-mono text-[11px] bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 relative z-0 transition-colors
+                                ${isActive ? "font-bold text-blue-900" : "text-gray-400 placeholder:text-gray-300"}
+                              `}
+                              placeholder="0.000"
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-white z-20 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
+                <tr className="border-t border-gray-200">
+                  <td className="p-4 border-r border-gray-200 text-right uppercase text-xs font-bold text-gray-600 sticky left-0 bg-white">Target Rencana per Bulan (%)</td>
+                  <td className="border-r border-gray-200 bg-gray-50"></td>
+                  {rencanaPerMinggu.map((total, idx) => (
+                    <td key={idx} className="p-3 border-r border-gray-200 text-center font-mono font-bold text-indigo-600 text-xs bg-indigo-50/50">
+                      {total.toFixed(3)}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="bg-indigo-600">
+                  <td className="p-4 border-r border-indigo-700 text-right uppercase text-xs font-black text-white sticky left-0 bg-indigo-600">Komulatif Rencana (%)</td>
+                   <td className="border-r border-indigo-700 bg-indigo-600"></td>
+                  {rencanaKomulatif.map((total, idx) => (
+                    <td key={idx} className={`p-3 border-r border-indigo-700 text-center font-mono font-black text-xs ${total > 100.001 ? 'text-red-300' : 'text-white'}`}>
+                      {total.toFixed(3)}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
       </div>
-    </Layout>
+      
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          height: 8px;
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9; 
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1; 
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8; 
+        }
+      `}} />
+    </>
   );
 }
