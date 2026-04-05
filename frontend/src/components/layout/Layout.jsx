@@ -4,7 +4,7 @@ import Header from "./Header";
 
 export default function Layout({ children, user, onLogout }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden font-roboto">
 
       {/* SIDEBAR */}
       <Sidebar />

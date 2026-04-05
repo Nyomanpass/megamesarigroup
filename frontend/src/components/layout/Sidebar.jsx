@@ -1,35 +1,38 @@
 // components/layout/Sidebar.jsx
 import { Home, BarChart2, FileText, Bell } from "lucide-react";
+import { NavLink } from "react-router-dom";
 
 export default function Sidebar() {
   return (
-    <div className="w-64 h-screen bg-[#1F1D2B] text-white flex flex-col p-5">
+    <div className="w-64 h-screen bg-primary text-white flex flex-col p-5">
 
       {/* Logo */}
-      <h1 className="text-2xl font-bold mb-8">Mega Mesari</h1>
+      <div className="mb-8 w-full flex items-center justify-center">
+        <img src="/logo.webp" alt="logo megamesari" className="w-42" />
+      </div>
 
       {/* Menu */}
       <div className="space-y-6">
 
-        <div className="flex items-center gap-3 opacity-70 hover:opacity-100 cursor-pointer">
+        <NavLink to="/dashboard" className="flex items-center gap-3 tracking-wide hover:text-secondary hover:opacity-100 cursor-pointer">
           <Home size={18} />
           <span>Dashboard</span>
-        </div>
+        </NavLink>
 
-        <div className="flex items-center gap-3 opacity-70 hover:opacity-100 cursor-pointer">
+        <NavLink to="/analytics" className="flex items-center gap-3 tracking-wide hover:text-secondary hover:opacity-100 cursor-pointer">
           <BarChart2 size={18} />
           <span>Analytics</span>
-        </div>
+        </NavLink>
 
-        <div className="flex items-center gap-3 opacity-70 hover:opacity-100 cursor-pointer">
+        <NavLink to="/documents" className="flex items-center gap-3 tracking-wide hover:text-secondary hover:opacity-100 cursor-pointer">
           <FileText size={18} />
           <span>Documents</span>
-        </div>
+        </NavLink>
 
-        <div className="flex items-center gap-3 opacity-70 hover:opacity-100 cursor-pointer">
+        <NavLink to="/notifications" className="flex items-center gap-3 tracking-wide hover:text-secondary hover:opacity-100 cursor-pointer">
           <Bell size={18} />
           <span>Notifications</span>
-        </div>
+        </NavLink>
 
       </div>
 
