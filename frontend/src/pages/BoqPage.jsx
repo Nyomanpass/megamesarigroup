@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api";
-import Layout from "../components/layout/Layout";
-import { jwtDecode } from "jwt-decode";
-
 export default function BoqPage() {
   const { id } = useParams();
   
@@ -58,7 +55,6 @@ const handleBulkSubmit = async () => {
 
   const [boq, setBoq] = useState([]);
   const [project, setProject] = useState(null);
-  const [user, setUser] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -146,13 +142,6 @@ const handleSubmit = async () => {
 
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-    }
-
     fetchProject();
     fetchBoq();
   }, [id]);
@@ -167,41 +156,32 @@ const handleSubmit = async () => {
     setBoq(res.data);
   };
 
-  const handleLogout = async () => {
-    localStorage.clear();
-    window.location.href = "/";
-  };
-
   // 1. Hitung Subtotal (Volume * Harga) dan langsung bulatkan ke 2 desimal
-const rawJumlah = form.volume && form.harga_satuan 
-  ? form.volume * form.harga_satuan 
-  : 0;
-const jumlah = Number(rawJumlah.toFixed(2));
+  const rawJumlah = form.volume && form.harga_satuan
+    ? form.volume * form.harga_satuan
+    : 0;
+  const jumlah = Number(rawJumlah.toFixed(2));
 
-// 2. Hitung PPN dari hasil yang SUDAH dibulatkan tadi
-const rawPajak = (jumlah * (form.ppn || 0)) / 100;
-const pajak = Number(rawPajak.toFixed(2));
+  // 2. Hitung PPN dari hasil yang SUDAH dibulatkan tadi
+  const rawPajak = (jumlah * (form.ppn || 0)) / 100;
+  const pajak = Number(rawPajak.toFixed(2));
 
+  const jumlah_ppn = jumlah + pajak;
 
-const jumlah_ppn = jumlah + pajak;
+  const itemOnly = boq.filter(item => item.tipe === "item");
 
+  const totalHargaSatuan = itemOnly.reduce((acc, curr) => acc + Number(curr.harga_satuan || 0), 0);
 
-const itemOnly = boq.filter(item => item.tipe === "item");
+  const totalJumlah = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0);
 
+  const totalGrandTotal = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0);
 
-const totalHargaSatuan = itemOnly.reduce((acc, curr) => acc + Number(curr.harga_satuan || 0), 0);
-
-
-const totalJumlah = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0);
-
-const totalGrandTotal = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0);
-
-const totalBobot = boq
-  .filter(item => item.tipe === "item")
-  .reduce((sum, item) => sum + Number(item.bobot || 0), 0);
+  const totalBobot = boq
+    .filter(item => item.tipe === "item")
+    .reduce((sum, item) => sum + Number(item.bobot || 0), 0);
 
   return (
-    <Layout user={user} onLogout={handleLogout}>
+    <>
       <div className="p-6">
 
         {/* 🔥 HEADER */}
@@ -488,6 +468,6 @@ const totalBobot = boq
   </div>
 )}
       </div>
-    </Layout>
+    </>
   );
 }

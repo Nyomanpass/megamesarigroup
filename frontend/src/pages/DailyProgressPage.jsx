@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import Layout from "../components/layout/Layout";
 import api from "../api";
 
 export default function DailyProgressPage() {
@@ -211,7 +210,7 @@ const getSummary = () => {
 const summary = getSummary();
 
   return (
-    <Layout>
+    <>
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-xl font-bold">Daily Progress #{id}</h1>
@@ -544,6 +543,6 @@ const summary = getSummary();
           </table>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

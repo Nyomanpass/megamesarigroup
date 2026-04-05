@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import Layout from "../components/layout/Layout";
 import api from "../api";
 
 export default function DailyReportPage() {
@@ -63,7 +62,7 @@ export default function DailyReportPage() {
   }, []);
 
   return (
-    <Layout>
+    <>
       <div className="p-6">
 
       <h1 className="text-2xl font-bold mb-4">
@@ -277,6 +276,6 @@ export default function DailyReportPage() {
 </div>
 
     </div>
-   </Layout>
+   </>
   );
 }

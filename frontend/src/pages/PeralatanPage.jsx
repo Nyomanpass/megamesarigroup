@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Layout from "../components/layout/Layout";
 import api from "../api";
 import { useParams } from "react-router-dom";
 
@@ -70,7 +69,7 @@ export default function PeralatanPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-6">
 
         <h1 className="text-2xl font-bold mb-4">
@@ -167,6 +166,6 @@ export default function PeralatanPage() {
         </div>
 
       </div>
-    </Layout>
+    </>
   );
 }

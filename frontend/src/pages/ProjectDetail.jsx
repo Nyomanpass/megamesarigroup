@@ -1,24 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
-import Layout from "../components/layout/Layout";
-import { jwtDecode } from "jwt-decode";
-
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [project, setProject] = useState(null);
-  const [user, setUser] = useState(null);
-
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-    }
-
     fetchProject();
   }, [id]);
 
@@ -27,13 +15,8 @@ export default function ProjectDetail() {
     setProject(res.data);
   };
 
-  const handleLogout = async () => {
-    localStorage.clear();
-    window.location.href = "/";
-  };
-
   return (
-    <Layout user={user} onLogout={handleLogout}>
+    <>
       <div className="p-6">
 
         {/* 🔥 INFO PROJECT */}
@@ -123,6 +106,6 @@ export default function ProjectDetail() {
         </div>
 
       </div>
-    </Layout>
+    </>
   );
 }

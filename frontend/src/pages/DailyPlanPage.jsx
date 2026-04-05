@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Layout from "../components/layout/Layout";
 import api from "../api";
 import { useParams } from "react-router-dom";
 
@@ -49,7 +48,7 @@ export default function DailyPlanPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-6">
         {/* HEADER & TOMBOL GENERATE */}
         <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border-l-4 border-indigo-600">
@@ -157,6 +156,6 @@ export default function DailyPlanPage() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

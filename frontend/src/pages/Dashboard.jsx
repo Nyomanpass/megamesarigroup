@@ -1,11 +1,7 @@
-import { jwtDecode } from "jwt-decode";
 import { useEffect, useState } from "react";
 import api from "../api";
-import Layout from "../components/layout/Layout";
 import { useNavigate } from "react-router-dom";
-
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
@@ -29,13 +25,6 @@ export default function Dashboard() {
 
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-    }
-
     // 🔥 GET PROJECT
     fetchProjects();
   }, []);
@@ -49,70 +38,12 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      const refreshToken = localStorage.getItem("refreshToken");
 
-      await api.post("/auth/logout", { refreshToken });
 
-      localStorage.clear();
-      window.location.href = "/";
-    } catch (err) {
-      localStorage.clear();
-      window.location.href = "/";
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      const payload = {
-        ...form,
-
-        // 🔥 FIX NUMBER
-        waktu_pelaksanaan: Number(form.waktu_pelaksanaan || 0),
-        nilai_kontrak: Number(form.nilai_kontrak || 0),
-        tahun: Number(form.tahun || 0),
-
-        // 🔥 FIX DATE (biar tidak error)
-        tgl_kontrak: form.tgl_kontrak || null,
-        tgl_spmk: form.tgl_spmk || null,
-        end_date: form.end_date || null
-      };
-
-      console.log("SEND:", payload); // 🔥 DEBUG
-
-      await api.post("/projects", payload);
-
-      setShowModal(false);
-      fetchProjects();
-
-      // reset form
-      setForm({
-        kegiatan: "",
-        pekerjaan: "",
-        no_kontrak: "",
-        tgl_kontrak: "",
-        no_spmk: "",
-        tgl_spmk: "",
-        end_date: "",
-        kontraktor: "",
-        konsultan: "",
-        waktu_pelaksanaan: "",
-        nilai_kontrak: "",
-        lokasi: "",
-        tahun: ""
-      });
-
-    } catch (err) {
-      console.error("ERROR:", err.response?.data || err.message);
-      alert("Gagal tambah project");
-    }
-  };
+  
 
   return (
-    <Layout user={user} onLogout={handleLogout}>
+    <>
 
       <div className="text-xl font-semibold mb-4">
         Dashboard Project
@@ -122,7 +53,7 @@ export default function Dashboard() {
         onClick={() => setShowModal(true)}
         className="mb-4 bg-blue-600 text-white px-4 py-2 rounded"
       >
-        ➕ Tambah Project
+        Tambah Project
       </button>
 
       {/* LIST PROJECT */}
@@ -316,6 +247,6 @@ export default function Dashboard() {
         </div>
       )}
 
-    </Layout>
+    </>
   );
 }

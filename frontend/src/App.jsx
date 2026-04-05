@@ -15,6 +15,7 @@ import DailyReportPage from "./pages/DailyReportPage";
 import MaterialPage from "./pages/MaterialPage";
 import PekerjaPage from "./pages/PekerjaPage";
 import PeralatanPage from "./pages/PeralatanPage";
+import Project from "./pages/Project";
 
 // Error boundary component
 const ErrorPage = () => (
@@ -58,6 +59,8 @@ const ProtectedElement = ({ element }) => (
   </ProtectedRoute>
 );
 
+import Layout from "./components/layout/Layout";
+
 // Route configuration
 const router = createBrowserRouter([
   {
@@ -71,76 +74,63 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
-    path: "/dashboard",
-    element: <ProtectedElement element={<Dashboard />} />,
+    element: <ProtectedElement element={<Layout />} />,
     loader: authLoader,
     errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id",
-    element: <ProtectedElement element={<ProjectDetail />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/boq",
-    element: <ProtectedElement element={<BoqPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/schedule",
-    element: <ProtectedElement element={<SchedulePage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/daily-plan",
-    element: <ProtectedElement element={<DailyPlanPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/progress",
-    element: <ProtectedElement element={<DailyProgressPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/laporan-mingguan",
-    element: <ProtectedElement element={<WeeklyReportPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/laporan-bulanan",
-    element: <ProtectedElement element={<MonthlyReportPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/laporan-harian",
-    element: <ProtectedElement element={<DailyReportPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/material",
-    element: <ProtectedElement element={<MaterialPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/tenaga",
-    element: <ProtectedElement element={<PekerjaPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
-  },
-  {
-    path: "/project/:id/peralatan",
-    element: <ProtectedElement element={<PeralatanPage />} />,
-    loader: authLoader,
-    errorElement: <ErrorPage />,
+    children: [
+      {
+        path: "/dashboard",
+        element: <Dashboard />,
+      },
+      {
+        path: "/project",
+        element: <Project />,
+      },
+      {
+        path: "/project/:id",
+        element: <ProjectDetail />,
+      },
+      {
+        path: "/project/:id/boq",
+        element: <BoqPage />,
+      },
+      {
+        path: "/project/:id/schedule",
+        element: <SchedulePage />,
+      },
+      {
+        path: "/project/:id/daily-plan",
+        element: <DailyPlanPage />,
+      },
+      {
+        path: "/project/:id/progress",
+        element: <DailyProgressPage />,
+      },
+      {
+        path: "/project/:id/laporan-mingguan",
+        element: <WeeklyReportPage />,
+      },
+      {
+        path: "/project/:id/laporan-bulanan",
+        element: <MonthlyReportPage />,
+      },
+      {
+        path: "/project/:id/laporan-harian",
+        element: <DailyReportPage />,
+      },
+      {
+        path: "/project/:id/material",
+        element: <MaterialPage />,
+      },
+      {
+        path: "/project/:id/tenaga",
+        element: <PekerjaPage />,
+      },
+      {
+        path: "/project/:id/peralatan",
+        element: <PeralatanPage />,
+      },
+    ],
   },
   // Catch all route - redirect to dashboard if authenticated, otherwise to login
   {

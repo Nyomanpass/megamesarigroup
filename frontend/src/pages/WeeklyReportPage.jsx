@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api";
-import Layout from "../components/layout/Layout";
 
 export default function WeeklyReportPage() {
   const { id } = useParams();
@@ -34,7 +33,7 @@ export default function WeeklyReportPage() {
   );
 
   return (
-    <Layout>
+    <>
         <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">
             Laporan Mingguan Project #{id}
@@ -216,6 +215,6 @@ export default function WeeklyReportPage() {
   </div>
 )}
         </div>
-    </Layout>
+    </>
   );
 }

@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api";
-import Layout from "../components/layout/Layout";
-import { jwtDecode } from "jwt-decode";
-
 export default function SchedulePage() {
   const { id } = useParams();
 
-  const [user, setUser] = useState(null);
   const [boq, setBoq] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [loadingGenerate, setLoadingGenerate] = useState(false); // State loading khusus generate
 
-  // 🔥 ambil user
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      setUser(jwtDecode(token));
-    }
     fetchAll();
   }, [id]);
 
@@ -133,7 +124,7 @@ export default function SchedulePage() {
   });
 
   return (
-    <Layout user={user}>
+    <>
       <div className="p-6">
         
         {/* HEADER & ACTION BUTTONS */}
@@ -248,6 +239,6 @@ export default function SchedulePage() {
         </div>
 
       </div>
-    </Layout>
+    </>
   );
 }
