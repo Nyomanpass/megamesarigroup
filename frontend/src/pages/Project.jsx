@@ -2,9 +2,11 @@ import { Search, Filter, ChevronDown, Check } from "lucide-react";
 import { Folder, FolderCheck, FolderClock, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 
 export default function Project() {
+      // get user context from layout
+      const { user } = useOutletContext() || { user: {} };
       //filters
       const [showFilter, setShowFilter] = useState(false);
       const [filterStatus, setFilterStatus] = useState("Semua");
@@ -99,41 +101,51 @@ export default function Project() {
       };
 
       return (
-            <>
-                  <div className="">
-                        <h1 className="text-2xl font-semibold mt-4">Project Management</h1>
-                        <h1 className="text-lg font-medium">Pantau Keseluruhan Proyek yang Ada</h1>
+            <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen ">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                        <div>
+                              <div className="flex items-center gap-3 mb-2">
+                                    <span className="bg-accent text-secondary font-bold px-3 py-1 rounded-full text-xs tracking-wider">
+                                          {user?.role === "admin" ? "ADMIN VIEW" : "STAFF VIEW"}
+                                    </span>
+                              </div>
+                              <h1 className="text-3xl font-black text-primary flex items-center gap-3">
+                                    <Folder className="text-secondary" size={32} /> Project Management
+                              </h1>
+                              <p className="text-gray-500 mt-2 font-medium">Pantau Keseluruhan Proyek konstruksi.</p>
+                        </div>
                   </div>
 
                   <div className="w-full grid grid-cols-3 gap-4 mt-10">
-                        <div className="bg-neutral shadow rounded-xl p-4 flex gap-3">
-                              <div className="size-16 rounded-lg bg-accent flex items-center justify-center">
-                                    <Folder size={40} className="text-secondary" />
+                        <div className="bg-neutral p-6 rounded-3xl shadow-sm border border-muted-gray hover:border-secondary transition-colors group relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-secondary/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500"></div>
+                              <div className="bg-accent text-secondary w-12 h-12 rounded-xl flex items-center justify-center mb-6 relative z-10">
+                                    <Folder size={24} />
                               </div>
-                              <div>
-                                    <p className="text-lg">Total Projects</p>
-                                    <p className="text-3xl font-bold">12</p>
-                              </div>
+                              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Total Proyek</p>
+                              <h3 className="text-3xl font-black text-primary relative z-10">12</h3>
+                              <p className="text-xs text-gray-400 mt-2 font-medium relative z-10">lorem ipsum</p>
                         </div>
-                        <div className="bg-neutral shadow rounded-xl p-4 flex gap-3">
-                              <div className="size-16 rounded-lg bg-accent flex items-center justify-center">
-                                    <FolderClock size={40} className="text-secondary" />
+                        <div className="bg-neutral p-6 rounded-3xl shadow-sm border border-muted-gray hover:border-secondary transition-colors group relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-secondary/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500"></div>
+                              <div className="bg-accent text-secondary w-12 h-12 rounded-xl flex items-center justify-center mb-6 relative z-10">
+                                    <FolderClock size={24} />
                               </div>
-                              <div>
-                                    <p className="text-lg">Ongoing Projects</p>
-                                    <p className="text-3xl font-bold">12</p>
-                              </div>
+                              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Ongoing Projects</p>
+                              <h3 className="text-3xl font-black text-primary relative z-10">12</h3>
+                              <p className="text-xs text-gray-400 mt-2 font-medium relative z-10">lorem ipsum</p>
                         </div>
-                        <div className="bg-neutral shadow rounded-xl p-4 flex gap-3">
-                              <div className="size-16 rounded-lg bg-accent flex items-center justify-center">
-                                    <FolderCheck size={40} className="text-secondary" />
+                        <div className="bg-neutral p-6 rounded-3xl shadow-sm border border-muted-gray hover:border-secondary transition-colors group relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-secondary/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500"></div>
+                              <div className="bg-accent text-secondary w-12 h-12 rounded-xl flex items-center justify-center mb-6 relative z-10">
+                                    <FolderCheck size={24} />
+                              </div>
+                              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Completed Projects</p>
+                              <h3 className="text-3xl font-black text-primary relative z-10">12</h3>
+                              <p className="text-xs text-gray-400 mt-2 font-medium relative z-10">lorem ipsum</p>
+                        </div>
 
-                              </div>
-                              <div>
-                                    <p className="text-lg">Completed Projects</p>
-                                    <p className="text-3xl font-bold">12</p>
-                              </div>
-                        </div>
+
 
 
                   </div >
@@ -333,6 +345,6 @@ export default function Project() {
                         </div>
                   )}
 
-            </>
+            </div>
       )
 }

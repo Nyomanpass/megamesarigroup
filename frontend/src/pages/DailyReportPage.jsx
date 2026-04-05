@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
+import { ArrowLeft, CalendarDays, Search, Package, Users, Wrench, FileCheck, Info } from "lucide-react";
 
 export default function DailyReportPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const [tanggal, setTanggal] = useState("");
   const [hariKe, setHariKe] = useState("");
@@ -15,7 +17,7 @@ export default function DailyReportPage() {
   const [totalPekerja, setTotalPekerja] = useState([]);
   const [totalPeralatan, setTotalPeralatan] = useState([]);
 
-  // 🔥 ambil daily plan (buat dropdown hari)
+  // ambil daily plan (buat dropdown hari)
   const fetchPlans = async () => {
     try {
       const res = await api.get(`/daily-plan/${id}`);
@@ -25,12 +27,12 @@ export default function DailyReportPage() {
     }
   };
 
-  // 🔥 ambil laporan harian
+  // ambil laporan harian
   const fetchReport = async () => {
     setError("");
 
     if (!tanggal && !hariKe) {
-      setError("Pilih tanggal atau hari dulu!");
+      setError("Pilih tanggal atau hari ke- untuk menampilkan laporan!");
       return;
     }
 
@@ -41,241 +43,291 @@ export default function DailyReportPage() {
       if (hariKe) url += `hari_ke=${hariKe}`;
 
       const res = await api.get(url);
-      console.log("Full Response:", res.data); // <--- LIHAT INI DI INSPECT ELEMENT (CONSOLE)
-
+      
       setData(res.data.data);
-
-        setTotalMaterial(res.data.total_material || []);
-        setTotalPekerja(res.data.total_pekerja || []);
-        setTotalPeralatan(res.data.total_peralatan || []);
+      setTotalMaterial(res.data.total_material || []);
+      setTotalPekerja(res.data.total_pekerja || []);
+      setTotalPeralatan(res.data.total_peralatan || []);
 
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        "Terjadi kesalahan";
+      const msg = err.response?.data?.message || "Terjadi kesalahan memuat laporan";
       setError(msg);
     }
   };
 
   useEffect(() => {
     fetchPlans();
-  }, []);
+  }, [id]);
 
   return (
     <>
-      <div className="p-6">
+      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-      <h1 className="text-2xl font-bold mb-4">
-        📅 Laporan Harian Project #{id}
-      </h1>
-
-      {/* 🔥 FILTER */}
-      <div className="bg-white p-4 rounded-lg shadow mb-4 flex flex-wrap gap-3 items-end">
-
-        {/* TANGGAL */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Pilih Tanggal
-          </label>
-          <input
-            type="date"
-            value={tanggal}
-            onChange={(e) => {
-              setTanggal(e.target.value);
-              setHariKe("");
-            }}
-            className="border p-2 rounded"
-          />
-        </div>
-
-        {/* HARI KE */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Pilih Hari
-          </label>
-          <select
-            value={hariKe}
-            onChange={(e) => {
-              setHariKe(e.target.value);
-              setTanggal("");
-            }}
-            className="border p-2 rounded"
+        {/* HEADER */}
+        <div className="flex items-center gap-4 mb-8">
+          <button 
+            onClick={() => navigate(`/project/${id}`)} 
+            className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
           >
-            <option value="">-- Pilih Hari --</option>
-            {plans.map((p) => (
-              <option key={p.id} value={p.hari_ke}>
-                Hari ke-{p.hari_ke} ({p.tanggal})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* BUTTON */}
-        <button
-          onClick={fetchReport}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          🔍 Tampilkan
-        </button>
-      </div>
-
-      {/* 🔥 ERROR */}
-      {error && (
-        <div className="bg-red-100 text-red-600 p-2 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      {/* 🔥 TABLE */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2">Tanggal</th>
-              <th className="p-2">Uraian</th>
-              <th className="p-2">Satuan</th>
-              <th className="p-2">Volume</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="text-center p-4">
-                  Tidak ada pekerjaan
-                </td>
-              </tr>
-            ) : (
-              data.map((item, i) => (
-                <tr key={i} className="border-t">
-                  <td className="p-2">{item.tanggal}</td>
-                  <td className="p-2">{item.uraian}</td>
-                  <td className="p-2">{item.satuan}</td>
-                  <td className="p-2 font-semibold">
-                    {item.volume}
-                  </td>
-                </tr>
-              ))
-            )}
-
-          </tbody>
-        </table>
-<div className="mt-6 bg-white p-4 rounded shadow">
-
-  <h2 className="text-lg font-semibold mb-3">
-    🔧 Detail Harian
-  </h2>
-
-  {/* MATERIAL */}
-<div className="mb-4">
-  <h3 className="font-semibold">Material</h3>
-  {data.flatMap(d => d.materials || []).length > 0 ? (
-    data.flatMap(d => d.materials).map((m, i) => (
-      <div key={i}>
-        - {m.material?.nama} ({Number(m.hasil).toFixed(2)})
-      </div>
-    ))
-  ) : (
-    <div>-</div>
-  )}
-</div>
-
-  {/* PEKERJA */}
-<div className="mb-4">
-  <h3 className="font-semibold">Pekerja</h3>
-  {data.flatMap(d => d.pekerja || []).length > 0 ? (
-    data.flatMap(d => d.pekerja).map((p, i) => (
-      <div key={i}>
-        - {p.pekerja?.nama} ({Number(p.jumlah).toFixed(2)})
-      </div>
-    ))
-  ) : (
-    <div>-</div>
-  )}
-</div>
-
-  {/* PERALATAN */}
-  <div>
-    <h3 className="font-semibold">Peralatan</h3>
-    {data.flatMap(d => d.peralatan || []).length > 0 ? (
-      data.flatMap(d => d.peralatan).map((a, i) => (
-        <div key={i}>
-          - {a.tool?.nama} ({a.jumlah})
-        </div>
-      ))
-    ) : (
-      <div>-</div>
-    )}
-  </div>
-
-</div>
-      </div>
-
-<div className="mt-6 bg-green-50 p-4 rounded shadow border border-green-200">
-  <h2 className="text-lg font-semibold mb-4 text-green-800">
-    📊 Total Harian (Gabungan)
-  </h2>
-
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-    
-    {/* --- MATERIAL --- */}
-    <div className="mb-4">
-      <h3 className="font-bold text-gray-700 border-b border-green-200 mb-2">Material</h3>
-      {totalMaterial.length > 0 ? (
-        totalMaterial.map((m, i) => (
-          <div key={i} className="text-sm py-1">
-            - {m.nama} (<strong>{Number(m.total).toFixed(2)} {m.satuan}</strong>)
+            <ArrowLeft size={24} className="text-gray-600" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <FileCheck className="text-blue-500"/> Laporan Harian Proyek
+            </h1>
+            <p className="text-sm text-gray-500">Tracking pengeluaran bobot fisik dan sumber daya harian</p>
           </div>
-        ))
-      ) : (
-        <div className="text-gray-400">-</div>
-      )}
-    </div>
+        </div>
 
-    {/* --- PEKERJA --- */}
-    <div className="mb-4">
-      <h3 className="font-bold text-gray-700 border-b border-green-200 mb-2">Pekerja</h3>
-      {totalPekerja.length > 0 ? (
-        totalPekerja.map((p, i) => (
-          <div key={i} className="text-sm py-1 bg-white mb-1 p-2 rounded shadow-sm border border-green-100">
-            <div className="font-semibold text-blue-700">{p.nama}</div>
-            <div className="flex flex-col text-xs text-gray-600 mt-1">
-              <span>Sistem: {Number(p.total).toFixed(2)}</span>
-              <span className="text-blue-600 font-bold">
-                Riil: {p.di_bilang} {p.satuan}
-              </span>
+        {/* 🔥 FILTER SECTION */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-8">
+          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Search size={16} className="text-blue-500"/> Filter Pencarian
+          </h2>
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full relative">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                Pilih Berdasarkan Tanggal
+              </label>
+              <input
+                type="date"
+                value={tanggal}
+                onChange={(e) => {
+                  setTanggal(e.target.value);
+                  setHariKe("");
+                }}
+                className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all font-medium text-gray-700 bg-gray-50/50"
+              />
             </div>
-          </div>
-        ))
-      ) : (
-        <div className="text-gray-400">-</div>
-      )}
-    </div>
+            
+            <div className="flex items-center justify-center py-2 md:py-0 w-full md:w-auto font-bold text-gray-400">ATAU</div>
 
-    {/* --- PERALATAN --- */}
-    <div>
-      <h3 className="font-bold text-gray-700 border-b border-green-200 mb-2">Peralatan</h3>
-      {totalPeralatan.length > 0 ? (
-        totalPeralatan.map((a, i) => (
-          <div key={i} className="text-sm py-1 bg-white mb-1 p-2 rounded shadow-sm border border-green-100">
-            <div className="font-semibold text-orange-700">{a.nama}</div>
-            <div className="flex flex-col text-xs text-gray-600 mt-1">
-              <span>Sistem: {Number(a.total).toFixed(2)}</span>
-              <span className="text-orange-600 font-bold">
-                Alat: {a.di_bilang} {a.satuan}
-              </span>
+            <div className="flex-1 w-full relative">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                Pilih Berdasarkan Hari Ke-
+              </label>
+              <select
+                value={hariKe}
+                onChange={(e) => {
+                  setHariKe(e.target.value);
+                  setTanggal("");
+                }}
+                className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all font-medium text-gray-700 bg-gray-50/50"
+              >
+                <option value="">-- Dropdown Hari Ke- --</option>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.hari_ke}>
+                    Hari ke-{p.hari_ke}  🗓️ ({new Date(p.tanggal).toLocaleDateString('id-ID', {day:'2-digit', month:'short'})})
+                  </option>
+                ))}
+              </select>
             </div>
+
+            <button
+              onClick={fetchReport}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-md active:scale-95 flex items-center gap-2 w-full md:w-auto justify-center"
+            >
+              <Search size={18} /> Tampilkan Laporan
+            </button>
           </div>
-        ))
-      ) : (
-        <div className="text-gray-400">-</div>
-      )}
-    </div>
+          
+          {error && (
+            <div className="mt-4 bg-red-50 text-red-600 p-3 px-4 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-2">
+              <Info size={16}/> {error}
+            </div>
+          )}
+        </div>
 
-  </div>
-</div>
+        {/* REPORT CONTENT */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* KOLOM KIRI: MAIN TABLE (2/3 width) */}
+          <div className="lg:col-span-2 space-y-6">
+             
+            {/* 🔥 TABLE: OUTPUT PROGRES FISIK */}
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-5 bg-blue-50/50 border-b border-gray-100 flex items-center gap-2">
+                 <h2 className="text-lg font-bold text-gray-800">Tabel Progress Fisik Harian</h2>
+                 <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{data.length} Pekerjaan</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-white text-gray-500 uppercase text-xs tracking-wider border-b border-gray-100">
+                    <tr>
+                      <th className="p-4 font-bold">Tanggal</th>
+                      <th className="p-4 font-bold">Uraian Pekerjaan (BOQ)</th>
+                      <th className="p-4 font-bold text-center">Satuan</th>
+                      <th className="p-4 font-bold text-right pr-6">Volume Output</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="text-center p-12 text-gray-400 italic">
+                          <div className="flex flex-col items-center gap-2">
+                             <CalendarDays size={32} className="opacity-20" />
+                             <p>Tidak ada aktivitas proyek terekam pada hari ini.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      data.map((item, i) => (
+                        <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="p-4 text-gray-600 whitespace-nowrap">
+                             {new Date(item.tanggal).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'})}
+                          </td>
+                          <td className="p-4 font-bold text-gray-800">{item.uraian}</td>
+                          <td className="p-4 text-center text-gray-500">{item.satuan}</td>
+                          <td className="p-4 text-right pr-6">
+                             <span className="bg-green-50 text-green-700 font-bold px-3 py-1 rounded-lg border border-green-100 text-sm font-mono">
+                               {Number(item.volume).toFixed(3)}
+                             </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-    </div>
-   </>
+            {/* 🔥 DETAIL HARIAN RESOURCES (RAW) */}
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden p-6">
+               <h2 className="text-lg font-bold text-gray-800 mb-6 border-b border-gray-100 pb-4">Rincian Penggunaan Sumber Daya per Item</h2>
+               
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 
+                 <div>
+                    <h3 className="font-bold text-orange-700 bg-orange-50 px-3 py-2 rounded-lg flex items-center justify-between mb-3 text-sm">
+                       <span className="flex items-center gap-2"><Package size={16}/> Material</span>
+                    </h3>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      {data.flatMap(d => d.materials || []).length > 0 ? (
+                        data.flatMap(d => d.materials).map((m, i) => (
+                          <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                            <span className="font-medium">{m.material?.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(m.hasil).toFixed(2)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center text-gray-400 text-xs italic py-2">Kosong</div>
+                      )}
+                    </div>
+                 </div>
+
+                 <div>
+                    <h3 className="font-bold text-purple-700 bg-purple-50 px-3 py-2 rounded-lg flex items-center justify-between mb-3 text-sm">
+                       <span className="flex items-center gap-2"><Users size={16}/> Pekerja</span>
+                    </h3>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      {data.flatMap(d => d.pekerja || []).length > 0 ? (
+                        data.flatMap(d => d.pekerja).map((p, i) => (
+                          <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                            <span className="font-medium">{p.pekerja?.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(p.jumlah).toFixed(2)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center text-gray-400 text-xs italic py-2">Kosong</div>
+                      )}
+                    </div>
+                 </div>
+
+                 <div>
+                    <h3 className="font-bold text-teal-700 bg-teal-50 px-3 py-2 rounded-lg flex items-center justify-between mb-3 text-sm">
+                       <span className="flex items-center gap-2"><Wrench size={16}/> Alat Berat</span>
+                    </h3>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      {data.flatMap(d => d.peralatan || []).length > 0 ? (
+                        data.flatMap(d => d.peralatan).map((a, i) => (
+                          <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                            <span className="font-medium">{a.tool?.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(a.jumlah).toFixed(2)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center text-gray-400 text-xs italic py-2">Kosong</div>
+                      )}
+                    </div>
+                 </div>
+
+               </div>
+            </div>
+
+          </div>
+
+          {/* KOLOM KANAN: TOTAL REKAP (1/3 width) */}
+          <div className="lg:col-span-1">
+             <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-3xl p-6 shadow-sm border border-emerald-200/50 h-full">
+               <h2 className="text-lg font-black text-emerald-900 mb-6 border-b border-emerald-200/50 pb-4">
+                 📊 Total Harian (Rekap Gabungan)
+               </h2>
+
+               {/* --- MATERIAL REKAP --- */}
+                <div className="mb-6">
+                  <h3 className="font-bold text-gray-800 tracking-wide text-xs uppercase mb-3 text-emerald-800">Total Kebutuhan Material</h3>
+                  {totalMaterial.length > 0 ? (
+                    <div className="space-y-2">
+                      {totalMaterial.map((m, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl shadow-sm border border-emerald-100 flex justify-between items-center break-inside-avoid">
+                          <span className="font-semibold text-gray-700">{m.nama}</span>
+                          <span className="font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg text-sm">{Number(m.total).toFixed(2)} {m.satuan}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-emerald-600/50 text-sm italic bg-emerald-50/50 p-3 rounded-xl border border-dashed border-emerald-200 text-center">Tidak ada rekap material.</div>
+                  )}
+                </div>
+
+                {/* --- PEKERJA REKAP --- */}
+                <div className="mb-6">
+                  <h3 className="font-bold text-gray-800 tracking-wide text-xs uppercase mb-3 text-emerald-800">Total Kebutuhan Pekerja</h3>
+                  {totalPekerja.length > 0 ? (
+                    <div className="space-y-2">
+                       {totalPekerja.map((p, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl shadow-sm border border-blue-100 flex flex-col gap-1.5 break-inside-avoid">
+                          <div className="font-bold text-blue-800">{p.nama}</div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-500">Sistem: {Number(p.total).toFixed(2)}</span>
+                            <span className="font-black text-white bg-blue-500 px-2 py-0.5 rounded-md shadow-sm">
+                              Dibutuhkan: {p.di_bilang} {p.satuan}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-emerald-600/50 text-sm italic bg-emerald-50/50 p-3 rounded-xl border border-dashed border-emerald-200 text-center">Tidak ada rekap pekerja.</div>
+                  )}
+                </div>
+
+                {/* --- PERALATAN REKAP --- */}
+                <div>
+                  <h3 className="font-bold text-gray-800 tracking-wide text-xs uppercase mb-3 text-emerald-800">Total Kebutuhan Peralatan</h3>
+                   {totalPeralatan.length > 0 ? (
+                    <div className="space-y-2">
+                       {totalPeralatan.map((a, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl shadow-sm border border-orange-100 flex flex-col gap-1.5 break-inside-avoid">
+                          <div className="font-bold text-orange-800">{a.nama}</div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-500">Sistem: {Number(a.total).toFixed(2)}</span>
+                            <span className="font-black text-white bg-orange-500 px-2 py-0.5 rounded-md shadow-sm">
+                              Dibutuhkan: {a.di_bilang} {a.satuan}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-emerald-600/50 text-sm italic bg-emerald-50/50 p-3 rounded-xl border border-dashed border-emerald-200 text-center">Tidak ada rekap peralatan.</div>
+                  )}
+                </div>
+             </div>
+          </div>
+
+        </div>
+      </div>
+    </>
   );
 }
