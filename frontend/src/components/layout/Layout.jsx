@@ -5,7 +5,7 @@ import Header from "./Header";
 export default function Layout({ children, user, onLogout }) {
   return (
     <div className="flex h-screen overflow-hidden">
-      
+
       {/* SIDEBAR */}
       <Sidebar />
 
@@ -14,7 +14,7 @@ export default function Layout({ children, user, onLogout }) {
 
         <Header user={user} onLogout={onLogout} />
 
-        <div className="p-6 max-w-[1400px] mx-auto">
+        <div className="p-6 max-w-350 mx-auto">
           {children}
         </div>
 

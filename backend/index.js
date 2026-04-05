@@ -23,9 +23,7 @@ import "./models/DailyPekerja.js";
 import "./models/DailyPeralatan.js";
 import "./models/DailyMaterial.js";
 
-
-
-import ScheduleRoutes from "./routes/scheduleRoutes.js";
+import ScheduleRoutes from "./routes/ScheduleRoutes.js";
 import DailyPlanRoute from "./routes/DailyPlanRoute.js";
 import DailyProgressRoutes from "./routes/DailyProgressRoutes.js";
 import ReportRoutes from "./routes/ReportRoutes.js";
@@ -33,25 +31,37 @@ import MaterialRoutes from "./routes/MaterialRoutes.js";
 import PekerjaRoutes from "./routes/PekerjaRoutes.js";
 import PeralatanRoutes from "./routes/PeralatanRoutes.js";
 
-
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
 
 // middleware
-app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:5173", // Menggunakan variabel dari .env kamu
-  credentials: true
-}));
+app.use(
+   cors({
+      origin: function (origin, callback) {
+         // List origins yang diizinkan
+         const allowedOrigins = ["http://localhost", "http://localhost:3000", "http://localhost:5173", "http://localhost:80", process.env.CLIENT_ORIGIN];
+
+         // Jika tidak ada origin (request dari mobile app atau server-to-server), izinkan
+         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+         } else {
+            callback(new Error("Not allowed by CORS"));
+         }
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+   }),
+);
 app.use(express.json());
 
 // test route
 app.get("/", (req, res) => {
-  res.send("Mega Mesari API Running 🚀");
+   res.send("Mega Mesari API Running 🚀");
 });
 
 // routes
 app.use("/api", authRoutes);
-
 
 app.use("/api", ScheduleRoutes);
 app.use("/api", BoqRoutes);
@@ -65,38 +75,37 @@ app.use("/api", PeralatanRoutes);
 
 // koneksi database
 const startServer = async () => {
-  try {
-    // 2. Pastikan koneksi ke DB sukses
-    await sequelize.authenticate();
-    console.log("Database connected ✅");
+   try {
+      // 2. Pastikan koneksi ke DB sukses
+      await sequelize.authenticate();
+      console.log("Database connected ✅");
 
-    // 3. Sync tabel (Gunakan { alter: true } jika ingin update kolom otomatis tanpa hapus data)
-    //await sequelize.sync(); 
-    await sequelize.sync({ alter: true });
-    console.log("Database synced 🔄");
+      // 3. Sync tabel (Gunakan { alter: true } jika ingin update kolom otomatis tanpa hapus data)
+      //await sequelize.sync();
+      await sequelize.sync({ alter: true });
+      console.log("Database synced 🔄");
 
-    cron.schedule("0 0 * * *", async () => {
-      try {
-        const deleted = await LoginLog.destroy({
-          where: {
-            createdAt: {
-              [Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-            }
-          }
-        });
-      } catch (err) {
-        console.error("❌ Gagal hapus log:", err);
-      }
-    });
+      cron.schedule("0 0 * * *", async () => {
+         try {
+            const deleted = await LoginLog.destroy({
+               where: {
+                  createdAt: {
+                     [Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                  },
+               },
+            });
+         } catch (err) {
+            console.error("❌ Gagal hapus log:", err);
+         }
+      });
 
-    // 4. Jalankan server
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT} 🚀`);
-    });
-
-  } catch (error) {
-    console.error("DB Error:", error);
-  }
+      // 4. Jalankan server
+      app.listen(PORT, () => {
+         console.log(`Server running on port ${PORT} 🚀`);
+      });
+   } catch (error) {
+      console.error("DB Error:", error);
+   }
 };
 
 startServer();

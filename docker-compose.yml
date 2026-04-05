@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+   mysql:
+      image: mysql:8.0
+      container_name: megamesari_mysql
+      restart: unless-stopped
+      environment:
+         MYSQL_ROOT_PASSWORD: rootpassword
+         MYSQL_DATABASE: megamesarigroup
+         MYSQL_USER: user
+         MYSQL_PASSWORD: password
+      ports:
+         - "3306:3306"
+      volumes:
+         - mysql_data:/var/lib/mysql
+         - ./megamesarigroup.sql:/docker-entrypoint-initdb.d/megamesarigroup.sql
+      networks:
+         - megamesari_network
+
+   backend:
+      build: ./backend
+      container_name: megamesari_backend
+      restart: unless-stopped
+      environment:
+         DB_HOST: mysql
+         DB_PORT: 3306
+         DB_NAME: megamesarigroup
+         DB_USER: user
+         DB_PASS: password
+         NODE_ENV: production
+      ports:
+         - "3000:3000"
+      depends_on:
+         - mysql
+      networks:
+         - megamesari_network
+
+   frontend:
+      build: ./frontend
+      container_name: megamesari_frontend
+      restart: unless-stopped
+      ports:
+         - "80:80"
+      volumes:
+         - ./frontend:/app
+         - /app/node_modules
+      command: npm run dev -- --host
+      depends_on:
+         - backend
+      networks:
+         - megamesari_network
+
+volumes:
+   mysql_data:
+
+networks:
+   megamesari_network:
+      driver: bridge

@@ -4,13 +4,13 @@ import { Home, BarChart2, FileText, Bell } from "lucide-react";
 export default function Sidebar() {
   return (
     <div className="w-64 h-screen bg-[#1F1D2B] text-white flex flex-col p-5">
-      
+
       {/* Logo */}
-      <h1 className="text-2xl font-bold mb-8">Droitdash</h1>
+      <h1 className="text-2xl font-bold mb-8">Mega Mesari</h1>
 
       {/* Menu */}
       <div className="space-y-6">
-        
+
         <div className="flex items-center gap-3 opacity-70 hover:opacity-100 cursor-pointer">
           <Home size={18} />
           <span>Dashboard</span>
