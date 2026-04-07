@@ -42,7 +42,7 @@ export default function ProjectDetail() {
     { title: "BOQ", path: "boq", icon: FileText, color: "blue" },
     { title: "Schedule", path: "schedule", icon: CalendarDays, color: "red" },
     { title: "Daily Plan", path: "daily-plan", icon: CalendarPlus, color: "green" },
-    { title: "Daily Progress", path: "progress", icon: TrendingUp, color: "yellow" },
+    // { title: "Daily Progress", path: "progress", icon: TrendingUp, color: "yellow" },
     { title: "Laporan Harian", path: "laporan-harian", icon: FileCheck, color: "purple" },
     { title: "Laporan Mingguan", path: "laporan-mingguan", icon: BarChartIcon, color: "indigo" },
     { title: "Laporan Bulanan", path: "laporan-bulanan", icon: BarChart3, color: "pink" },
@@ -263,7 +263,25 @@ export default function ProjectDetail() {
           Modul & Pelaporan Proyek
         </h3>
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-5">
+        <div className="grid grid-cols-1 mb-4 gap-4 md:gap-5 mt-4">
+
+          <button
+            onClick={() => navigate(`/project/${id}/progress`)}
+            className="bg-white group cursor-pointer border border-gray-100 shadow-sm hover:shadow-xl rounded-[1.5rem] p-6 transition-all duration-300 flex flex-col items-center justify-center gap-4 active:scale-95 hover:bg-gray-50"
+          >
+            <div className="p-4 rounded-2xl bg-yellow-100 text-yellow-600 transition-all duration-500 group-hover:scale-110 group-hover:-rotate-3 shadow-sm">
+              <TrendingUp size={32} strokeWidth={2.5} />
+            </div>
+
+            <span className="font-bold text-gray-600 text-sm md:text-base text-center group-hover:text-gray-900 transition-colors">
+              Daily Progress
+            </span>
+          </button>
+
+        </div>
+
+       
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {menus.map((menu, index) => {
             const Icon = menu.icon;
             const colorClass = getColorClasses(menu.color);

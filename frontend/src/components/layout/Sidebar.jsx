@@ -1,56 +1,68 @@
-// components/layout/Sidebar.jsx
-import { Home, BarChart2, FileText, Bell, Folder, LogOut } from "lucide-react";
+import { useState } from "react";
+import { Home, Box, Folder, Settings, ClipboardList } from "lucide-react"; // Tambah Box untuk icon Master Item
 import { NavLink } from "react-router-dom";
 
-export default function Sidebar({ user, onLogout }) {
+export default function Sidebar() {
   return (
     <div className="w-64 h-screen bg-primary text-white flex flex-col p-5">
 
       {/* Logo */}
       <div className="mb-8 w-full flex items-center justify-center">
-        <img src="/logo.webp" alt="logo megamesari" className="w-42" />
+        <img src="/logo.webp" alt="logo megamesari" className="w-72" />
       </div>
 
       {/* Menu */}
-      <div className="space-y-6">
+      <div className="space-y-4">
 
-        <NavLink to="/dashboard" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? 'text-secondary' : 'hover:text-secondary transition-all duration-300'} cursor-pointer`}>
+        {/* Dashboard */}
+        <NavLink to="/dashboard" className={({ isActive }) =>
+          `flex items-center gap-3 tracking-wide ${
+            isActive ? "text-secondary" : "hover:text-secondary"
+          }`
+        }>
           <Home size={18} />
           <span>Dashboard</span>
         </NavLink>
-        <NavLink to="/project" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? 'text-secondary' : 'hover:text-secondary transition-all duration-300'} cursor-pointer`}>
+
+        {/* Project */}
+        <NavLink to="/project" className={({ isActive }) =>
+          `flex items-center gap-3 tracking-wide ${
+            isActive ? "text-secondary" : "hover:text-secondary"
+          }`
+        }>
           <Folder size={18} />
           <span>Projects</span>
         </NavLink>
 
-        <NavLink to="/analytics" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? 'text-secondary' : 'hover:text-secondary transition-all duration-300'} cursor-pointer`}>
-          <BarChart2 size={18} />
-          <span>Analytics</span>
-        </NavLink>
+        <hr className="border-white/10 my-2" />
 
-        <NavLink to="/documents" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? 'text-secondary' : 'hover:text-secondary transition-all duration-300'} cursor-pointer`}>
-          <FileText size={18} />
-          <span>Documents</span>
-        </NavLink>
+        {/* Section Settings */}
+        <div className="pt-2">
+          <p className="text-xs uppercase text-gray-400 font-semibold mb-3 tracking-widest">
+            Settings
+          </p>
+          
+          <NavLink to="/settings/masteritem" className={({ isActive }) =>
+            `flex items-center gap-3 tracking-wide ${
+              isActive ? "text-secondary" : "hover:text-secondary"
+            }`
+          }>
+            <Box size={18} />
+            <span>Master Item</span>
+          </NavLink>
 
-        <NavLink to="/notifications" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? 'text-secondary' : 'hover:text-secondary transition-all duration-300'} cursor-pointer`} >
-          <Bell size={18} />
-          <span>Notifications</span>
-        </NavLink>
-
-      </div>
-
-      {/* User */}
-      <div className="mt-auto bg-neutral text-text-primary p-4 rounded-lg flex justify-between items-center gap-3">
-        <div>
-          <p className="text-sm font-semibold">{user?.name}</p>
-          <p className="text-xs">{user?.role}</p>
+          {/* Analisa Master */}
+          <NavLink to="/settings/analisa" className={({ isActive }) =>
+            `flex items-center gap-3 tracking-wide ${
+              isActive ? "text-secondary" : "hover:text-secondary"
+            }`
+          }>
+            <ClipboardList size={18} />
+            <span>Analisa Master</span>
+          </NavLink>
         </div>
-        <button onClick={onLogout} className="size-10 bg-danger rounded-xl flex items-center justify-center cursor-pointer text-neutral hover:scale-95">
-          <LogOut size={18} />
-        </button>
-      </div>
 
+      </div>
     </div>
   );
 }

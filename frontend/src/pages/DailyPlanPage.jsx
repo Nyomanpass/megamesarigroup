@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, CalendarDays, BarChart as BarChartIcon, Zap, Calendar as CalIcon, CalendarPlus, Clock } from "lucide-react";
+import { ArrowLeft, CalendarDays, BarChart as BarChartIcon, Zap, Calendar as CalIcon, CalendarPlus, Clock, CalendarRange } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
@@ -15,6 +15,17 @@ export default function DailyPlanPage() {
   const [weekly, setWeekly] = useState([]);
   const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const [showModal, setShowModal] = useState(false);
+  const [periods, setPeriods] = useState([]);
+  const [editId, setEditId] = useState(null);
+
+  const [form, setForm] = useState({
+    bulan_ke: "",
+    nama: "",
+    start_date: "",
+    end_date: ""
+  });
 
   const fetchAll = async () => {
     try {
@@ -30,9 +41,70 @@ export default function DailyPlanPage() {
     }
   };
 
+  const fetchPeriods = async () => {
+    try {
+      const res = await api.get(`/project-periods?project_id=${projectId}`);
+      setPeriods(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchAll();
+    fetchPeriods();
   }, [projectId]);
+
+
+  const handleChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (editId) {
+        // UPDATE
+        await api.put(`/project-periods/${editId}`, {
+          ...form,
+          project_id: projectId
+        });
+      } else {
+        // CREATE
+        await api.post("/project-periods", {
+          ...form,
+          project_id: projectId
+        });
+      }
+
+      // reset
+      setForm({
+        bulan_ke: "",
+        nama: "",
+        start_date: "",
+        end_date: ""
+      });
+      setEditId(null);
+
+      fetchPeriods();
+    } catch (err) {
+      alert("Gagal simpan");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const confirm = window.confirm("Hapus termin?");
+    if (!confirm) return;
+
+    try {
+      await api.delete(`/project-periods/${id}`);
+      fetchPeriods();
+    } catch (err) {
+      alert("Gagal hapus");
+    }
+  };
 
   const handleGenerate = async () => {
     const confirm = window.confirm("Generate ulang rencana harian? Data lama akan diperbarui.");
@@ -78,15 +150,42 @@ export default function DailyPlanPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className={`${
-              loading ? "bg-gray-200 text-gray-500" : "bg-emerald-600 hover:bg-emerald-700 text-white"
-            } px-5 py-2.5 rounded-xl font-bold border-2 border-transparent shadow flex items-center gap-2 transition-all active:scale-95`}
-          >
-            <Zap size={18} /> {loading ? "Memproses..." : "Generate Plan Otomatis"}
-          </button>
+         <div className="flex flex-wrap gap-3">
+
+            {/* Periode Termin */}
+            <button
+              onClick={() => {
+                setShowModal(true);
+                fetchPeriods();
+              }}
+              disabled={loading}
+              className={`
+                px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all
+                ${loading 
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                  : "bg-white border border-emerald-500 text-emerald-600 hover:bg-emerald-50 active:scale-95"}
+              `}
+            >
+              <CalendarRange size={18} />
+              Periode Termin
+            </button>
+
+            {/* Generate Plan */}
+            <button
+              onClick={handleGenerate}
+              disabled={loading}
+              className={`
+                px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow
+                ${loading 
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"}
+              `}
+            >
+              <Zap size={18} className={loading ? "animate-pulse" : ""} />
+              {loading ? "Memproses..." : "Generate Plan"}
+            </button>
+
+          </div>
         </div>
 
         {/* --- CHARTS OVERVIEW --- */}
@@ -249,6 +348,162 @@ export default function DailyPlanPage() {
         </div>
 
       </div>
+
+{showModal && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+    
+    <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl border border-gray-100 animate-in zoom-in-95">
+
+      {/* HEADER */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Periode Termin</h2>
+          <p className="text-sm text-gray-500">Kelola periode pekerjaan proyek</p>
+        </div>
+        <button 
+          onClick={() => setShowModal(false)}
+          className="text-gray-400 hover:text-gray-600 text-lg"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* FORM */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <div>
+          <label className="text-xs text-gray-500">Bulan ke</label>
+          <input
+            type="number"
+            name="bulan_ke"
+            value={form.bulan_ke}
+            onChange={handleChange}
+            className="w-full border border-gray-200 p-2 rounded-xl focus:ring-2 focus:ring-emerald-400 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500">Nama Termin</label>
+          <input
+            type="text"
+            name="nama"
+            placeholder="Termin 1"
+            value={form.nama}
+            onChange={handleChange}
+            className="w-full border border-gray-200 p-2 rounded-xl focus:ring-2 focus:ring-emerald-400 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500">Tanggal Mulai</label>
+          <input
+            type="date"
+            name="start_date"
+            value={form.start_date}
+            onChange={handleChange}
+            className="w-full border border-gray-200 p-2 rounded-xl"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500">Tanggal Selesai</label>
+          <input
+            type="date"
+            name="end_date"
+            value={form.end_date}
+            onChange={handleChange}
+            className="w-full border border-gray-200 p-2 rounded-xl"
+          />
+        </div>
+      </div>
+
+      {/* ACTION BUTTON */}
+      <div className="flex items-center gap-2 mb-5">
+        <button
+          onClick={handleSubmit}
+          className={`px-5 py-2 rounded-xl text-white font-semibold shadow transition ${
+            editId 
+              ? "bg-blue-600 hover:bg-blue-700" 
+              : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
+        >
+          {editId ? "Update Termin" : "+ Tambah Termin"}
+        </button>
+
+        {editId && (
+          <button
+            onClick={() => {
+              setEditId(null);
+              setForm({
+                bulan_ke: "",
+                nama: "",
+                start_date: "",
+                end_date: ""
+              });
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Batal Edit
+          </button>
+        )}
+      </div>
+
+      {/* LIST */}
+      <div className="border rounded-2xl overflow-hidden">
+        {periods.map((p) => (
+          <div
+            key={p.id}
+            className="flex justify-between items-center px-4 py-3 border-b last:border-none hover:bg-gray-50 transition"
+          >
+            <div>
+              <div className="font-semibold text-gray-800">
+                {p.nama}
+                <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+                  Bulan {p.bulan_ke}
+                </span>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                {new Date(p.start_date).toLocaleDateString("id-ID")} -{" "}
+                {new Date(p.end_date).toLocaleDateString("id-ID")}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setEditId(p.id);
+                  setForm({
+                    bulan_ke: p.bulan_ke,
+                    nama: p.nama,
+                    start_date: p.start_date?.slice(0, 10),
+                    end_date: p.end_date?.slice(0, 10),
+                  });
+                }}
+                className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+              >
+                Edit
+              </button>
+
+              <button
+                onClick={() => handleDelete(p.id)}
+                className="px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {periods.length === 0 && (
+          <div className="text-center text-gray-400 p-6">
+            Belum ada termin
+          </div>
+        )}
+      </div>
+
+    </div>
+  </div>
+)}
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar {

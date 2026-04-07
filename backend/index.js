@@ -22,6 +22,10 @@ import "./models/PeralatanModel.js";
 import "./models/DailyPekerja.js";
 import "./models/DailyPeralatan.js";
 import "./models/DailyMaterial.js";
+import "./models/MasterItem.js";
+import "./models/AnalisaMaster.js";
+import "./models/AnalisaMasterDetail.js";
+
 
 import ScheduleRoutes from "./routes/ScheduleRoutes.js";
 import DailyPlanRoute from "./routes/DailyPlanRoute.js";
@@ -30,6 +34,12 @@ import ReportRoutes from "./routes/ReportRoutes.js";
 import MaterialRoutes from "./routes/MaterialRoutes.js";
 import PekerjaRoutes from "./routes/PekerjaRoutes.js";
 import PeralatanRoutes from "./routes/PeralatanRoutes.js";
+import ProjectPeriodRoute from "./routes/ProjectPeriodRoute.js";  
+import MasterItemRoutes from "./routes/MasterItemRoutes.js";
+import ItemCategoryRoutes from "./routes/ItemCategoryRoutes.js";
+import AnalisaMasterRoutes from "./routes/AnalisaMasterRoutes.js";
+import AnalisaMasterDetailRoutes from "./routes/AnalisaMasterDetailRoutes.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
@@ -72,6 +82,12 @@ app.use("/api", ReportRoutes);
 app.use("/api", MaterialRoutes);
 app.use("/api", PekerjaRoutes);
 app.use("/api", PeralatanRoutes);
+app.use("/api", ProjectPeriodRoute);
+app.use("/api", MasterItemRoutes);
+app.use("/api", ItemCategoryRoutes);
+app.use("/api", AnalisaMasterRoutes);
+app.use("/api", AnalisaMasterDetailRoutes);
+
 
 // koneksi database
 const startServer = async () => {
