@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
 import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle } from "lucide-react";
+import { useRef } from "react";
 
 export default function DailyProgressPage() {
   const { id } = useParams();
@@ -13,6 +14,9 @@ export default function DailyProgressPage() {
   const [materialList, setMaterialList] = useState([]);
   const [pekerjaList, setPekerjaList] = useState([]);
   const [peralatanList, setPeralatanList] = useState([]);
+  const formRef = useRef(null);
+
+  const [isCopy, setIsCopy] = useState(false);
 
   // --- Edit Mode State ---
   const [editId, setEditId] = useState(null);
@@ -65,7 +69,14 @@ export default function DailyProgressPage() {
   // ================= LOGIKA EDIT =================
   const handleEdit = async (item) => {
     try {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setEditId(item.id);
+
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }, 100);
 
       const res = await api.get(`/daily-progress/${item.id}`);
       const d = res.data;
@@ -99,8 +110,50 @@ export default function DailyProgressPage() {
     }
   };
 
+  const handleCopy = async (item) => {
+  try {
+    setIsCopy(true);     // ✅ ini beda dari edit
+    setEditId(null);     // ❌ jangan pakai edit
+
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }, 100);
+
+    const res = await api.get(`/daily-progress/${item.id}`);
+    const d = res.data;
+
+    setForm({
+      boq_id: d.boq_id,
+      tanggal: d.tanggal, // 🔥 kosongkan biar user isi baru
+      volume: d.volume
+    });
+
+    setMaterials((d.materials || []).map(m => ({
+      material_id: m.material_id,
+      koef: m.koef
+    })));
+
+    setPekerja((d.workers || []).map(w => ({
+      worker_id: w.worker_id,
+      koef: w.koef
+    })));
+
+    setPeralatan((d.tools || []).map(t => ({
+      tool_id: t.tool_id,
+      jumlah: t.jumlah
+    })));
+
+  } catch (error) {
+    alert("Gagal copy data");
+  }
+};
+
   const cancelEdit = () => {
     setEditId(null);
+    setIsCopy(false);
     setForm({ boq_id: "", tanggal: "", volume: "" });
     setMaterials([]);
     setPekerja([]);
@@ -125,7 +178,7 @@ export default function DailyProgressPage() {
         peralatan
       };
 
-      if (editId) {
+      if (editId && !isCopy) {
         await api.put(`/daily-progress/${editId}`, payload);
         alert("✅ Berhasil Update!");
       } else {
@@ -175,7 +228,7 @@ export default function DailyProgressPage() {
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <div ref={formRef} className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate(`/project/${id}`)} 
@@ -215,7 +268,7 @@ export default function DailyProgressPage() {
               >
                 <option value="">-- Pilih Pekerjaan BOQ --</option>
                 {boqList.filter(b => b.tipe === 'item').map(b => (
-                  <option key={b.id} value={b.id}>{b.kode ? `${b.kode} - ` : ''}{b.uraian} (Vol: {b.volume})</option>
+                  <option key={b.id} value={b.id}>{b.kode ? `${b.kode} - ` : ''}{b.uraian}</option>
                 ))}
               </select>
             </div>
@@ -510,6 +563,12 @@ export default function DailyProgressPage() {
                        <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
                     </td>
                     <td className="p-4 text-center pr-6">
+                      <button 
+                          onClick={() => handleCopy(item)}
+                          className="bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-600 hover:text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 justify-center mx-auto mt-1"
+                        >
+                          <PlusCircle size={12} /> Copy
+                        </button>
                       <button 
                         onClick={() => handleEdit(item)}
                         className="bg-white border border-gray-200 hover:border-amber-300 hover:bg-amber-50 text-gray-600 hover:text-amber-600 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 justify-center mx-auto"

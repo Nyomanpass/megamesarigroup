@@ -6,12 +6,54 @@ import { DailyProgress } from "./DailyProgressModel.js";
 import { ProjectPeriod } from "./ProjectPeriodModel.js";
 import { ProjectWeek } from "./ProjectWeekModel.js";
 
+
 import { Material } from "./MaterialModel.js";
 import { Pekerja } from "./Pekerja.js";
 import { Peralatan } from "./PeralatanModel.js";
 import { DailyPekerja } from "./DailyPekerja.js";
 import { DailyPeralatan } from "./DailyPeralatan.js";
 import { DailyMaterial } from "./DailyMaterial.js";
+
+import { MasterItem } from "./MasterItem.js";
+import { AnalisaMaster } from "./AnalisaMaster.js";
+import { AnalisaMasterDetail } from "./AnalisaMasterDetail.js";
+import { ItemCategory } from "./ItemCategory.js";
+
+
+// =====================
+// ANALISA MASTER RELATION
+// =====================
+
+MasterItem.belongsTo(ItemCategory, {
+  foreignKey: "category_id"
+});
+
+ItemCategory.hasMany(MasterItem, {
+  foreignKey: "category_id"
+});
+
+// AnalisaMaster → Detail
+AnalisaMaster.hasMany(AnalisaMasterDetail, {
+  foreignKey: "analisa_id",
+  as: "details",
+  onDelete: "CASCADE"
+});
+
+AnalisaMasterDetail.belongsTo(AnalisaMaster, {
+  foreignKey: "analisa_id"
+});
+
+
+// Detail → MasterItem
+AnalisaMasterDetail.belongsTo(MasterItem, {
+  foreignKey: "item_id",
+  as: "item"
+});
+
+MasterItem.hasMany(AnalisaMasterDetail, {
+  foreignKey: "item_id"
+});
+
 
 // RELASI
 Project.hasMany(Boq, { foreignKey: "project_id" });
@@ -122,5 +164,8 @@ export {
   Peralatan,
   DailyPekerja,
   DailyPeralatan,
-  DailyMaterial
+  DailyMaterial,
+  MasterItem,
+  AnalisaMaster,
+  AnalisaMasterDetail
 };

@@ -65,7 +65,7 @@ export default function MaterialPage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="p-6 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-8">

@@ -21,6 +21,16 @@ export const getWeeklyReport = async (req, res) => {
       where: { project_id }
     });
 
+    const sortedBoqs = boqs.sort((a, b) => {
+      const kodeA = (a.kode || "").trim();
+      const kodeB = (b.kode || "").trim();
+
+      return kodeA.localeCompare(kodeB, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+
     const progress = await DailyProgress.findAll({
       where: { project_id }
     });
@@ -67,7 +77,7 @@ export const getWeeklyReport = async (req, res) => {
       // =========================================
       const laporan = [];
 
-      for (const boq of boqs) {
+      for (const boq of sortedBoqs) {
         const total = Number(boq.volume || 0);
 
         // 🔥 minggu ini (per BOQ)
@@ -149,6 +159,16 @@ export const getMonthlyReport = async (req, res) => {
       where: { project_id }
     });
 
+    const sortedBoqs = boqs.sort((a, b) => {
+      const kodeA = (a.kode || "").trim();
+      const kodeB = (b.kode || "").trim();
+
+      return kodeA.localeCompare(kodeB, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+
     const progress = await DailyProgress.findAll({
       where: { project_id }
     });
@@ -203,7 +223,7 @@ export const getMonthlyReport = async (req, res) => {
       // =========================================
       const laporan = [];
 
-      for (const boq of boqs) {
+      for (const boq of sortedBoqs) {
         const total = Number(boq.volume || 0);
 
         const bulanIni = progress

@@ -23,7 +23,12 @@ export const createDailyProgress = async (req, res) => {
 
     const inputVolume = Number(volume);
 
+    // 🔥 FIX FLOAT
+    const fix = (num) => Number(parseFloat(num).toFixed(6));
+
+    // =========================
     // ✅ VALIDASI
+    // =========================
     if (!boq_id) {
       throw new Error("BOQ wajib dipilih");
     }
@@ -41,17 +46,25 @@ export const createDailyProgress = async (req, res) => {
       where: { boq_id }
     });
 
-    const total = Number(boq.volume || 0);
-    const sudah = Number(totalProgress || 0);
+    // 🔥 FIX ANGKA
+    const total = fix(boq.volume || 0);
+    const sudah = fix(totalProgress || 0);
+    const input = fix(inputVolume);
 
+    // =========================
+    // ✅ VALIDASI VOLUME
+    // =========================
     if (sudah >= total) {
       throw new Error("Pekerjaan sudah selesai (100%)");
     }
 
-    if (sudah + inputVolume > total) {
+    if (fix(sudah + input) > total) {
       throw new Error("Volume melebihi sisa pekerjaan!");
     }
 
+    // =========================
+    // ✅ VALIDASI PLAN
+    // =========================
     const plan = await DailyPlan.findOne({
       where: { project_id, tanggal }
     });
@@ -67,7 +80,7 @@ export const createDailyProgress = async (req, res) => {
       project_id,
       boq_id,
       tanggal,
-      volume: inputVolume
+      volume: input
     }, { transaction: t });
 
     // =========================
@@ -78,7 +91,7 @@ export const createDailyProgress = async (req, res) => {
         daily_progress_id: progress.id,
         material_id: m.material_id,
         koef: m.koef,
-        hasil: (m.koef || 0) * inputVolume // 🔥 AUTO HITUNG
+        hasil: fix((m.koef || 0) * input)
       }));
 
       await DailyMaterial.bulkCreate(dataMaterial, { transaction: t });
@@ -92,7 +105,7 @@ export const createDailyProgress = async (req, res) => {
         daily_progress_id: progress.id,
         worker_id: p.worker_id,
         koef: p.koef,
-        jumlah: (p.koef || 0) * inputVolume // 🔥 AUTO HITUNG
+        jumlah: fix((p.koef || 0) * input)
       }));
 
       await DailyPekerja.bulkCreate(dataPekerja, { transaction: t });

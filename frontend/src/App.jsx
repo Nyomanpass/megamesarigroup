@@ -17,6 +17,11 @@ import PekerjaPage from "./pages/PekerjaPage";
 import PeralatanPage from "./pages/PeralatanPage";
 import Project from "./pages/Project";
 
+import MasterItemPage from "./pages/settings/MasterItemPage";
+import AnalisaMasterPage from "./pages/settings/AnalisaMasterPage";
+import AnalisaDetailPage from "./pages/settings/AnalisaDetailPage";
+
+
 // Error boundary component
 const ErrorPage = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -130,7 +135,19 @@ const router = createBrowserRouter([
         path: "/project/:id/peralatan",
         element: <PeralatanPage />,
       },
-    ],
+      {
+        path: "/settings/masteritem",
+        element: <MasterItemPage />,
+      },
+        {
+          path: "/settings/analisa",
+          element: <AnalisaMasterPage />,
+        },
+        {
+          path: "/settings/analisa/:id",
+          element: <AnalisaDetailPage />,
+        }
+      ]
   },
   // Catch all route - redirect to dashboard if authenticated, otherwise to login
   {
