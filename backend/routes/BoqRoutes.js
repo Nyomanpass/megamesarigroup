@@ -5,7 +5,8 @@ import {
   getBoqById,
   updateBoq,
   deleteBoq,
-  createBulkBoq
+  createBulkBoq,
+ 
 } from "../controllers/BoqController.js";
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.patch("/boq/:id", updateBoq);
 router.delete("/boq/:id", deleteBoq);
 
 router.post('/boq/bulk', createBulkBoq);
+
 
 export default router;

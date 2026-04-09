@@ -1,11 +1,6 @@
 import { DailyPlan, DailyProgress, Boq } from "../models/index.js";
-
-import { DailyMaterial } from "../models/DailyMaterial.js";
-import { DailyPekerja } from "../models/DailyPekerja.js";
-import { DailyPeralatan } from "../models/DailyPeralatan.js";
-import { Material } from "../models/MaterialModel.js";
-import { Pekerja } from "../models/Pekerja.js";
-import { Peralatan } from "../models/PeralatanModel.js";
+import { DailyProgressItem } from "../models/index.js";
+import { ProjectItem } from "../models/index.js";
 
 export const getWeeklyReport = async (req, res) => {
   try {
@@ -286,117 +281,138 @@ export const getMonthlyReport = async (req, res) => {
   }
 };
 
-
-
 export const getDailyReport = async (req, res) => {
   try {
     const { project_id } = req.params;
-    const { tanggal, hari_ke } = req.query;
+    const { day } = req.query; // 🔥 pakai hari_ke
 
-    let targetTanggal = tanggal;
-
-    // 1. Cari tanggal berdasarkan hari_ke jika inputnya hari_ke
-    if (hari_ke) {
-      const plan = await DailyPlan.findOne({ where: { project_id, hari_ke } });
-      if (!plan) return res.status(404).json({ message: "Hari tidak ditemukan" });
-      targetTanggal = plan.tanggal;
+    if (!day) {
+      return res.status(400).json({ message: "Hari ke wajib diisi" });
     }
 
-    if (!targetTanggal) return res.status(400).json({ message: "Pilih tanggal atau hari_ke" });
+    // 🔥 1. ambil tanggal dari DailyPlan
+    const plans = await DailyPlan.findAll({
+      where: {
+        project_id,
+        hari_ke: day
+      },
+      attributes: ["tanggal"]
+    });
 
-    // 2. Ambil data Progress beserta relasi Material, Pekerja (Master), dan Peralatan (Master)
-    const data = await DailyProgress.findAll({
-      where: { project_id, tanggal: targetTanggal },
+    const tanggalList = plans.map(p => p.tanggal);
+
+    if (tanggalList.length === 0) {
+      return res.json({
+        data: [],
+        total_material: [],
+        total_pekerja: [],
+        total_peralatan: []
+      });
+    }
+
+    // 🔥 2. ambil progress berdasarkan tanggal
+    const progress = await DailyProgress.findAll({
+      where: {
+        project_id,
+        tanggal: tanggalList
+      },
       include: [
-        { model: Boq, as: "boq", attributes: ["uraian", "satuan"] },
-        { 
-          model: DailyMaterial, as: "materials", 
-          include: [{ model: Material, as: "material", attributes: ["nama", "satuan"] }] 
+        {
+          model: Boq,
+          as: "boq",
+          attributes: ["uraian", "satuan"]
         },
-        { 
-          model: DailyPekerja, as: "workers", 
-          include: [{ model: Pekerja, as: "pekerja", attributes: ["nama", "satuan", "di_bilang"] }] 
-        },
-        { 
-          model: DailyPeralatan, as: "tools", 
-          include: [{ model: Peralatan, as: "tool", attributes: ["nama", "satuan", "di_bilang"] }] 
+        {
+          model: DailyProgressItem,
+          as: "items",
+          include: [
+            {
+              model: ProjectItem,
+              as: "item",
+              attributes: ["terbilang"]
+            }
+          ]
         }
       ]
     });
 
-    // 3. Inisialisasi Penampung untuk Gabungan
+    // 🔥 3. mapping
+    const result = progress.map(p => {
+      const items = p.items || [];
+
+      return {
+        tanggal: p.tanggal,
+        uraian: p.boq?.uraian,
+        satuan: p.boq?.satuan,
+        volume: p.volume,
+
+        materials: items.filter(i => i.tipe === "BAHAN"),
+        pekerja: items.filter(i => i.tipe === "TENAGA"),
+        peralatan: items.filter(i => i.tipe === "ALAT")
+      };
+    });
+
     const total_material = {};
     const total_pekerja = {};
     const total_peralatan = {};
 
-    const result = data.map((d) => {
-      // --- PROSES MATERIAL (Akumulasi/Tambah terus) ---
-      d.materials?.forEach(m => {
-        const nama = m.material?.nama;
-        const sat = m.material?.satuan || "";
-        if (nama) {
-          if (!total_material[nama]) total_material[nama] = { total: 0, satuan: sat };
-          total_material[nama].total += Number(m.hasil);
+    result.forEach(r => {
+
+      // MATERIAL
+      r.materials.forEach(m => {
+        if (!total_material[m.nama]) {
+          total_material[m.nama] = { nama: m.nama, total: 0, satuan: m.satuan };
+        }
+        total_material[m.nama].total += m.hasil;
+      });
+
+      // PEKERJA
+      r.pekerja.forEach(p => {
+        if (!total_pekerja[p.nama]) {
+          total_pekerja[p.nama] = {
+            nama: p.nama,
+            total: 0,
+            satuan: p.satuan,
+            terbilang: 0
+          };
+        }
+
+        total_pekerja[p.nama].total += p.hasil;
+
+        if (p.hasil > 0 && total_pekerja[p.nama].terbilang === 0) {
+          total_pekerja[p.nama].terbilang = p.item?.terbilang || 0;
         }
       });
 
-    // --- PROSES PEKERJA (Akumulasi Sistem + Data Master) ---
-      d.workers?.forEach(w => {
-        const nama = w.pekerja?.nama;
-        const sat = w.pekerja?.satuan || "";
-        const dib = Number(w.pekerja?.di_bilang) || 0;
-        
-        if (nama) {
-          if (!total_pekerja[nama]) {
-            total_pekerja[nama] = { total: 0, satuan: sat, di_bilang: dib };
-          }
-          // 🔥 TAMBAHKAN TERUS (Akumulasi): agar 0.02 + 0.09 = 0.11
-          total_pekerja[nama].total += Number(w.jumlah);
+      // PERALATAN
+      r.peralatan.forEach(a => {
+        if (!total_peralatan[a.nama]) {
+          total_peralatan[a.nama] = {
+            nama: a.nama,
+            total: 0,
+            satuan: a.satuan,
+            terbilang: 0
+          };
+        }
+
+        total_peralatan[a.nama].total += a.hasil;
+
+        if (a.hasil > 0 && total_peralatan[a.nama].terbilang === 0) {
+          total_peralatan[a.nama].terbilang = a.item?.terbilang || 0;
         }
       });
 
-      // --- PROSES PERALATAN (Akumulasi Sistem + Data Master) ---
-      d.tools?.forEach(t => {
-        const nama = t.tool?.nama;
-        const sat = t.tool?.satuan || "";
-        const dib = Number(t.tool?.di_bilang) || 0;
-        
-        if (nama) {
-          if (!total_peralatan[nama]) {
-            total_peralatan[nama] = { total: 0, satuan: sat, di_bilang: dib };
-          }
-          // 🔥 TAMBAHKAN TERUS: agar hasil sistem akurat
-          total_peralatan[nama].total += Number(t.jumlah);
-        }
-      });
-      return {
-        tanggal: d.tanggal,
-        uraian: d.boq?.uraian,
-        satuan: d.boq?.satuan,
-        volume: Number(d.volume),
-        materials: d.materials || [],
-        pekerja: d.workers || [],
-        peralatan: d.tools || []
-      };
     });
 
-    // 4. Format Akhir untuk dikirim ke Frontend
-    const formatTotal = (obj) => Object.entries(obj).map(([nama, val]) => ({ 
-      nama, 
-      total: val.total, 
-      di_bilang: val.di_bilang,
-      satuan: val.satuan 
-    }));
-
     res.json({
-      tanggal: targetTanggal,
       data: result,
-      total_material: formatTotal(total_material),
-      total_pekerja: formatTotal(total_pekerja),
-      total_peralatan: formatTotal(total_peralatan)
+      total_material: Object.values(total_material),
+      total_pekerja: Object.values(total_pekerja),
+      total_peralatan: Object.values(total_peralatan)
     });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };

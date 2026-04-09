@@ -2,6 +2,8 @@ import { AnalisaMasterDetail } from "../models/AnalisaMasterDetail.js";
 import { MasterItem } from "../models/MasterItem.js";
 import { AnalisaMaster } from "../models/AnalisaMaster.js";
 
+const round2 = (num) => Number(num.toFixed(2));
+
 export const getAnalisaDetail = async (req, res) => {
   try {
     const { id } = req.params;
@@ -11,12 +13,12 @@ export const getAnalisaDetail = async (req, res) => {
     const details = await AnalisaMasterDetail.findAll({
       where: { analisa_id: id },
       include: [
-  {
-    model: MasterItem,
-    as: "item", // 🔥 WAJIB
-    attributes: ["id", "nama", "tipe", "satuan", "harga_default"]
-  }
-]
+        {
+          model: MasterItem,
+          as: "item",
+          attributes: ["id", "nama", "tipe", "satuan", "harga_default"]
+        }
+      ]
     });
 
     // 🔥 GROUPING
@@ -29,36 +31,46 @@ export const getAnalisaDetail = async (req, res) => {
     let totalAlat = 0;
 
     details.forEach((d) => {
-    if (!d.item) return; // 🔥 amankan
+      if (!d.item) return;
 
-    const harga = Number(d.item.harga_default) || 0;
-    const jumlah = d.koefisien * harga;
+      const harga = round2(Number(d.item.harga_default) || 0);
+      const koef = Number(d.koefisien) || 0;
 
-    const item = {
+      // 🔥 ROUND DI SINI
+      const jumlah = round2(koef * harga);
+
+      const item = {
         id: d.id,
+        item_id: d.item.id,
         nama: d.item.nama,
         tipe: d.item.tipe,
         satuan: d.item.satuan,
-        koefisien: d.koefisien,
+        koefisien: koef,
         harga,
         jumlah
-    };
+      };
 
-    if (d.item.tipe === "TENAGA") {
+      if (d.item.tipe === "TENAGA") {
         tenaga.push(item);
-        totalTenaga += jumlah;
-    } else if (d.item.tipe === "BAHAN") {
+        totalTenaga = round2(totalTenaga + jumlah);
+      } else if (d.item.tipe === "BAHAN") {
         bahan.push(item);
-        totalBahan += jumlah;
-    } else {
+        totalBahan = round2(totalBahan + jumlah);
+      } else {
         alat.push(item);
-        totalAlat += jumlah;
-    }
+        totalAlat = round2(totalAlat + jumlah);
+      }
     });
 
-    const total = totalTenaga + totalBahan + totalAlat;
-    const overhead = (analisa.overhead_persen / 100) * total;
-    const grandTotal = total + overhead;
+    // 🔥 TOTAL (WAJIB ROUND)
+    const total = round2(totalTenaga + totalBahan + totalAlat);
+
+    // 🔥 OVERHEAD (WAJIB ROUND)
+    const persen = Number(analisa.overhead_persen) || 0;
+    const overhead = round2((persen / 100) * total);
+
+    // 🔥 GRAND TOTAL (WAJIB ROUND)
+    const grandTotal = round2(total + overhead);
 
     res.json({
       tenaga,

@@ -50,14 +50,15 @@ export const getMasterItemById = async (req, res) => {
 // 🔹 CREATE
 export const createMasterItem = async (req, res) => {
   try {
-    const { nama, tipe, satuan, harga_default, category_id } = req.body;
+    const { nama, tipe, satuan, harga_default, category_id, terbilang } = req.body;
 
     const data = await MasterItem.create({
       nama,
       tipe,
       satuan,
       harga_default,
-      category_id
+      category_id,
+      terbilang
     });
 
     res.status(201).json(data);
@@ -69,7 +70,7 @@ export const createMasterItem = async (req, res) => {
 // 🔹 UPDATE
 export const updateMasterItem = async (req, res) => {
   try {
-    let { nama, tipe, satuan, harga_default, category_id } = req.body;
+    let { nama, tipe, satuan, harga_default, category_id, terbilang } = req.body;
 
     const data = await MasterItem.findByPk(req.params.id);
 
@@ -87,7 +88,8 @@ export const updateMasterItem = async (req, res) => {
       tipe,
       satuan,
       harga_default,
-      category_id
+      category_id,
+      terbilang
     });
 
     res.json({ message: "Data berhasil diupdate", data });
