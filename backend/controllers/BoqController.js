@@ -1,77 +1,158 @@
 import { Boq } from "../models/BoqModel.js";
-import { Sequelize } from "sequelize";
+import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
+import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
+import { ProjectItem } from "../models/ProjekItem.js";
+
+// 🔥 TANPA req/res
+export const generateBobotInternal = async (project_id) => {
+  try {
+    const data = await Boq.findAll({
+      where: { project_id }
+    });
+
+    let totalSemua = 0;
+    const temp = [];
+
+    // 🔥 hitung jumlah semua item
+    for (let boq of data) {
+      if (boq.tipe === "item" && boq.analisa_id) {
+        const harga_satuan = await hitungAnalisa(boq.analisa_id);
+        const volume = Number(boq.volume) || 0;
+
+        const jumlah = harga_satuan * volume;
+
+        temp.push({
+          id: boq.id,
+          jumlah
+        });
+
+        totalSemua += jumlah;
+      }
+    }
+
+    if (totalSemua === 0) return;
+
+    // 🔥 update bobot
+    const updates = temp.map((item) => {
+      const bobot = (item.jumlah / totalSemua) * 100;
+
+      return Boq.update(
+        { bobot: Number(bobot.toFixed(3)) },
+        { where: { id: item.id } }
+      );
+    });
+
+    await Promise.all(updates);
+
+  } catch (error) {
+    console.error("ERROR generate:", error);
+  }
+};
 
 const generateKode = async (parent_id) => {
   const parent = await Boq.findByPk(parent_id);
   if (!parent) throw new Error("Parent tidak ditemukan");
 
-  // Cari semua anak dari parent ini untuk menentukan nomor urut berikutnya
   const children = await Boq.findAll({
     where: { parent_id },
-    order: [['kode', 'DESC']] // Ambil yang kodenya paling terakhir
+    order: [['kode', 'DESC']]
   });
 
   let nextNumber = 1;
   if (children.length > 0) {
-    // Ambil angka terakhir dari kode anak paling bawah
-    // Misal A.1.2 -> ambil "2", lalu tambah 1 jadi "3"
     const lastChildKode = children[0].kode;
     const parts = lastChildKode.split('.');
     const lastPart = parts[parts.length - 1];
     nextNumber = parseInt(lastPart) + 1;
   }
-
-  // LOGIKA DINAMIS:
-  // Jika parent adalah Header (A), dan kamu mau itemnya langsung A.1.1:
   if (!parent.kode.includes('.')) { 
-     // Opsi 1: Jika Header (A) langsung punya Item -> A.1
-     // return `${parent.kode}.${nextNumber}`; 
-     
-     // Opsi 2: Jika ingin standar 3 level (A.1.1) walaupun tanpa sub-header:
      return `${parent.kode}.1.${nextNumber}`;
   }
-
-  // Jika parent adalah Sub-Header (A.1), maka anaknya A.1.1, A.1.2, dst.
   return `${parent.kode}.${nextNumber}`;
+};
+
+
+const round2 = (num) => Math.round(num * 100) / 100;
+
+const hitungAnalisa = async (analisa_id) => {
+  const analisa = await ProjectAnalisa.findByPk(analisa_id);
+
+  const details = await ProjectAnalisaDetail.findAll({
+    where: { project_analisa_id: analisa_id },
+    include: [
+      {
+        model: ProjectItem,
+        as: "item"
+      }
+    ]
+  });
+
+  let total = 0;
+
+  details.forEach((d) => {
+    const harga = round2(Number(d.item?.harga || 0));
+    const koef = Number(d.koefisien) || 0;
+
+    // 🔥 round tiap item
+    const subtotal = round2(koef * harga);
+
+    total = round2(total + subtotal);
+  });
+
+  // 🔥 round total sebelum overhead
+  const totalFix = round2(total);
+
+  // 🔥 overhead
+  const overhead = round2((analisa.overhead_persen / 100) * totalFix);
+
+  // 🔥 final
+  return round2(totalFix + overhead);
 };
 
 export const createBulkBoq = async (req, res) => {
   try {
     const { project_id, parent_id, items } = req.body;
 
-    if (!items || items.length === 0) return res.status(400).json({ message: "Data kosong" });
+    if (!items || items.length === 0) {
+      return res.status(400).json({ message: "Data kosong" });
+    }
 
     const results = [];
 
-    // Kita pakai for-loop biasa (bukan map) agar prosesnya berurutan 
-    // supaya generateKode tidak menghasilkan nomor yang sama
     for (const item of items) {
-      let { uraian, satuan, volume, harga_satuan, ppn } = item;
-      
-      // Generate kode untuk item ini
+      let { uraian, satuan, volume, analisa_id, ppn } = item;
+
+      if (!analisa_id) {
+        return res.status(400).json({ message: "Analisa wajib dipilih untuk item!" });
+      }
+
+      // 🔥 generate kode
       const kode = await generateKode(parent_id);
 
-      const jumlah = parseFloat(volume || 0) * parseFloat(harga_satuan || 0);
-      const jumlah_ppn = jumlah + (jumlah * (ppn || 11) / 100);
+      // ❗ TIDAK HITUNG HARGA DI SINI
 
       const newItem = await Boq.create({
         project_id,
         parent_id,
+        analisa_id, // 🔥 kunci utama
         kode: kode.trim(),
         uraian,
         satuan,
         volume,
-        harga_satuan,
-        jumlah,
         ppn,
-        jumlah_ppn,
-        tipe: "item" // Khusus Bulk untuk Item
+        tipe: "item"
       });
-      
+
+
       results.push(newItem);
     }
+     await generateBobotInternal(project_id);
 
-    res.status(201).json({ message: `${results.length} Item berhasil ditambahkan`, data: results });
+    res.status(201).json({
+      message: `${results.length} Item berhasil ditambahkan`,
+      data: results
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -135,32 +216,57 @@ export const createBoq = async (req, res) => {
 };
 
 
-
-// 🔥 GET ALL BY PROJECT
 export const getBoqByProject = async (req, res) => {
   try {
     const { project_id } = req.params;
 
-    // 1. Ambil data mentah dari DB (jangan sort di DB dulu)
     const data = await Boq.findAll({
       where: { project_id }
     });
 
-    // 2. Sorting Cerdas di Javascript
+    // 🔥 SORTING (tetap dipakai)
     const sortedData = data.sort((a, b) => {
-      // Hilangkan spasi di depan/belakang kode sebelum dibanding
       const kodeA = (a.kode || "").trim();
       const kodeB = (b.kode || "").trim();
 
-      // numeric: true membuat "B.1.10" di bawah "B.1.2"
-      // sensitivity: 'base' membuat urutan tidak sensitif huruf besar/kecil
       return kodeA.localeCompare(kodeB, undefined, {
         numeric: true,
-        sensitivity: 'base'
+        sensitivity: "base"
       });
     });
 
-    res.json(sortedData);
+    // 🔥 HITUNG DINAMIS
+    const result = await Promise.all(
+      sortedData.map(async (boq) => {
+
+        let harga_satuan = 0;
+        let jumlah = 0;
+        let jumlah_ppn = 0;
+
+        if (boq.tipe === "item" && boq.analisa_id) {
+
+          harga_satuan = await hitungAnalisa(boq.analisa_id);
+
+          const volume = Number(boq.volume) || 0;
+          jumlah = harga_satuan * volume;
+
+          const ppn = Number(boq.ppn) || 0;
+          jumlah_ppn = jumlah + (jumlah * ppn / 100);
+        }
+
+        return {
+          ...boq.toJSON(),
+
+          // 🔥 override nilai DB
+          harga_satuan: Number(harga_satuan.toFixed(2)),
+          jumlah: Number(jumlah.toFixed(2)),
+          jumlah_ppn: Number(jumlah_ppn.toFixed(2))
+        };
+      })
+    );
+
+    res.json(result);
+
   } catch (error) {
     console.error("DETEKSI ERROR:", error);
     res.status(500).json({ message: error.message });
@@ -177,21 +283,51 @@ export const getBoqById = async (req, res) => {
   }
 };
 
-// 🔥 UPDATE
 export const updateBoq = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Cari datanya dulu
-    const item = await Boq.findByPk(id);
-    if (!item) return res.status(404).json({ message: "Data tidak ditemukan" });
 
-    // Update field yang dikirim (termasuk bobot)
-    await Boq.update(req.body, {
-      where: { id: id }
+    // 🔥 cari data
+    const item = await Boq.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: "Data tidak ditemukan" });
+    }
+
+    // 🔥 ambil project_id untuk generate bobot nanti
+    const project_id = item.project_id;
+
+    // 🔥 ambil field yang mau diupdate
+    const {
+      uraian,
+      satuan,
+      volume,
+      analisa_id,
+      ppn,
+      tipe,
+      kode,
+      parent_id
+    } = req.body;
+
+    // 🔥 update manual biar aman & fleksibel
+    await item.update({
+      kode: kode ?? item.kode,
+      parent_id: parent_id ?? item.parent_id,
+      uraian: uraian ?? item.uraian,
+      satuan: satuan ?? item.satuan,
+      volume: volume ?? item.volume,
+      analisa_id: analisa_id ?? item.analisa_id,
+      ppn: ppn ?? item.ppn,
+      tipe: tipe ?? item.tipe
     });
 
-    res.status(200).json({ message: "Berhasil update data" });
+    // 🔥 REGENERATE BOBOT
+    await generateBobotInternal(project_id);
+
+    res.status(200).json({
+      message: "Berhasil update BOQ",
+      data: item
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -200,11 +336,24 @@ export const updateBoq = async (req, res) => {
 // 🔥 DELETE
 export const deleteBoq = async (req, res) => {
   try {
-    await Boq.destroy({
-      where: { id: req.params.id }
+    const { id } = req.params;
+
+    const item = await Boq.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: "Data tidak ditemukan" });
+    }
+
+    const project_id = item.project_id;
+
+    await item.destroy();
+
+    // 🔥 regenerate bobot setelah delete
+    await generateBobotInternal(project_id);
+
+    res.status(200).json({
+      message: "Berhasil hapus BOQ"
     });
 
-    res.json({ message: "Boq deleted" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

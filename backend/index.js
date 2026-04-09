@@ -19,12 +19,13 @@ import "./models/ProjectPeriodModel.js";
 import "./models/MaterialModel.js";
 import "./models/Pekerja.js";
 import "./models/PeralatanModel.js";
-import "./models/DailyPekerja.js";
-import "./models/DailyPeralatan.js";
-import "./models/DailyMaterial.js";
 import "./models/MasterItem.js";
 import "./models/AnalisaMaster.js";
 import "./models/AnalisaMasterDetail.js";
+import "./models/ProjekItem.js";
+import "./models/ProjekAnalisa.js";
+import "./models/ProjekAnalisaDetail.js";
+import "./models/DailyProgresItem.js"
 
 
 import ScheduleRoutes from "./routes/ScheduleRoutes.js";
@@ -39,6 +40,9 @@ import MasterItemRoutes from "./routes/MasterItemRoutes.js";
 import ItemCategoryRoutes from "./routes/ItemCategoryRoutes.js";
 import AnalisaMasterRoutes from "./routes/AnalisaMasterRoutes.js";
 import AnalisaMasterDetailRoutes from "./routes/AnalisaMasterDetailRoutes.js";
+import ProjectItemRoutes from './routes/ProjectItemRoutes.js';
+import ProjekAnalisaRoutes from './routes/ProjekAnalisaRoutes.js';
+import ProjekAnalisaDetailRoutes from './routes/ProjekAnalisaDetailRoutes.js';
 
 
 const app = express();
@@ -87,6 +91,9 @@ app.use("/api", MasterItemRoutes);
 app.use("/api", ItemCategoryRoutes);
 app.use("/api", AnalisaMasterRoutes);
 app.use("/api", AnalisaMasterDetailRoutes);
+app.use("/api", ProjectItemRoutes);
+app.use("/api", ProjekAnalisaRoutes);
+app.use("/api", ProjekAnalisaDetailRoutes);
 
 
 // koneksi database

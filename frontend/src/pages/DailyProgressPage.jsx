@@ -11,15 +11,9 @@ export default function DailyProgressPage() {
   // --- States ---
   const [boqList, setBoqList] = useState([]);
   const [data, setData] = useState([]);
-  const [materialList, setMaterialList] = useState([]);
-  const [pekerjaList, setPekerjaList] = useState([]);
-  const [peralatanList, setPeralatanList] = useState([]);
   const formRef = useRef(null);
 
-  const [isCopy, setIsCopy] = useState(false);
-
-  // --- Edit Mode State ---
-  const [editId, setEditId] = useState(null);
+  const [previewItems, setPreviewItems] = useState([]);
 
   const [form, setForm] = useState({
     boq_id: "",
@@ -27,10 +21,7 @@ export default function DailyProgressPage() {
     volume: ""
   });
 
-  // --- Detail States ---
-  const [materials, setMaterials] = useState([]);
-  const [pekerja, setPekerja] = useState([]);
-  const [peralatan, setPeralatan] = useState([]);
+
 
   // ================= FETCH DATA =================
   const fetchData = async () => {
@@ -47,151 +38,83 @@ export default function DailyProgressPage() {
     setBoqList(res.data);
   };
 
-  const fetchMaster = async () => {
-    try {
-      const m = await api.get(`/materials/${id}`);
-      const p = await api.get(`/pekerja/${id}`);
-      const a = await api.get(`/peralatan/${id}`);
-      setMaterialList(m.data);
-      setPekerjaList(p.data);
-      setPeralatanList(a.data);
-    } catch (e) {
-      console.log(e);
-    }
-  };
+
 
   useEffect(() => {
     fetchData();
     fetchBoq();
-    fetchMaster();
   }, [id]);
 
-  // ================= LOGIKA EDIT =================
-  const handleEdit = async (item) => {
+
+
+  const loadPreviewAnalisa = async (boq_id, volume) => {
     try {
-      setEditId(item.id);
+      if (!boq_id) return;
 
-      setTimeout(() => {
-        formRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start"
-        });
-      }, 100);
+      const boq = boqList.find(b => b.id == boq_id);
+      if (!boq || !boq.analisa_id) return;
 
-      const res = await api.get(`/daily-progress/${item.id}`);
-      const d = res.data;
+      const res = await api.get(`/project-analisa-detail/${boq.analisa_id}`);
+      const analisa = res.data;
 
-      setEditId(item.id);
+      const allItems = [
+        ...(analisa.tenaga || []),
+        ...(analisa.bahan || []),
+        ...(analisa.alat || [])
+      ];
 
-      setForm({
-        boq_id: d.boq_id,
-        tanggal: d.tanggal,
-        volume: d.volume
-      });
+    const result = allItems.map(item => {
+      let rawKoef = item.koefisien;
+      if (!rawKoef) rawKoef = item.koef;
+      const koef = parseFloat(String(rawKoef).replace(",", ".")) || 0;
+      const volNum = parseFloat(volume) || 0;
 
-      setMaterials((d.materials || []).map(m => ({
-        material_id: m.material_id,
-        koef: m.koef
-      })));
+      const hasil = koef * volNum;
 
-      setPekerja((d.workers || []).map(w => ({
-        worker_id: w.worker_id,
-        koef: w.koef
-      })));
-
-      setPeralatan((d.tools || []).map(t => ({
-        tool_id: t.tool_id,
-        jumlah: t.jumlah
-      })));
-
-    } catch (error) {
-      console.error(error);
-      alert("Gagal load data edit");
-    }
-  };
-
-  const handleCopy = async (item) => {
-  try {
-    setIsCopy(true);     // ✅ ini beda dari edit
-    setEditId(null);     // ❌ jangan pakai edit
-
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
-    }, 100);
-
-    const res = await api.get(`/daily-progress/${item.id}`);
-    const d = res.data;
-
-    setForm({
-      boq_id: d.boq_id,
-      tanggal: d.tanggal, // 🔥 kosongkan biar user isi baru
-      volume: d.volume
+      return {
+        nama: item.nama,
+        tipe: item.tipe,
+        satuan: item.satuan,
+        koef,
+        hasil: hasil.toFixed(3)
+      };
     });
 
-    setMaterials((d.materials || []).map(m => ({
-      material_id: m.material_id,
-      koef: m.koef
-    })));
+      setPreviewItems(result);
 
-    setPekerja((d.workers || []).map(w => ({
-      worker_id: w.worker_id,
-      koef: w.koef
-    })));
-
-    setPeralatan((d.tools || []).map(t => ({
-      tool_id: t.tool_id,
-      jumlah: t.jumlah
-    })));
-
-  } catch (error) {
-    alert("Gagal copy data");
-  }
-};
-
-  const cancelEdit = () => {
-    setEditId(null);
-    setIsCopy(false);
-    setForm({ boq_id: "", tanggal: "", volume: "" });
-    setMaterials([]);
-    setPekerja([]);
-    setPeralatan([]);
-  };
-
-  const removeItem = (type, index) => {
-    if (type === 'm') setMaterials(materials.filter((_, i) => i !== index));
-    if (type === 'p') setPekerja(pekerja.filter((_, i) => i !== index));
-    if (type === 'a') setPeralatan(peralatan.filter((_, i) => i !== index));
-  };
-
-  // ================= SUBMIT =================
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...form,
-        project_id: id,
-        materials,
-        pekerja,
-        peralatan
-      };
-
-      if (editId && !isCopy) {
-        await api.put(`/daily-progress/${editId}`, payload);
-        alert("✅ Berhasil Update!");
-      } else {
-        await api.post("/daily-progress", payload);
-        alert("✅ Berhasil Simpan!");
-      }
-
-      cancelEdit();
-      fetchData();
     } catch (err) {
-      alert(err.response?.data?.message || "Terjadi kesalahan");
+      console.log("Preview error", err);
     }
   };
+
+  
+  useEffect(() => {
+    if (form.boq_id) {
+      loadPreviewAnalisa(form.boq_id, form.volume);
+    }
+  }, [form.boq_id, form.volume]);
+
+  // ================= SUBMIT =================
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  try {
+
+    const payload = {
+      project_id: id,
+      boq_id: form.boq_id,
+      tanggal: form.tanggal,
+      volume: form.volume
+    };
+
+    await api.post("/daily-progress", payload);
+    alert("✅ Berhasil Simpan!");
+
+    fetchData();
+
+  } catch (err) {
+    alert(err.response?.data?.message || "Terjadi kesalahan update ini alernya");
+  }
+};
 
   // ================= SUMMARY LOGIC =================
   const getSummary = () => {
@@ -201,7 +124,7 @@ export default function DailyProgressPage() {
     if (!selectedBoq) return null;
 
     const volumeLalu = data
-      .filter((d) => d.boq_id == form.boq_id && d.id !== editId)
+      .filter((d) => d.boq_id == form.boq_id)
       .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
 
     const volumeInputSekarang = parseFloat(form.volume || 0);
@@ -243,11 +166,8 @@ export default function DailyProgressPage() {
               <p className="text-sm text-gray-500">Laporkan capaian volume harian di lapangan</p>
             </div>
           </div>
-          {editId && (
-            <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl flex items-center gap-2 font-bold shadow-sm border border-amber-200">
-              <AlertCircle size={18} /> Mode Edit Data: {editId}
-            </div>
-          )}
+        
+           
         </div>
 
         {/* ================= FORM ================= */}
@@ -260,15 +180,24 @@ export default function DailyProgressPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
             <div className="flex flex-col">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Pekerjaan (Dari BOQ)</label>
-              <select
+                <select
                 value={form.boq_id}
-                onChange={(e) => setForm({ ...form, boq_id: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium outline-none transition-all" 
+                onChange={(e) => {
+                  const boq_id = e.target.value; // ✅ ini BOQ
+                  const newForm = { ...form, boq_id };
+
+                  setForm(newForm);
+
+    
+                }}
+                className="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium outline-none transition-all"
                 required
               >
                 <option value="">-- Pilih Pekerjaan BOQ --</option>
                 {boqList.filter(b => b.tipe === 'item').map(b => (
-                  <option key={b.id} value={b.id}>{b.kode ? `${b.kode} - ` : ''}{b.uraian}</option>
+                  <option key={b.id} value={b.id}>
+                    {b.kode ? `${b.kode} - ` : ''}{b.uraian}
+                  </option>
                 ))}
               </select>
             </div>
@@ -353,174 +282,87 @@ export default function DailyProgressPage() {
             </div>
           )}
 
-          {/* ================= DETAIL SECTION (RESOURCE USAGE) ================= */}
-          <div className="mt-8 border-t border-gray-100 pt-8 relative z-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">Catatan Penggunaan Sumber Daya <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">(Opsional)</span></h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* --- MATERIAL --- */}
-              <div className="bg-orange-50/30 rounded-2xl border border-orange-100 p-5 flex flex-col">
-                <h3 className="font-bold text-orange-800 mb-4 text-sm flex items-center justify-between">
-                  <span>📦 Material (Bahan)</span>
-                  <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px]">{materials.length} item</span>
-                </h3>
-                <div className="space-y-3 flex-1">
-                  {materials.map((m, i) => (
-                    <div key={i} className="flex gap-2 items-start bg-white p-2 rounded-xl border border-orange-50 shadow-sm relative group transition-colors hover:border-orange-200">
-                      <div className="flex-1 w-full space-y-2">
-                        <select
-                          value={m.material_id}
-                          onChange={(e) => {
-                            const newData = [...materials];
-                            newData[i].material_id = e.target.value;
-                            setMaterials(newData);
-                          }}
-                          className="w-full border-none bg-orange-50/50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-orange-300"
-                        >
-                          <option value="">Pilih Material</option>
-                          {materialList.map(mat => (
-                            <option key={mat.id} value={mat.id}>{mat.nama}</option>
-                          ))}
-                        </select>
-                        <input
-                          placeholder="Jumlah Koef/Volume"
-                          value={m.koef}
-                          onChange={(e) => {
-                            const newData = [...materials];
-                            newData[i].koef = e.target.value;
-                            setMaterials(newData);
-                          }}
-                          className="w-full border-none bg-gray-50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-orange-300"
-                        />
-                      </div>
-                      <button type="button" onClick={() => removeItem('m', i)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
+          {previewItems.length > 0 && (
+            <div className="mt-8 bg-white border border-blue-100 rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+              
+              {/* HEADER PREVIEW */}
+              <div className="bg-blue-50/50 px-5 py-3 border-b border-blue-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <h3 className="font-bold text-slate-700 tracking-tight">🔍 Preview Analisa Kebutuhan</h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMaterials([...materials, { material_id: "", koef: "" }])}
-                  className="mt-4 w-full py-2 border border-dashed border-orange-300 text-orange-600 rounded-xl text-xs font-bold hover:bg-orange-50 transition-colors flex items-center justify-center gap-1"
-                >
-                  <PlusCircle size={14} /> Tambah Material
-                </button>
+                <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase">
+                  Auto Calculation
+                </span>
               </div>
 
-              {/* --- PEKERJA --- */}
-              <div className="bg-purple-50/30 rounded-2xl border border-purple-100 p-5 flex flex-col">
-                <h3 className="font-bold text-purple-800 mb-4 text-sm flex items-center justify-between">
-                  <span>👷 Tenaga Kerja (Mandor/Tukang)</span>
-                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-[10px]">{pekerja.length} item</span>
-                </h3>
-                <div className="space-y-3 flex-1">
-                  {pekerja.map((p, i) => (
-                    <div key={i} className="flex gap-2 items-start bg-white p-2 rounded-xl border border-purple-50 shadow-sm relative group transition-colors hover:border-purple-200">
-                      <div className="flex-1 w-full space-y-2">
-                        <select
-                          value={p.worker_id}
-                          onChange={(e) => {
-                            const newData = [...pekerja];
-                            newData[i].worker_id = e.target.value;
-                            setPekerja(newData);
-                          }}
-                          className="w-full border-none bg-purple-50/50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-purple-300"
-                        >
-                          <option value="">Pilih Pekerja</option>
-                          {pekerjaList.map(w => (
-                            <option key={w.id} value={w.id}>{w.nama} ({w.tipe})</option>
-                          ))}
-                        </select>
-                        <input
-                          placeholder="Jumlah Koef/HK"
-                          value={p.koef}
-                          onChange={(e) => {
-                            const newData = [...pekerja];
-                            newData[i].koef = e.target.value;
-                            setPekerja(newData);
-                          }}
-                          className="w-full border-none bg-gray-50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-purple-300"
-                        />
-                      </div>
-                      <button type="button" onClick={() => removeItem('p', i)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPekerja([...pekerja, { worker_id: "", koef: "" }])}
-                  className="mt-4 w-full py-2 border border-dashed border-purple-300 text-purple-600 rounded-xl text-xs font-bold hover:bg-purple-50 transition-colors flex items-center justify-center gap-1"
-                >
-                  <PlusCircle size={14} /> Tambah Pekerja
-                </button>
+              <div className="p-0 overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="text-slate-400 text-[11px] uppercase tracking-widest bg-slate-50/30">
+                      <th className="px-5 py-3 font-semibold text-center w-12">No</th>
+                      <th className="px-5 py-3 font-semibold">Item Material / Tenaga</th>
+                      <th className="px-5 py-3 font-semibold text-center">Tipe</th>
+                      <th className="px-5 py-3 font-semibold text-right">Koefisien</th>
+                      <th className="px-5 py-3 font-semibold text-center">Volume</th>
+                      <th className="px-5 py-3 font-semibold text-right text-blue-600">Total Kebutuhan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {previewItems.map((item, i) => (
+                      <tr key={i} className="hover:bg-blue-50/20 transition-colors group">
+                        <td className="px-5 py-3 text-center text-slate-400 font-mono text-xs">{i + 1}</td>
+                        <td className="px-5 py-3">
+                          <span className="font-bold text-slate-700 group-hover:text-blue-700 transition-colors">
+                            {item.nama}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            item.tipe === 'BAHAN' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            item.tipe === 'TENAGA' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                            'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          }`}>
+                            {item.tipe}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right font-mono text-slate-500 italic">{item.koef}</td>
+                        <td className="px-5 py-3 text-center">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded font-medium text-slate-600">
+                            {form.volume}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="font-black text-blue-600 text-base">
+                              {item.hasil}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter -mt-1">
+                              Estimasi Satuan
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              {/* --- PERALATAN --- */}
-              <div className="bg-teal-50/30 rounded-2xl border border-teal-100 p-5 flex flex-col">
-                <h3 className="font-bold text-teal-800 mb-4 text-sm flex items-center justify-between">
-                  <span>🚜 Alat Berat / Alat Bantu</span>
-                  <span className="bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full text-[10px]">{peralatan.length} item</span>
-                </h3>
-                <div className="space-y-3 flex-1">
-                  {peralatan.map((a, i) => (
-                    <div key={i} className="flex gap-2 items-start bg-white p-2 rounded-xl border border-teal-50 shadow-sm relative group transition-colors hover:border-teal-200">
-                      <div className="flex-1 w-full space-y-2">
-                        <select
-                          value={a.tool_id}
-                          onChange={(e) => {
-                            const newData = [...peralatan];
-                            newData[i].tool_id = e.target.value;
-                            setPeralatan(newData);
-                          }}
-                          className="w-full border-none bg-teal-50/50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-teal-300"
-                        >
-                          <option value="">Pilih Peralatan</option>
-                          {peralatanList.map(t => (
-                            <option key={t.id} value={t.id}>{t.nama}</option>
-                          ))}
-                        </select>
-                        <input
-                          placeholder="Jumlah Alat/Durasi"
-                          value={a.jumlah}
-                          onChange={(e) => {
-                            const newData = [...peralatan];
-                            newData[i].jumlah = e.target.value;
-                            setPeralatan(newData);
-                          }}
-                          className="w-full border-none bg-gray-50 p-2 text-xs rounded-lg font-medium text-gray-700 outline-none focus:ring-1 focus:ring-teal-300"
-                        />
-                      </div>
-                      <button type="button" onClick={() => removeItem('a', i)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPeralatan([...peralatan, { tool_id: "", jumlah: form.volume || 0 }])}
-                  className="mt-4 w-full py-2 border border-dashed border-teal-300 text-teal-600 rounded-xl text-xs font-bold hover:bg-teal-50 transition-colors flex items-center justify-center gap-1"
-                >
-                  <PlusCircle size={14} /> Tambah Peralatan
-                </button>
+              {/* FOOTER PREVIEW */}
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-100">
+                <p className="text-[10px] text-slate-400 italic">
+                  *Hasil di atas adalah estimasi murni berdasarkan perkalian Volume x Koefisien AHSP.
+                </p>
               </div>
-
             </div>
-          </div>
+          )}
+
+          {/* ================= DETAIL SECTION (RESOURCE USAGE) ================= */}
 
           {/* ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 relative z-10">
-            {editId && (
-              <button type="button" onClick={cancelEdit} className="px-6 py-3 rounded-xl font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm">
-                <X size={18} /> Batal Edit
-              </button>
-            )}
-            <button className={`px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2 ${editId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-              <Save size={18} /> {editId ? "Update Data Progres" : "Post Data Progres"}
+            <button className={`px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2  bg-blue-600 hover:bg-blue-700`}>
+              <Save size={18} /> Post Data Progres
             </button>
           </div>
         </form>
@@ -537,7 +379,6 @@ export default function DailyProgressPage() {
                 <tr className="text-xs uppercase tracking-wider text-gray-500 border-b border-gray-100">
                   <th className="p-4 pl-6">Tanggal</th>
                   <th className="p-4">Item Pekerjaan BOQ</th>
-                  <th className="p-4 text-center">Resources Tersimpan</th>
                   <th className="p-4 text-right">Volume</th>
                   <th className="p-4 text-center pr-6">Aksi</th>
                 </tr>
@@ -551,31 +392,11 @@ export default function DailyProgressPage() {
                     <td className="p-4 text-gray-800 font-bold max-w-[300px] truncate" title={item.boq?.uraian}>
                        <span className="text-blue-500 mr-2 opacity-50">•</span>{item.boq?.uraian}
                     </td>
-                    <td className="p-4 text-center">
-                       <div className="flex items-center justify-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                         {item.materials?.length > 0 && <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-1.5 py-0.5 rounded" title="Material">M:{item.materials.length}</span>}
-                         {item.workers?.length > 0 && <span className="bg-purple-100 text-purple-600 text-[10px] font-bold px-1.5 py-0.5 rounded" title="Tenaga Kerja">W:{item.workers.length}</span>}
-                         {item.tools?.length > 0 && <span className="bg-teal-100 text-teal-600 text-[10px] font-bold px-1.5 py-0.5 rounded" title="Peralatan">T:{item.tools.length}</span>}
-                         {(!item.materials?.length && !item.workers?.length && !item.tools?.length) && <span className="text-xs text-gray-300">-</span>}
-                       </div>
-                    </td>
+                   
                     <td className="p-4 text-right">
                        <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
                     </td>
-                    <td className="p-4 text-center pr-6">
-                      <button 
-                          onClick={() => handleCopy(item)}
-                          className="bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-600 hover:text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 justify-center mx-auto mt-1"
-                        >
-                          <PlusCircle size={12} /> Copy
-                        </button>
-                      <button 
-                        onClick={() => handleEdit(item)}
-                        className="bg-white border border-gray-200 hover:border-amber-300 hover:bg-amber-50 text-gray-600 hover:text-amber-600 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 justify-center mx-auto"
-                      >
-                        <Edit size={12} /> Edit ReKAM
-                      </button>
-                    </td>
+                  
                   </tr>
                 ))}
                 {data.length === 0 && (

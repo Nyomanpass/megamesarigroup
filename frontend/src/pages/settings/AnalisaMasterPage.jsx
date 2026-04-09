@@ -5,6 +5,11 @@ const AnalisaMasterPage = () => {
   const [data, setData] = useState([]);
   const [items, setItems] = useState([]);
 
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editDetailId, setEditDetailId] = useState(null);
+  const [isEditDetail, setIsEditDetail] = useState(false);
+
   const [selectedAnalisa, setSelectedAnalisa] = useState(null);
   const [detail, setDetail] = useState(null);
 
@@ -12,7 +17,7 @@ const AnalisaMasterPage = () => {
     kode: "",
     nama: "",
     satuan: "",
-    overhead_persen: 10
+    overhead_persen: 0
 });
 
   const [formDetail, setFormDetail] = useState({
@@ -31,11 +36,17 @@ const handleSubmitMaster = async (e) => {
   e.preventDefault();
 
   try {
-    const res = await api.post("/master/analisa", formMaster);
+    if (isEdit) {
+      // 🔥 UPDATE
+      await api.put(`/master/analisa/${editId}`, formMaster);
+      alert("Data berhasil diupdate");
+    } else {
+      // 🔥 CREATE
+      await api.post("/master/analisa", formMaster);
+      alert("Data berhasil ditambah");
+    }
 
-    console.log("SUCCESS:", res.data);
-
-    // 🔥 RESET FORM
+    // reset
     setFormMaster({
       kode: "",
       nama: "",
@@ -43,12 +54,51 @@ const handleSubmitMaster = async (e) => {
       overhead_persen: 10
     });
 
-    // 🔥 REFRESH DATA (INI YANG BIKIN MUNCUL)
+    setIsEdit(false);
+    setEditId(null);
+
     fetchData();
 
   } catch (err) {
     console.error(err);
   }
+};
+
+const handleDelete = async (id) => {
+  const confirmDelete = window.confirm("Yakin mau hapus?");
+
+  if (!confirmDelete) return;
+
+  try {
+    await api.delete(`/master/analisa/${id}`);
+    alert("Data berhasil dihapus");
+
+    fetchData();
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const handleEditDetail = (d) => {
+  setFormDetail({
+    item_id: d.item_id, // 🔥 ambil dari backend
+    koefisien: d.koefisien
+  });
+
+  setEditDetailId(d.id);
+  setIsEditDetail(true);
+};
+
+const handleEdit = (data) => {
+  setFormMaster({
+    kode: data.kode,
+    nama: data.nama,
+    satuan: data.satuan,
+    overhead_persen: data.overhead_persen
+  });
+
+  setEditId(data.id);
+  setIsEdit(true);
 };
 
   // 🔹 GET ANALISA
@@ -81,7 +131,7 @@ const handleSubmitMaster = async (e) => {
   };
 
   // 🔹 TAMBAH DETAIL
-  const handleSubmitDetail = async (e) => {
+const handleSubmitDetail = async (e) => {
   e.preventDefault();
 
   if (!selectedAnalisa) {
@@ -89,14 +139,52 @@ const handleSubmitMaster = async (e) => {
     return;
   }
 
-  await api.post("/master/analisa-detail", {
-    analisa_id: selectedAnalisa.id,
-    item_id: formDetail.item_id,
-    koefisien: formDetail.koefisien
-  });
+  try {
+    if (isEditDetail) {
+      // 🔥 UPDATE
+      await api.put(`/master/analisa-detail/${editDetailId}`, {
+        koefisien: formDetail.koefisien,
+        item_id: formDetail.item_id
+      });
 
-  setFormDetail({ item_id: "", koefisien: "" });
-  fetchDetail(selectedAnalisa.id);
+      alert("Detail berhasil diupdate");
+    } else {
+      // 🔥 CREATE
+      await api.post("/master/analisa-detail", {
+        analisa_id: selectedAnalisa.id,
+        item_id: formDetail.item_id,
+        koefisien: formDetail.koefisien
+      });
+
+      alert("Detail berhasil ditambah");
+    }
+
+    // reset
+    setFormDetail({ item_id: "", koefisien: "" });
+    setIsEditDetail(false);
+    setEditDetailId(null);
+
+    fetchDetail(selectedAnalisa.id);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const handleDeleteDetail = async (id) => {
+  const confirmDelete = window.confirm("Yakin hapus item ini?");
+
+  if (!confirmDelete) return;
+
+  try {
+    await api.delete(`/master/analisa-detail/${id}`);
+
+    alert("Berhasil dihapus");
+
+    fetchDetail(selectedAnalisa.id);
+  } catch (err) {
+    console.error(err);
+  }
 };
 
   return (
@@ -138,9 +226,9 @@ const handleSubmitMaster = async (e) => {
       className="border p-2"
     />
 
-    <button className="col-span-2 bg-blue-600 text-white p-2">
-      Simpan Analisa
-    </button>
+   <button className="col-span-2 bg-blue-600 text-white p-2">
+  {isEdit ? "Update Analisa" : "Simpan Analisa"}
+</button>
 
   </form>
 </div>
@@ -163,9 +251,23 @@ const handleSubmitMaster = async (e) => {
               <td>
                 <button
                   onClick={() => openDetail(a)}
-                  className="bg-blue-500 text-white px-2"
+                  className="bg-blue-500 text-white px-2 mr-2"
                 >
                   Detail
+                </button>
+
+                <button
+                  onClick={() => handleEdit(a)}
+                  className="bg-yellow-500 text-white px-2 mr-2"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => handleDelete(a.id)}
+                  className="bg-red-500 text-white px-2"
+                >
+                  Hapus
                 </button>
               </td>
             </tr>
@@ -223,8 +325,8 @@ const handleSubmitMaster = async (e) => {
             className="border p-2 rounded w-1/4"
           />
 
-          <button className="bg-green-600 text-white px-4 rounded hover:bg-green-700">
-            + Tambah
+         <button className="bg-green-600 text-white px-4 rounded">
+            {isEditDetail ? "Update" : "+ Tambah"}
           </button>
         </form>
 
@@ -240,6 +342,7 @@ const handleSubmitMaster = async (e) => {
                   <th className="p-2 border">Koef</th>
                   <th className="p-2 border">Harga</th>
                   <th className="p-2 border">Jumlah</th>
+                  <th className="p-2 border">aksi</th>
                 </tr>
               </thead>
 
@@ -252,16 +355,33 @@ const handleSubmitMaster = async (e) => {
 
                 {detail.tenaga?.length > 0 ? (
                   detail.tenaga.map((d) => (
-                    <tr key={d.id}>
-                      <td className="p-2 border">{d.nama}</td>
-                      <td className="p-2 border text-center">{d.koefisien}</td>
-                      <td className="p-2 border text-right">
-                        {d.harga.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-2 border text-right">
-                        {d.jumlah.toLocaleString("id-ID")}
-                      </td>
-                    </tr>
+                  <tr key={d.id}>
+                  <td className="p-2 border">{d.nama}</td>
+                  <td className="p-2 border text-center">{d.koefisien}</td>
+                  <td className="p-2 border text-right">
+                    {d.harga.toLocaleString("id-ID")}
+                  </td>
+                  <td className="p-2 border text-right">
+                    {d.jumlah.toLocaleString("id-ID")}
+                  </td>
+
+                  {/* 🔥 AKSI */}
+                  <td className="p-2 border text-center">
+                    <button
+                      onClick={() => handleEditDetail(d)}
+                      className="bg-yellow-500 text-white px-2 mr-1"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteDetail(d.id)}
+                      className="bg-red-500 text-white px-2"
+                    >
+                      Hapus
+                    </button>
+                  </td>
+                </tr>
                   ))
                 ) : (
                   <tr>
@@ -285,16 +405,33 @@ const handleSubmitMaster = async (e) => {
 
                 {detail.bahan?.length > 0 ? (
                   detail.bahan.map((d) => (
-                    <tr key={d.id}>
-                      <td className="p-2 border">{d.nama}</td>
-                      <td className="p-2 border text-center">{d.koefisien}</td>
-                      <td className="p-2 border text-right">
-                        {d.harga.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-2 border text-right">
-                        {d.jumlah.toLocaleString("id-ID")}
-                      </td>
-                    </tr>
+                                     <tr key={d.id}>
+                  <td className="p-2 border">{d.nama}</td>
+                  <td className="p-2 border text-center">{d.koefisien}</td>
+                  <td className="p-2 border text-right">
+                    {d.harga.toLocaleString("id-ID")}
+                  </td>
+                  <td className="p-2 border text-right">
+                    {d.jumlah.toLocaleString("id-ID")}
+                  </td>
+
+                  {/* 🔥 AKSI */}
+                  <td className="p-2 border text-center">
+                    <button
+                      onClick={() => handleEditDetail(d)}
+                      className="bg-yellow-500 text-white px-2 mr-1"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteDetail(d.id)}
+                      className="bg-red-500 text-white px-2"
+                    >
+                      Hapus
+                    </button>
+                  </td>
+                </tr>
                   ))
                 ) : (
                   <tr>
@@ -318,16 +455,33 @@ const handleSubmitMaster = async (e) => {
 
                 {detail.alat?.length > 0 ? (
                   detail.alat.map((d) => (
-                    <tr key={d.id}>
-                      <td className="p-2 border">{d.nama}</td>
-                      <td className="p-2 border text-center">{d.koefisien}</td>
-                      <td className="p-2 border text-right">
-                        {d.harga.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-2 border text-right">
-                        {d.jumlah.toLocaleString("id-ID")}
-                      </td>
-                    </tr>
+                                    <tr key={d.id}>
+                  <td className="p-2 border">{d.nama}</td>
+                  <td className="p-2 border text-center">{d.koefisien}</td>
+                  <td className="p-2 border text-right">
+                    {d.harga.toLocaleString("id-ID")}
+                  </td>
+                  <td className="p-2 border text-right">
+                    {d.jumlah.toLocaleString("id-ID")}
+                  </td>
+
+                  {/* 🔥 AKSI */}
+                  <td className="p-2 border text-center">
+                    <button
+                      onClick={() => handleEditDetail(d)}
+                      className="bg-yellow-500 text-white px-2 mr-1"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteDetail(d.id)}
+                      className="bg-red-500 text-white px-2"
+                    >
+                      Hapus
+                    </button>
+                  </td>
+                </tr>
                   ))
                 ) : (
                   <tr>

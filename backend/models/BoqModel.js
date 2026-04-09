@@ -10,6 +10,13 @@ export const Boq = sequelize.define("Boq", {
     references: { model: "projects", key: "id" }
   },
 
+  // 🔥 RELASI KE ANALISA
+  analisa_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: "project_analisa", key: "id" }
+  },
+
   parent_id: {
     type: DataTypes.INTEGER,
     allowNull: true,
@@ -36,12 +43,13 @@ export const Boq = sequelize.define("Boq", {
     allowNull: true
   },
 
+  // 🔥 dari analisa (auto)
   harga_satuan: {
     type: DataTypes.DECIMAL(20, 2),
     allowNull: true
   },
 
-  // 🔥 AUTO HITUNG
+  // 🔥 volume × harga_satuan
   jumlah: {
     type: DataTypes.DECIMAL(20, 2),
     allowNull: true
@@ -72,7 +80,7 @@ export const Boq = sequelize.define("Boq", {
       "pembulatan",
       "subheader"
     ),
-    defaultValue: "item" // 🔥 FIX TYPO
+    defaultValue: "item"
   }
 
 }, {

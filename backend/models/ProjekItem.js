@@ -1,11 +1,16 @@
 import { DataTypes } from "sequelize";
 import { sequelize } from "../config/Database.js";
 
-export const MasterItem = sequelize.define("MasterItem", {
+export const ProjectItem = sequelize.define("ProjectItem", {
   id: { 
     type: DataTypes.INTEGER, 
     autoIncrement: true, 
     primaryKey: true 
+  },
+
+  project_id: { 
+    type: DataTypes.INTEGER, 
+    allowNull: false 
   },
 
   nama: { 
@@ -23,21 +28,22 @@ export const MasterItem = sequelize.define("MasterItem", {
     allowNull: false 
   },
 
-    harga_default: {
-      type: DataTypes.DECIMAL(15, 2),
-      allowNull: false
-    },
+  harga: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false
+  },
 
-    category_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
+  category_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
 
-    terbilang: {
+  terbilang: {
     type: DataTypes.INTEGER,
     allowNull: true
   }
+
 }, {
-  tableName: "master_items",
+  tableName: "project_items",
   timestamps: true
 });

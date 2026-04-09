@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 import {
-  MapPin, Calendar, Building2, Briefcase, FileText, ClipboardList,
+  MapPin, Calendar, Building2, Briefcase, FileText,
   CalendarDays, CalendarPlus, TrendingUp, FileCheck, BarChart as BarChartIcon,
-  BarChart3, Package, Users, Wrench, ArrowLeft, Target, Wallet, Folder
+  BarChart3, Package, Users, Wrench, Wallet, Folder, Calculator
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -14,11 +14,29 @@ import {
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [progres, seProgres] = useState([]);
+  const lastProgress = progres.length
+  ? progres[progres.length - 1].kum_real
+  : 0;
+
+  const safeProgress = Math.min(lastProgress, 100);
 
   const [project, setProject] = useState(null);
 
+
+
+  const fetchChart = async () => {
+    try {
+      const res = await api.get(`/daily-plan/weekly-chart/${id}`);
+      seProgres(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchProject();
+    fetchChart();
   }, [id]);
 
   const fetchProject = async () => {
@@ -49,6 +67,7 @@ export default function ProjectDetail() {
     { title: "Material", path: "material", icon: Package, color: "gray" },
     { title: "Tenaga Kerja", path: "tenaga", icon: Users, color: "orange" },
     { title: "Peralatan", path: "peralatan", icon: Wrench, color: "teal" },
+    { title: "Analisa Proyek", path: "analisa", icon: Calculator, color: "emerald" },
   ];
 
   const getColorClasses = (color) => {
@@ -68,20 +87,16 @@ export default function ProjectDetail() {
   };
 
   // ✅ Dummy Data for Charts
-  const chartData = [
-    { name: 'Minggu 1', rencana: 5, realisasi: 4 },
-    { name: 'Minggu 2', rencana: 15, realisasi: 12 },
-    { name: 'Minggu 3', rencana: 30, realisasi: 28 },
-    { name: 'Minggu 4', rencana: 45, realisasi: 50 },
-    { name: 'Minggu 5', rencana: 60, realisasi: 65 },
-    { name: 'Minggu 6', rencana: 80, realisasi: 85 },
-    { name: 'Minggu 7', rencana: 100, realisasi: 98 },
-  ];
+  const chartData = progres.map(d => ({
+    name: `Minggu ${d.minggu_ke}`,
+    rencana: d.kum_rencana,
+    real: d.kum_real
+  }));
 
-  const pieData = [
-    { name: 'Selesai', value: 75, color: '#10B981' }, // Green
-    { name: 'Sisa', value: 25, color: '#E2E8F0' }  // Gray
-  ];
+const pieData = [
+  { name: 'Selesai', value: lastProgress, color: '#10B981' },
+  { name: 'Sisa', value: 100 - lastProgress, color: '#E2E8F0' }
+];
 
   if (!project) {
     return (
@@ -205,14 +220,13 @@ export default function ProjectDetail() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-3xl font-black text-gray-800 leading-none">75<span className="text-lg">%</span></span>
+                <span className="text-3xl font-black text-gray-800 leading-none"> {safeProgress.toFixed(2)}
+                    <span className="text-lg">%</span></span>
               </div>
             </div>
             <div className="text-center relative z-10">
               <h3 className="text-lg font-bold text-gray-800">Progress Pengerjaan</h3>
-              <p className="text-sm text-emerald-600 font-bold flex items-center justify-center gap-1.5 mt-1">
-                <TrendingUp size={16} /> On Track (Aman)
-              </p>
+             
             </div>
           </div>
 
@@ -234,23 +248,57 @@ export default function ProjectDetail() {
 
             <div className="h-40 w-full relative z-10 -ml-5">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={-5} />
-                  <RechartsTooltip
-                    cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }}
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Area type="monotone" dataKey="rencana" stroke="#CBD5E1" strokeWidth={3} fillOpacity={0} />
-                  <Area type="monotone" dataKey="realisasi" stroke="#4F46E5" strokeWidth={4} fill="url(#colorReal)" />
-                </AreaChart>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+
+              <defs>
+                <linearGradient id="colorRencana" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#94A3B8" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#94A3B8" stopOpacity={0}/>
+                </linearGradient>
+
+                <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ff5511" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#ff5511" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 12, fill: '#64748b' }} 
+              />
+
+              <YAxis 
+                domain={[0, 100]} 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 12, fill: '#64748b' }} 
+              />
+
+              <RechartsTooltip />
+
+              <Area 
+                type="natural" 
+                dataKey="rencana" 
+                stroke="#94A3B8"
+                strokeWidth={3}
+                fill="url(#colorRencana)"
+              />
+
+              <Area 
+                type="natural" 
+                dataKey="real" 
+                stroke="#ff5511"
+                strokeWidth={4}
+                fill="url(#colorReal)"
+                dot={false}
+                activeDot={{ r: 5 }}
+              />
+
+            </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>

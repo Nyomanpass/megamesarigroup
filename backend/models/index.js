@@ -10,16 +10,89 @@ import { ProjectWeek } from "./ProjectWeekModel.js";
 import { Material } from "./MaterialModel.js";
 import { Pekerja } from "./Pekerja.js";
 import { Peralatan } from "./PeralatanModel.js";
-import { DailyPekerja } from "./DailyPekerja.js";
-import { DailyPeralatan } from "./DailyPeralatan.js";
-import { DailyMaterial } from "./DailyMaterial.js";
+
 
 import { MasterItem } from "./MasterItem.js";
 import { AnalisaMaster } from "./AnalisaMaster.js";
 import { AnalisaMasterDetail } from "./AnalisaMasterDetail.js";
 import { ItemCategory } from "./ItemCategory.js";
 
+import { ProjectItem } from "./ProjekItem.js";
+import { ProjectAnalisa } from "./ProjekAnalisa.js";
+import { ProjectAnalisaDetail } from "./ProjekAnalisaDetail.js";
+import { DailyProgressItem } from "./DailyProgresItem.js";
 
+
+// PARENT → CHILD
+DailyProgress.hasMany(DailyProgressItem, {
+  foreignKey: "daily_progress_id",
+  as: "items",
+  onDelete: "CASCADE"
+});
+
+DailyProgressItem.belongsTo(DailyProgress, {
+  foreignKey: "daily_progress_id",
+  as: "progress"
+});
+
+
+// CHILD → MASTER ITEM
+DailyProgressItem.belongsTo(ProjectItem, {
+  foreignKey: "item_id",
+  as: "item"
+});
+
+ProjectItem.hasMany(DailyProgressItem, {
+  foreignKey: "item_id",
+  as: "daily_items"
+});
+
+
+
+//relasi analisa dan boq
+// 🔥 BOQ → ANALISA
+Boq.belongsTo(ProjectAnalisa, {
+  foreignKey: "analisa_id",
+  as: "analisa"
+});
+
+// 🔥 ANALISA → BOQ
+ProjectAnalisa.hasMany(Boq, {
+  foreignKey: "analisa_id",
+  as: "boq_items"
+});
+
+// analisa projek relation
+ProjectAnalisaDetail.belongsTo(ProjectItem, {
+  foreignKey: "item_id",
+  as: "item"
+});
+
+ProjectItem.hasMany(ProjectAnalisaDetail, {
+  foreignKey: "item_id",
+  as: "details"
+});
+
+ProjectAnalisaDetail.belongsTo(ProjectAnalisa, {
+  foreignKey: "project_analisa_id",
+  as: "analisa"
+});
+
+ProjectAnalisa.hasMany(ProjectAnalisaDetail, {
+  foreignKey: "project_analisa_id",
+  as: "details"
+});
+
+
+ProjectItem.belongsTo(ItemCategory, {
+  foreignKey: "category_id",
+  as: "category" // 🔥 HARUS SAMA DENGAN INCLUDE
+});
+
+ItemCategory.hasMany(ProjectItem, {
+  foreignKey: "category_id",
+  as: "project_items"
+});
 // =====================
 // ANALISA MASTER RELATION
 // =====================
@@ -94,61 +167,10 @@ ProjectPeriod.belongsTo(Project, {
 });
 
 
-DailyProgress.hasMany(DailyMaterial, {
-  foreignKey: "daily_progress_id",
-  as: "materials"
-});
-
-DailyMaterial.belongsTo(DailyProgress, {
-  foreignKey: "daily_progress_id"
-});
-
-DailyMaterial.belongsTo(Material, {
-  foreignKey: "material_id",
-  as: "material"
-});
-
-Material.hasMany(DailyMaterial, {
-  foreignKey: "material_id"
-});
 
 
-DailyProgress.hasMany(DailyPeralatan, {
-  foreignKey: "daily_progress_id",
-  as: "tools"
-});
-
-DailyPeralatan.belongsTo(DailyProgress, {
-  foreignKey: "daily_progress_id"
-});
-
-DailyPeralatan.belongsTo(Peralatan, {
-  foreignKey: "tool_id",
-  as: "tool"
-});
-
-Peralatan.hasMany(DailyPeralatan, {
-  foreignKey: "tool_id"
-});
 
 
-DailyProgress.hasMany(DailyPekerja, {
-  foreignKey: "daily_progress_id",
-  as: "workers"
-});
-
-DailyPekerja.belongsTo(DailyProgress, {
-  foreignKey: "daily_progress_id"
-});
-
-DailyPekerja.belongsTo(Pekerja, {
-  foreignKey: "worker_id",
-  as: "pekerja"
-});
-
-Pekerja.hasMany(DailyPekerja, {
-  foreignKey: "worker_id"
-});
 
 
 export {
@@ -162,10 +184,11 @@ export {
   Material,
   Pekerja,
   Peralatan,
-  DailyPekerja,
-  DailyPeralatan,
-  DailyMaterial,
   MasterItem,
   AnalisaMaster,
-  AnalisaMasterDetail
+  AnalisaMasterDetail,
+  ProjectAnalisaDetail,
+  ProjectItem,
+  ProjectAnalisa,
+  DailyProgressItem
 };

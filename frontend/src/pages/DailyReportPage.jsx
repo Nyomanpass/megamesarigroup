@@ -6,8 +6,6 @@ import { ArrowLeft, CalendarDays, Search, Package, Users, Wrench, FileCheck, Inf
 export default function DailyReportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  const [tanggal, setTanggal] = useState("");
   const [hariKe, setHariKe] = useState("");
   const [data, setData] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -30,8 +28,9 @@ export default function DailyReportPage() {
   // ambil laporan harian
   const fetchReport = async () => {
     setError("");
+    console.log("hariKe:", hariKe);
 
-    if (!tanggal && !hariKe) {
+    if (!hariKe) {
       setError("Pilih tanggal atau hari ke- untuk menampilkan laporan!");
       return;
     }
@@ -39,8 +38,7 @@ export default function DailyReportPage() {
     try {
       let url = `/daily-report/${id}?`;
 
-      if (tanggal) url += `tanggal=${tanggal}&`;
-      if (hariKe) url += `hari_ke=${hariKe}`;
+      if (hariKe) url += `day=${hariKe}`;
 
       const res = await api.get(url);
       
@@ -85,22 +83,7 @@ export default function DailyReportPage() {
             <Search size={16} className="text-blue-500"/> Filter Pencarian
           </h2>
           <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 w-full relative">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                Pilih Berdasarkan Tanggal
-              </label>
-              <input
-                type="date"
-                value={tanggal}
-                onChange={(e) => {
-                  setTanggal(e.target.value);
-                  setHariKe("");
-                }}
-                className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all font-medium text-gray-700 bg-gray-50/50"
-              />
-            </div>
             
-            <div className="flex items-center justify-center py-2 md:py-0 w-full md:w-auto font-bold text-gray-400">ATAU</div>
 
             <div className="flex-1 w-full relative">
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
@@ -110,14 +93,13 @@ export default function DailyReportPage() {
                 value={hariKe}
                 onChange={(e) => {
                   setHariKe(e.target.value);
-                  setTanggal("");
                 }}
                 className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all font-medium text-gray-700 bg-gray-50/50"
               >
                 <option value="">-- Dropdown Hari Ke- --</option>
                 {plans.map((p) => (
                   <option key={p.id} value={p.hari_ke}>
-                    Hari ke-{p.hari_ke}  🗓️ ({new Date(p.tanggal).toLocaleDateString('id-ID', {day:'2-digit', month:'short'})})
+                    Hari ke-{p.hari_ke} ({new Date(p.tanggal).toLocaleDateString('id-ID', {day:'2-digit', month:'short'})})
                   </option>
                 ))}
               </select>
@@ -205,8 +187,10 @@ export default function DailyReportPage() {
                       {data.flatMap(d => d.materials || []).length > 0 ? (
                         data.flatMap(d => d.materials).map((m, i) => (
                           <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
-                            <span className="font-medium">{m.material?.nama}</span>
-                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(m.hasil).toFixed(2)}</span>
+                            <span className="font-medium">{m.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">
+                              {Number(m.hasil).toFixed(2)} {m.satuan}
+                            </span>
                           </div>
                         ))
                       ) : (
@@ -223,8 +207,10 @@ export default function DailyReportPage() {
                       {data.flatMap(d => d.pekerja || []).length > 0 ? (
                         data.flatMap(d => d.pekerja).map((p, i) => (
                           <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
-                            <span className="font-medium">{p.pekerja?.nama}</span>
-                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(p.jumlah).toFixed(2)}</span>
+                            <span className="font-medium">{p.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">
+                              {Number(p.hasil).toFixed(2)} {p.satuan}
+                            </span>
                           </div>
                         ))
                       ) : (
@@ -241,8 +227,10 @@ export default function DailyReportPage() {
                       {data.flatMap(d => d.peralatan || []).length > 0 ? (
                         data.flatMap(d => d.peralatan).map((a, i) => (
                           <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
-                            <span className="font-medium">{a.tool?.nama}</span>
-                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">{Number(a.jumlah).toFixed(2)}</span>
+                            <span className="font-medium">{a.nama}</span>
+                            <span className="font-mono bg-white px-2 rounded text-xs border shadow-sm">
+                              {Number(a.hasil).toFixed(2)} {a.satuan}
+                            </span>
                           </div>
                         ))
                       ) : (
@@ -260,7 +248,7 @@ export default function DailyReportPage() {
           <div className="lg:col-span-1">
              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-3xl p-6 shadow-sm border border-emerald-200/50 h-full">
                <h2 className="text-lg font-black text-emerald-900 mb-6 border-b border-emerald-200/50 pb-4">
-                 📊 Total Harian (Rekap Gabungan)
+                 Total Harian (Rekap Gabungan)
                </h2>
 
                {/* --- MATERIAL REKAP --- */}
@@ -291,7 +279,7 @@ export default function DailyReportPage() {
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-gray-500">Sistem: {Number(p.total).toFixed(2)}</span>
                             <span className="font-black text-white bg-blue-500 px-2 py-0.5 rounded-md shadow-sm">
-                              Dibutuhkan: {p.di_bilang} {p.satuan}
+                              Dibutuhkan: {p.terbilang}
                             </span>
                           </div>
                         </div>
@@ -313,7 +301,7 @@ export default function DailyReportPage() {
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-gray-500">Sistem: {Number(a.total).toFixed(2)}</span>
                             <span className="font-black text-white bg-orange-500 px-2 py-0.5 rounded-md shadow-sm">
-                              Dibutuhkan: {a.di_bilang} {a.satuan}
+                              Dibutuhkan: {a.terbilang} 
                             </span>
                           </div>
                         </div>

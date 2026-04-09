@@ -2,6 +2,8 @@ import { DailyPlan } from "../models/DailyPlanModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
 import { Project } from "../models/ProjectModel.js";
 import { ProjectPeriod } from "../models/ProjectPeriodModel.js";
+import { DailyProgress } from "../models/DailyProgressModel.js";
+import { Boq } from "../models/BoqModel.js";
 import moment from "moment";
 import "moment/locale/id.js";
 
@@ -298,6 +300,107 @@ export const getMonthlyReport = async (req, res) => {
 
     // 🔥 paksa 100
     result[result.length - 1].kumulatif = 100.00;
+
+    res.json(result);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getWeeklyChart = async (req, res) => {
+  try {
+    const { project_id } = req.params;
+
+    const plans = await DailyPlan.findAll({
+      where: { project_id },
+      order: [["tanggal", "ASC"]],
+    });
+
+    const progress = await DailyProgress.findAll({
+      where: { project_id },
+      order: [["tanggal", "ASC"]],
+    });
+
+    const boqs = await Boq.findAll({
+      where: { project_id }
+    });
+
+    // 🔥 grouping minggu
+    const group = {};
+    plans.forEach((p) => {
+      if (!group[p.minggu_ke]) group[p.minggu_ke] = [];
+      group[p.minggu_ke].push(p);
+    });
+
+    let kumulatifRencana = 0;
+    const result = [];
+
+    for (const minggu in group) {
+      const items = group[minggu];
+
+      const tglAkhir = items[items.length - 1].tanggal;
+
+      // =========================
+      // 🔥 RENCANA
+      // =========================
+      const rencana = Number(items[0].bobot_mingguan || 0);
+      kumulatifRencana += rencana;
+
+      // =========================
+      // 🔥 AMBIL PROGRESS SAMPAI TANGGAL INI (PENTING!)
+      // =========================
+      const progressSdIni = progress.filter(
+        (p) => p.tanggal <= tglAkhir
+      );
+
+      // =========================
+      // 🔥 HITUNG REAL BERDASARKAN BOQ
+      // =========================
+      let totalProgress = 0;
+      let totalBobot = 0;
+
+      for (const boq of boqs) {
+        const boqProgress = progressSdIni
+          .filter(p => p.boq_id === boq.id)
+          .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        // ambil last (kumulatif)
+        const last = boqProgress.length
+          ? Number(boqProgress[boqProgress.length - 1].volume)
+          : 0;
+
+        const persenItem = boq.volume
+          ? (last / boq.volume) * 100
+          : 0;
+
+        totalProgress += persenItem * Number(boq.bobot || 0);
+        totalBobot += Number(boq.bobot || 0);
+      }
+
+      const real = totalBobot
+        ? totalProgress / totalBobot
+        : 0;
+
+      // =========================
+      // 🔥 REAL MINGGUAN
+      // =========================
+      const prevKum = result.at(-1)?.kum_real || 0;
+      const realMingguan = real - prevKum;
+
+      // =========================
+      // 🔥 PUSH
+      // =========================
+      result.push({
+        minggu_ke: Number(minggu),
+
+        rencana: Number(rencana.toFixed(3)),
+        real: Number(realMingguan.toFixed(3)),
+
+        kum_rencana: Number(kumulatifRencana.toFixed(3)),
+        kum_real: Number(real.toFixed(3)),
+      });
+    }
 
     res.json(result);
 

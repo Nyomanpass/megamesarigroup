@@ -11,48 +11,13 @@ import {
 export default function BoqPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const [analisaList, setAnalisaList] = useState([]);
+  const [rounding, setRounding] = useState(-5); 
   const [bulkItems, setBulkItems] = useState([
-    { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
+    { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
   ]);
-
-  const addBulkRow = () => {
-    setBulkItems([...bulkItems, { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }]);
-  };
-
-  const handleBulkChange = (index, field, value) => {
-    const newItems = [...bulkItems];
-    newItems[index][field] = value;
-    setBulkItems(newItems);
-  };
-
-  const handleBulkSubmit = async () => {
-    try {
-      if (!form.parent_id) return alert("Wajib pilih Parent terlebih dahulu!");
-      
-      const itemsToSubmit = bulkItems.filter(item => item.uraian.trim() !== "");
-      
-      if (itemsToSubmit.length === 0) return alert("Isi minimal satu uraian pekerjaan!");
-
-      await api.post("/boq/bulk", {
-        project_id: id,
-        parent_id: form.parent_id,
-        items: itemsToSubmit.map(item => ({
-          ...item,
-          volume: Number(item.volume) || 0,
-          harga_satuan: Number(item.harga_satuan) || 0,
-          ppn: Number(item.ppn) || 0
-        }))
-      });
-
-      setShowModal(false);
-      setBulkItems([{ uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }]); 
-      fetchBoq();
-    } catch (err) {
-      console.error(err);
-      alert("Gagal simpan: " + (err.response?.data?.message || err.message));
-    }
-  };
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState(null);
 
   const [boq, setBoq] = useState([]);
   const [project, setProject] = useState(null);
@@ -64,78 +29,201 @@ export default function BoqPage() {
     uraian: "",
     satuan: "",
     volume: "",
-    harga_satuan: "",
     ppn: 11,
     tipe: "item"
   });
 
-  const handleGenerateBobot = async () => {
-    if (totalJumlah === 0) {
-      return alert("Total seluruh pekerjaan masih 0. Isi harga item dulu!");
+  const addBulkRow = () => {
+    setBulkItems([...bulkItems, { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }]);
+  };
+
+  const handleBulkChange = (index, field, value) => {
+    const newItems = [...bulkItems];
+    newItems[index][field] = value;
+    setBulkItems(newItems);
+  };
+
+ const handleBulkSubmit = async () => {
+  try {
+    if (!form.parent_id) {
+      alert("Wajib pilih Parent terlebih dahulu!");
+      return;
     }
 
-    const confirmAction = window.confirm(
-      `Hitung ulang bobot untuk ${itemOnly.length} item?`
+    const itemsToSubmit = bulkItems.filter(
+      item => item.uraian.trim() !== "" && item.analisa_id
     );
 
-    if (!confirmAction) return;
+    if (itemsToSubmit.length === 0) {
+      alert("Isi minimal satu uraian & pilih analisa!");
+      return;
+    }
 
+    await api.post("/boq/bulk", {
+      project_id: id,
+      parent_id: form.parent_id,
+      items: itemsToSubmit.map(item => ({
+        uraian: item.uraian,
+        satuan: item.satuan,
+        volume: Number(item.volume) || 0,
+        analisa_id: item.analisa_id, // 🔥 WAJIB
+        ppn: Number(item.ppn) || 11
+      }))
+    });
+
+    setShowModal(false);
+
+    // 🔥 reset
+    setBulkItems([
+      { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+    ]);
+
+    fetchBoq();
+
+  } catch (err) {
+    console.error(err);
+    alert("Gagal simpan: " + (err.response?.data?.message || err.message));
+  }
+};
+
+const handleEdit = async (id) => {
+  try {
+    const res = await api.get(`/boq/${id}`);
+    const item = res.data;
+
+    setIsEdit(true);
+    setEditId(id);
+
+    // 🔥 ambil harga dari analisa
+    let harga_preview = null;
+
+    if (item.analisa_id) {
+      const analisaRes = await api.get(`/project-analisa-detail/${item.analisa_id}`);
+      harga_preview = analisaRes.data.grandTotal;
+    }
+
+    setForm({
+      parent_id: item.parent_id || "",
+      kode: item.kode || "",
+      uraian: item.uraian || "",
+      satuan: item.satuan || "",
+      volume: item.volume || "",
+      ppn: item.ppn || 11,
+      tipe: item.tipe || "item"
+    });
+
+    setBulkItems([
+      {
+        uraian: item.uraian || "",
+        satuan: item.satuan || "",
+        volume: item.volume || "",
+        analisa_id: item.analisa_id || "",
+        ppn: item.ppn || 11,
+        harga_preview // 🔥 INI KUNCI
+      }
+    ]);
+
+    setShowModal(true);
+
+  } catch (err) {
+    console.error(err);
+    alert("Gagal ambil data");
+  }
+};
+
+  const handleDeleteBoq = async (id) => {
     try {
-      const updatePromises = itemOnly.map((item) => {
-        const hasilBobotRaw = (Number(item.jumlah) / totalJumlah) * 100;
-        const bobotFix = Number(hasilBobotRaw.toFixed(3));
+      const confirmDelete = window.confirm("Yakin hapus data ini?");
+      if (!confirmDelete) return;
 
-        return api.patch(`/boq/${item.id}`, {
-          bobot: bobotFix
-        });
-      });
+      await api.delete(`/boq/${id}`);
 
-      await Promise.all(updatePromises);
-      alert("✅ Bobot berhasil diperbarui (Pembulatan 3 Desimal)!");
-      fetchBoq(); 
+      alert("Berhasil hapus");
+      fetchBoq(); // 🔥 reload
+
     } catch (err) {
       console.error(err);
-      alert("Gagal update bobot: " + (err.response?.data?.message || err.message));
+      alert("Gagal hapus");
     }
   };
 
 
-  const handleSubmit = async () => {
-    try {
-      if (!form.uraian) return alert("Uraian wajib diisi");
+const handleSubmit = async () => {
+  try {
+    if (!form.uraian) return alert("Uraian wajib diisi");
 
-      const payload = {
-        ...form,
-        project_id: id,
-        parent_id: form.parent_id === "" ? null : form.parent_id,
-        volume: form.tipe === "item" ? Number(form.volume) : null,
-        harga_satuan: form.tipe === "item" ? Number(form.harga_satuan) : null,
-        ppn: form.tipe === "item" ? Number(form.ppn) : null,
-      };
+    const payload = {
+      ...form,
+      project_id: id,
+      parent_id: form.parent_id === "" ? null : form.parent_id,
+      volume: form.tipe === "item" ? Number(form.volume) : null,
+      ppn: form.tipe === "item" ? Number(form.ppn) : null,
+    };
 
+    if (isEdit) {
+      const item = bulkItems[0];
+
+      let payload = {};
+
+      if (form.tipe === "item") {
+        // 🔥 item lengkap
+        payload = {
+          uraian: item.uraian,
+          satuan: item.satuan,
+          volume: Number(item.volume) || 0,
+          analisa_id: item.analisa_id || null,
+          ppn: Number(item.ppn) || 11,
+          parent_id: form.parent_id || null
+        };
+      } else {
+        // 🔥 header / subheader
+        payload = {
+          uraian: form.uraian,
+          kode: form.kode
+        };
+      }
+
+      await api.patch(`/boq/${editId}`, payload);
+
+      alert("Berhasil update");
+    } else {
+      // 🔥 CREATE
       await api.post("/boq", payload);
-
-      setShowModal(false);
-      setForm({ 
-        parent_id: "", 
-        kode: "", 
-        uraian: "", 
-        satuan: "", 
-        volume: "", 
-        harga_satuan: "", 
-        ppn: 11, 
-        tipe: "item" 
-      });
-      fetchBoq();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "Gagal menyimpan data");
+      alert("Berhasil tambah");
     }
+
+    // 🔥 reset state
+    setShowModal(false);
+    setIsEdit(false);
+    setEditId(null);
+
+    setForm({
+      parent_id: "",
+      kode: "",
+      uraian: "",
+      satuan: "",
+      volume: "",
+      ppn: 11,
+      tipe: "item"
+    });
+
+    fetchBoq();
+
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Gagal menyimpan data");
+  }
+};
+
+  const fetchAnalisa = async () => {
+    const res = await api.get(`/project-analisa?project_id=${id}`);
+    setAnalisaList(res.data);
   };
 
   useEffect(() => {
     fetchProject();
     fetchBoq();
+    fetchAnalisa();
   }, [id]);
 
   const fetchProject = async () => {
@@ -148,12 +236,24 @@ export default function BoqPage() {
     setBoq(res.data);
   };
 
-  // Kalkulasi form preview
-  const rawJumlah = form.volume && form.harga_satuan ? form.volume * form.harga_satuan : 0;
-  const jumlah = Number(rawJumlah.toFixed(2));
-  const rawPajak = (jumlah * (form.ppn || 0)) / 100;
-  const pajak = Number(rawPajak.toFixed(2));
-  const jumlah_ppn = jumlah + pajak;
+  const handleSelectAnalisa = async (index, analisa_id) => {
+    const res = await api.get(`/project-analisa-detail/${analisa_id}`);
+
+    const updated = [...bulkItems];
+    updated[index].analisa_id = analisa_id;
+    updated[index].harga_preview = res.data.grandTotal; // 🔥 hanya preview
+
+    setBulkItems(updated);
+  };
+
+  const round2 = (num) => Math.round(num * 100) / 100;
+  const harga = Number(form.harga_satuan) || 0;
+  const volume = Number(form.volume) || 0;
+  const ppn = Number(form.ppn) || 0;
+  const pajak_satuan = round2((harga * ppn) / 100);
+  const harga_plus_pajak = round2(harga + pajak_satuan);
+  const jumlah_ppn = round2(harga_plus_pajak * volume);
+
 
   // Header Analytics Data
   const itemOnly = boq.filter(item => item.tipe === "item");
@@ -161,6 +261,21 @@ export default function BoqPage() {
   const totalJumlah = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0);
   const totalGrandTotal = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0);
   const totalBobot = itemOnly.reduce((sum, item) => sum + Number(item.bobot || 0), 0);
+
+    const applyRounding = (value, digit) => {
+      if (!digit) return value;
+
+      const factor = Math.pow(10, Math.abs(digit));
+      return Math.round(value / factor) * factor;
+    };
+
+
+  const totalAsli = itemOnly.reduce(
+    (acc, curr) => acc + Number(curr.jumlah_ppn || 0), 
+    0
+  );
+
+  const totalBulat = applyRounding(totalAsli, rounding);
 
   // Pie Chart Data: Top 5 Items by Bobot
   const pieChartData = useMemo(() => {
@@ -212,12 +327,7 @@ export default function BoqPage() {
             >
               <Plus size={18} /> Tambah BOQ
             </button>
-            <button
-              onClick={handleGenerateBobot}
-              className="bg-orange-500 text-white px-4 py-2.5 rounded-xl transition shadow-sm hover:shadow-md hover:bg-orange-600 font-semibold flex items-center gap-2"
-            >
-              <RefreshCw size={18} /> Generate Bobot
-            </button>
+          
           </div>
         </div>
 
@@ -230,7 +340,7 @@ export default function BoqPage() {
             </div>
             <p className="text-blue-100 uppercase tracking-widest text-xs font-bold mb-2">Total Estimasi Harga (+PPN)</p>
             <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight mb-2">
-               Rp {totalGrandTotal.toLocaleString("id-ID")}
+               Rp {totalBulat.toLocaleString("id-ID")}
             </h2>
             <div className="flex items-center gap-2 mt-4 text-sm bg-black/20 w-max px-3 py-1.5 rounded-full backdrop-blur-sm">
               <Calculator size={16} /> Base: Rp {totalJumlah.toLocaleString("id-ID")}
@@ -282,6 +392,7 @@ export default function BoqPage() {
                   <th className="p-4 text-center uppercase tracking-wider text-xs">PPN</th> 
                   <th className="p-4 text-right uppercase tracking-wider text-xs">Grand Total</th>
                   <th className="p-4 text-right px-6 uppercase tracking-wider text-xs">Bobot</th>
+                  <th className="p-4 text-right px-6 uppercase tracking-wider text-xs">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -359,6 +470,30 @@ export default function BoqPage() {
                               </span>
                             : "-"}
                       </td>
+
+                      <td className="p-4 text-center">
+                       
+                          <div className="flex gap-2 justify-center">
+
+                            {/* UPDATE */}
+                            <button
+                              onClick={() => handleEdit(item.id)}
+                              className="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs"
+                            >
+                              Edit
+                            </button>
+
+                            {/* DELETE */}
+                            <button
+                              onClick={() => handleDeleteBoq(item.id)}
+                              className="bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 text-xs"
+                            >
+                              Hapus
+                            </button>
+
+                          </div>
+                        
+                      </td>
                       </tr>
                   ))}
                   <tr className="bg-gray-800 text-white font-bold">
@@ -377,6 +512,20 @@ export default function BoqPage() {
                           {totalBobot.toFixed(2)}%
                       </td>
                   </tr>
+
+                  <tr className="bg-yellow-500/10 text-yellow-700 font-bold border-t border-yellow-400">
+                    <td colSpan={6} className="p-3 px-6 text-right uppercase text-xs">
+                      Pembulatan
+                    </td>
+
+                    <td className="p-3 text-right">
+                      {totalBulat.toLocaleString("id-ID")},00
+                    </td>
+
+                    <td className="p-3"></td>
+                  </tr>
+                 
+                   
               </tbody>
             </table>
           </div>
@@ -388,8 +537,29 @@ export default function BoqPage() {
             <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
               
               <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Plus className="text-blue-500" /> Tambah Data BOQ</h2>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">{isEdit ? "Edit Data BOQ" : "Tambah Data BOQ"}</h2>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setIsEdit(false);
+                    setEditId(null);
+
+                    setForm({
+                      parent_id: "",
+                      kode: "",
+                      uraian: "",
+                      satuan: "",
+                      volume: "",
+                      ppn: 11,
+                      tipe: "item"
+                    });
+
+                    setBulkItems([
+                      { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+                    ]);
+                  }}
+                  className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"
+                >
                   <X size={20} strokeWidth={3} />
                 </button>
               </div>
@@ -481,6 +651,8 @@ export default function BoqPage() {
                             <Trash2 size={16} />
                           </button>
 
+
+
                           <div className="mb-3">
                             <input 
                               className="w-full border-2 border-gray-200 p-2.5 rounded-xl font-medium focus:border-blue-500 outline-none" 
@@ -490,6 +662,36 @@ export default function BoqPage() {
                             />
                           </div>
 
+                        <div>
+                          <label className="text-[10px] uppercase text-gray-500 font-bold mb- block">
+                            Analisa
+                          </label>
+
+                          <div className="mb-3">
+                            <select
+                              className="w-full border-2 border-gray-200 p-2.5 pr-10 text-sm rounded-xl 
+                                        bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 
+                                        font-medium text-gray-700 appearance-none transition-all"
+                              value={item.analisa_id}
+                              onChange={(e) => {
+                                const value = e.target.value;
+
+                                handleBulkChange(index, "analisa_id", value);
+                                handleSelectAnalisa(index, value);
+                              }}
+                            >
+                              <option value="" className="text-gray-400">
+                                Pilih Analisa
+                              </option>
+
+                              {analisaList.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.kode ? `${a.kode} - ` : ""}{a.nama}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                           <div className="grid grid-cols-4 gap-3">
                             <div>
                               <label className="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Satuan</label>
@@ -521,26 +723,43 @@ export default function BoqPage() {
                               />
                             </div>
                             <div>
-                              <label className="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Harga Satuan</label>
-                              <input 
-                                type="number" 
-                                className="w-full border-2 border-gray-200 p-2 text-sm rounded-lg outline-none focus:border-blue-500" 
-                                placeholder="50000" 
-                                value={item.harga_satuan}
-                                onChange={(e) => handleBulkChange(index, "harga_satuan", e.target.value)}
-                              />
+                              <label className="text-[10px] uppercase text-gray-500 font-bold mb-1 block">
+                                Harga Satuan
+                              </label>
+
+                              <div className="relative">
+                                <input
+                                  value={
+                                    item.harga_preview
+                                      ? "Rp " + Number(item.harga_preview).toLocaleString("id-ID")
+                                      : "-"
+                                  }
+                                  disabled
+                                  className={`w-full border-2 p-2.5 text-sm rounded-xl font-bold tracking-wide
+                                    ${item.harga_preview 
+                                      ? "bg-green-50 border-green-200 text-green-700" 
+                                      : "bg-gray-100 border-gray-200 text-gray-400"}
+                                    cursor-not-allowed shadow-inner`}
+                                />
+
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                                  Auto
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
 
-                      <button 
-                        type="button"
-                        onClick={addBulkRow}
-                        className="w-full py-3 border-2 border-dashed border-blue-300 text-blue-600 text-sm font-bold rounded-2xl hover:bg-blue-50 bg-white transition-colors"
-                      >
-                        + TAMBAH BARIS PEKERJAAN
-                      </button>
+                      {!isEdit && (
+                        <button 
+                          type="button"
+                          onClick={addBulkRow}
+                          className="w-full py-3 border-2 border-dashed border-blue-300 text-blue-600 text-sm font-bold rounded-2xl hover:bg-blue-50 bg-white transition-colors"
+                        >
+                          + TAMBAH BARIS PEKERJAAN
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -549,16 +768,50 @@ export default function BoqPage() {
               {/* 7. TOMBOL AKSI */}
               <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl mt-auto">
                 <button
-                  onClick={() => setShowModal(false)}
-                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Batal
-                </button>
+                onClick={() => {
+                  setShowModal(false);
+                  setIsEdit(false);   
+                  setEditId(null);   
+
+                  setForm({
+                    parent_id: "",
+                    kode: "",
+                    uraian: "",
+                    satuan: "",
+                    volume: "",
+                    ppn: 11,
+                    tipe: "item"
+                  });
+
+                  // 🔥 reset bulk juga (opsional tapi bagus)
+                  setBulkItems([
+                    { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+                  ]);
+                }}
+                className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
                 <button
-                  onClick={form.tipe === "item" ? handleBulkSubmit : handleSubmit}
-                  className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors flex items-center gap-2"
+                  onClick={
+                    isEdit
+                      ? handleSubmit  
+                      : form.tipe === "item"
+                      ? handleBulkSubmit
+                      : handleSubmit
+                  }
+                 className={`px-6 py-2.5 text-white font-bold rounded-xl shadow-md transition-colors flex items-center gap-2 ${
+                            isEdit
+                              ? "bg-orange-500 hover:bg-orange-600"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          }`}
                 >
-                  <CheckCircle size={18} /> {form.tipe === "item" ? `Simpan ${bulkItems.length} Item` : "Simpan Data"}
+                  <CheckCircle size={18} />
+                  {form.tipe === "item"
+                    ? `Simpan ${bulkItems.length} Item`
+                    : isEdit
+                    ? "Update Data"
+                    : "Simpan Data"}
                 </button>
               </div>
             </div>

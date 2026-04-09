@@ -10,7 +10,8 @@ const MasterItemPage = () => {
     tipe: "TENAGA",
     satuan: "",
     harga_default: "",
-    category_id: "" 
+    category_id: "" ,
+    terbilang:0
   });
   const [editId, setEditId] = useState(null);
 
@@ -131,7 +132,8 @@ const handleDeleteCategory = async (id) => {
         tipe: "TENAGA",
         satuan: "",
         harga_default: "",
-        category_id: "" 
+        category_id: "" ,
+        terbilang:0
       });
       setEditId(null);
       fetchData();
@@ -166,7 +168,8 @@ const handleDeleteCategory = async (id) => {
       tipe: item.tipe,
       satuan: item.satuan,
       harga_default: item.harga_default,
-      category_id: item.category_id || ""
+      category_id: item.category_id || "",
+      terbilang: item.terbilang
     });
     setEditId(item.id);
     formRef.current?.scrollIntoView({
@@ -225,6 +228,22 @@ const handleDeleteCategory = async (id) => {
             />
         </div>
 
+        {(form.tipe === "TENAGA" || form.tipe === "ALAT") && (
+         <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase">
+                Terbilang (Kebutuhan)
+              </label>
+              <input
+                name="terbilang"
+                type="number"
+                min="1"
+                placeholder="Contoh: 1 / 2 / 3"
+                value={form.terbilang}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+            )}
         <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-700 ml-1">Kategori Tipe</label>
             <select
@@ -308,6 +327,7 @@ const handleDeleteCategory = async (id) => {
                 <th className="p-4 font-semibold">Tipe</th>
                 <th className="p-4 font-semibold">Kategori</th>
                 <th className="p-4 font-semibold">Satuan</th>
+                <th className="p-4 font-semibold">Terbilang</th>
                 <th className="p-4 font-semibold text-right">Harga</th>
                 <th className="p-4 font-semibold text-center">Aksi</th>
             </tr>
@@ -331,6 +351,7 @@ const handleDeleteCategory = async (id) => {
                         : "-"}
                     </td>
                 <td className="p-4">{item.satuan}</td>
+                 <td className="p-4">{item.terbilang}</td>
                 <td className="p-4 text-right">
                     {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.harga_default)}
                 </td>
