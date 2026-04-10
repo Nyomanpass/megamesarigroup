@@ -16,8 +16,7 @@ export default function Sidebar() {
 
         {/* Dashboard */}
         <NavLink to="/dashboard" className={({ isActive }) =>
-          `flex items-center gap-3 tracking-wide ${
-            isActive ? "text-secondary" : "hover:text-secondary"
+          `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary" : "hover:text-secondary"
           }`
         }>
           <Home size={18} />
@@ -26,8 +25,7 @@ export default function Sidebar() {
 
         {/* Project */}
         <NavLink to="/project" className={({ isActive }) =>
-          `flex items-center gap-3 tracking-wide ${
-            isActive ? "text-secondary" : "hover:text-secondary"
+          `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary" : "hover:text-secondary"
           }`
         }>
           <Folder size={18} />
@@ -41,10 +39,9 @@ export default function Sidebar() {
           <p className="text-xs uppercase text-gray-400 font-semibold mb-3 tracking-widest">
             Settings
           </p>
-          
+
           <NavLink to="/settings/masteritem" className={({ isActive }) =>
-            `flex items-center gap-3 tracking-wide ${
-              isActive ? "text-secondary" : "hover:text-secondary"
+            `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary" : "hover:text-secondary"
             }`
           }>
             <Box size={18} />
@@ -53,12 +50,11 @@ export default function Sidebar() {
 
           {/* Analisa Master */}
           <NavLink to="/settings/analisa" className={({ isActive }) =>
-            `flex items-center gap-3 tracking-wide ${
-              isActive ? "text-secondary" : "hover:text-secondary"
+            `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary" : "hover:text-secondary"
             }`
           }>
             <ClipboardList size={18} />
-            <span>Analisa Master</span>
+            <span>Master AHSP</span>
           </NavLink>
         </div>
 

@@ -3,12 +3,13 @@ import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   Plus, 
-  Pencil, 
+  Edit2, 
   Trash2, 
-  Hammer, 
+  Wrench, 
   ArrowLeft, 
-  Settings2, 
-  Search 
+  Search,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 export default function PeralatanPage() {
@@ -16,6 +17,9 @@ export default function PeralatanPage() {
   const navigate = useNavigate();
 
   const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+
   const [form, setForm] = useState({
     nama: "",
     satuan: "",
@@ -23,19 +27,35 @@ export default function PeralatanPage() {
     terbilang: 0
   });
 
+  const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState(null);
+  
+  const [showModal, setShowModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, itemName: "" });
 
-  // 🔥 GET DATA ALAT
   const fetchData = async () => {
-    const res = await api.get(
-      `/project-items?project_id=${id}&tipe=ALAT`
-    );
-    setData(res.data);
+    try {
+        const res = await api.get(`/project-items?project_id=${id}&tipe=ALAT`);
+        setData(res.data);
+        setFilteredData(res.data);
+    } catch (err) {
+        console.error(err);
+    }
   };
 
   useEffect(() => {
     fetchData();
   }, [id]);
+
+  useEffect(() => {
+      let filtered = data;
+      if (searchTerm) {
+          filtered = filtered.filter(item => 
+              item.nama.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+      }
+      setFilteredData(filtered);
+  }, [searchTerm, data]);
 
   const handleChange = (e) => {
     setForm({
@@ -44,218 +64,315 @@ export default function PeralatanPage() {
     });
   };
 
-  // 🔥 SUBMIT
-  const handleSubmit = async () => {
-    if (!form.nama) return;
-
-    if (editId) {
-      await api.put(`/project-items/${editId}`, {
-        ...form,
-        tipe: "ALAT"
-      });
-    } else {
-      await api.post("/project-items", {
-        ...form,
-        tipe: "ALAT",
-        project_id: id
-      });
-    }
-
-    setForm({ nama: "", satuan: "", harga: "", terbilang:0 });
-    setEditId(null);
-    fetchData();
+  const openFormModal = (item = null) => {
+      if (item) {
+          setForm({
+              nama: item.nama,
+              satuan: item.satuan,
+              harga: item.harga,
+              terbilang: item.terbilang
+          });
+          setEditId(item.id);
+          setIsEdit(true);
+      } else {
+          setForm({ nama: "", satuan: "", harga: "", terbilang: 0 });
+          setEditId(null);
+          setIsEdit(false);
+      }
+      setShowModal(true);
   };
 
-  // 🔥 EDIT
-  const handleEdit = (item) => {
-    setForm({
-      nama: item.nama,
-      satuan: item.satuan,
-      harga: item.harga,
-      terbilang: item.terbilang
-    });
-
-    setEditId(item.id);
+  const closeFormModal = () => {
+      setShowModal(false);
+      setTimeout(() => {
+         setIsEdit(false);
+         setEditId(null);
+      }, 300);
   };
 
-  // 🔥 DELETE
-  const handleDelete = async (itemId) => {
-    if (window.confirm("Yakin hapus alat ini?")) {
-      await api.delete(`/project-items/${itemId}`);
-      fetchData();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.nama) {
+         alert("Nama alat wajib diisi!");
+         return;
     }
+
+    try {
+        if (isEdit) {
+            await api.put(`/project-items/${editId}`, {
+                ...form,
+                tipe: "ALAT"
+            });
+        } else {
+            await api.post("/project-items", {
+                ...form,
+                tipe: "ALAT",
+                project_id: id
+            });
+        }
+        closeFormModal();
+        fetchData();
+    } catch (err) {
+        console.error(err);
+        alert("Gagal menyimpan data alat.");
+    }
+  };
+
+  const confirmDelete = (itemId, itemName) => {
+      setDeleteModal({ isOpen: true, id: itemId, itemName });
+  };
+
+  const executeDelete = async () => {
+      try {
+          await api.delete(`/project-items/${deleteModal.id}`);
+          fetchData();
+          setDeleteModal({ isOpen: false, id: null, itemName: "" });
+      } catch (err) {
+          console.error(err);
+          alert("Gagal menghapus data alat.");
+      }
   };
 
   return (
-   <div className="p-8 bg-slate-50 min-h-screen">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-200">
-              <Hammer className="text-white" size={28} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Katalog Peralatan
-              </h1>
-              <p className="text-sm text-slate-500 font-medium">Project ID: <span className="text-emerald-600">#{id}</span></p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => navigate(`/project/${id}`)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm font-medium"
+    <div className="p-6 bg-background min-h-screen text-text-primary">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex items-center gap-4">
+          <button 
+              onClick={() => navigate(`/project/${id}`)}
+              className="p-2.5 bg-white border border-gray-200 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
           >
-            <ArrowLeft size={18} />
-            Kembali
+              <ArrowLeft className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* FORM CARD */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <Settings2 size={16} />
-            {editId ? "Mode Edit Alat" : "Tambah Alat Baru"}
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <input
-                name="nama"
-                placeholder="Nama Alat (ex: Excavator)"
-                value={form.nama}
-                onChange={handleChange}
-                className="w-full border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all bg-slate-50/50"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase">
-              Terbilang (Kebutuhan)
-            </label>
-            <input
-              name="terbilang"
-              type="number"
-              min="1"
-              placeholder="Contoh: 1 / 2 / 3"
-              value={form.terbilang}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            />
-          </div>
-
-            <div className="space-y-1">
-              <input
-                name="satuan"
-                placeholder="Satuan (unit/jam)"
-                value={form.satuan}
-                onChange={handleChange}
-                className="w-full border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all bg-slate-50/50"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <input
-                name="harga"
-                type="number"
-                placeholder="Biaya Sewa"
-                value={form.harga}
-                onChange={handleChange}
-                className="w-full border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all bg-slate-50/50"
-              />
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              className={`w-full font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-100 active:scale-95 ${
-                editId 
-                ? "bg-amber-500 hover:bg-amber-600 text-white" 
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-              }`}
-            >
-              {editId ? <Pencil size={18} /> : <Plus size={18} />}
-              {editId ? "Update Alat" : "Tambah ke Katalog"}
-            </button>
+          <div>
+            <h1 className="text-3xl font-bold text-primary flex items-center gap-3">
+              <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+                  <Wrench className="w-7 h-7 text-secondary" />
+              </div>
+              Katalog Peralatan
+            </h1>
+            <p className="text-sm text-gray-500 mt-2 max-w-xl">
+              Kelola daftar peralatan, satuan, dan biaya sewanya khusus untuk project ini.
+            </p>
           </div>
         </div>
-
-        {/* TABLE CARD */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
-            <h3 className="font-bold text-slate-700">Daftar Inventaris Alat</h3>
-            <div className="text-xs font-bold px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-              {data.length} Item Terdaftar
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="px-6 py-4 font-semibold">Nama Alat</th>
-                  <th className="px-6 py-4 font-semibold">Satuan</th>
-                  <th className="px-6 py-4 font-semibold text-right">Biaya / Sewa</th>
-                   <th className="px-6 py-4 font-semibold text-right">Terbilang</th>
-                  <th className="px-6 py-4 font-semibold text-center">Aksi</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-50">
-                {data.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-16 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-4 bg-slate-100 rounded-full text-slate-300">
-                          <Search size={32} />
-                        </div>
-                        <p className="text-slate-400 font-medium">Belum ada alat yang ditambahkan</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  data.map((item) => (
-                    <tr key={item.id} className="hover:bg-emerald-50/40 transition-colors group">
-                      <td className="px-6 py-4 font-bold text-slate-700 uppercase text-sm italic">
-                        {item.nama}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200">
-                          {item.satuan}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right font-mono font-bold text-emerald-700">
-                        Rp {Number(item.harga || 0).toLocaleString("id-ID")}
-                      </td>
-                      <td className="px-6 py-4 text-right font-mono font-bold text-emerald-700">
-                        {item.terbilang}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-center gap-2">
-                          <button 
-                            onClick={() => handleEdit(item)}
-                            className="p-2 text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
-                          >
-                            <Pencil size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(item.id)}
-                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
+        <button
+            onClick={() => openFormModal()}
+            className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap"
+        >
+            <Plus className="w-5 h-5" />
+            Tambah Peralatan
+        </button>
       </div>
+
+      {/* TOOLBAR */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center mb-6">
+        <div className="relative w-full md:max-w-lg">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input 
+                type="text" 
+                placeholder="Cari nama peralatan..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 px-2.5 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all text-sm"
+            />
+        </div>
+        <div className="hidden md:block text-xs font-bold px-4 py-2 bg-gray-100 text-gray-600 rounded-lg border border-gray-200">
+             {data.length} Item Terdaftar
+        </div>
+      </div>
+
+      {/* TABLE SECTION */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="p-5 font-bold">Nama Alat</th>
+                <th className="p-5 font-bold w-32 border-l border-gray-100">Satuan</th>
+                <th className="p-5 font-bold w-48 text-right border-l border-gray-100">Biaya / Sewa (Rp)</th>
+                <th className="p-5 font-bold w-32 text-center border-l border-gray-100">Terbilang</th>
+                <th className="p-5 font-bold text-center w-32 border-l border-gray-100">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 text-sm">
+              {filteredData.map((item) => (
+                <tr key={item.id} className="hover:bg-accent/40 transition-colors group">
+                  <td className="p-5 font-medium text-text-primary">
+                    <div className="flex items-center gap-2">
+                        <Wrench className="w-4 h-4 text-gray-400" />
+                        {item.nama}
+                    </div>
+                  </td>
+                  <td className="p-5 text-gray-600 font-medium">
+                      <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 text-xs">
+                          {item.satuan}
+                      </span>
+                  </td>
+                  <td className="p-5 text-right font-medium text-gray-700">
+                      {Number(item.harga || 0).toLocaleString("id-ID")}
+                  </td>
+                  <td className="p-5 text-center font-bold text-secondary">
+                      {item.terbilang}
+                  </td>
+                  <td className="p-5">
+                    <div className="flex justify-center items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button
+                            onClick={() => openFormModal(item)}
+                            className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10"
+                            title="Edit Alat"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => confirmDelete(item.id, item.nama)}
+                            className="p-2 text-danger bg-danger/5 hover:bg-danger/15 hover:scale-105 rounded-lg transition-all border border-danger/10"
+                            title="Hapus Alat"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredData.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="p-16 text-center">
+                      <div className="flex flex-col items-center justify-center text-gray-400">
+                          <div className="bg-gray-50 p-4 rounded-full mb-3">
+                            <Search className="w-10 h-10 text-gray-300" />
+                          </div>
+                          <p className="text-base font-semibold text-gray-600">Alat Kosong</p>
+                          <p className="text-sm mt-1 text-gray-500">Belum ada alat yang ditambahkan atau ditemukan.</p>
+                      </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* --- FORM MODAL --- */}
+      {showModal && (
+        <div className="fixed inset-0 bg-primary/40 flex justify-center items-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-primary flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${isEdit ? 'bg-info/10 text-info' : 'bg-secondary/10 text-secondary'}`}>
+                  {isEdit ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                </div>
+                {isEdit ? "Edit Peralatan" : "Tambah Peralatan"}
+              </h2>
+              <button onClick={closeFormModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-6">
+              <div className="space-y-5">
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Nama Alat</label>
+                  <input
+                    type="text"
+                    name="nama"
+                    placeholder="Contoh: Excavator / Concrete Mixer"
+                    value={form.nama}
+                    onChange={handleChange}
+                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Satuan</label>
+                    <input
+                      type="text"
+                      name="satuan"
+                      placeholder="Contoh: Jam / Hari"
+                      value={form.satuan}
+                      onChange={handleChange}
+                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Terbilang (Kebutuhan)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      name="terbilang"
+                      placeholder="Contoh: 1"
+                      value={form.terbilang}
+                      onChange={handleChange}
+                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Harga Sewa / Biaya</label>
+                  <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">Rp</span>
+                      <input
+                        type="number"
+                        name="harga"
+                        placeholder="0"
+                        value={form.harga}
+                        onChange={handleChange}
+                        className="w-full border border-gray-200 bg-gray-50 p-3.5 pl-12 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                      />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
+                <button type="button" onClick={closeFormModal} className="px-6 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold transition-colors">
+                  Batal
+                </button>
+                <button type="submit" className="px-6 py-3 text-white bg-secondary hover:bg-[#e64a0f] rounded-xl font-bold transition-all shadow-sm active:scale-95">
+                  {isEdit ? "Simpan Perbaikan" : "Simpan Data"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRM MODAL --- */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 bg-primary/60 flex justify-center items-center z-[60] p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Hapus Data?</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                Apakah Anda yakin ingin menghapus alat<br />
+                <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
+              </p>
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={executeDelete}
+                  className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-bold rounded-xl transition-all shadow-sm shadow-red-200 active:scale-95"
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
