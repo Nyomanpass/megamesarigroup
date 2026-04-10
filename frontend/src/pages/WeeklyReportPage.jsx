@@ -169,7 +169,7 @@ export default function WeeklyReportPage() {
                       <th className="p-4 text-center" rowSpan={2}>Sat</th>
                       <th className="p-4 text-center border-l border-gray-100" colSpan={2}>Informasi BOQ</th>
                       <th className="p-4 text-center border-l bg-gray-50/50 border-gray-100" colSpan={3}>Realisasi Progress Fisik Kumulatif (%)</th>
-                      <th className="p-4 text-right" rowSpan={2}>Progres Fisik</th>
+                      <th className="p-4 text-right" rowSpan={2}>Progres Proyek</th>
                     </tr>
                     <tr className="border-b border-gray-100">
                        <th className="p-2 text-center text-orange-600 border-l border-gray-100 bg-orange-50/30">Total Vol</th>
@@ -211,9 +211,13 @@ export default function WeeklyReportPage() {
                           <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">{Number(item.minggu_ini).toFixed(3)}</td>
                           <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
 
-                          <td className="p-3 text-right">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${item.persen > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                              {item.persen}%
+                         <td className="p-3 text-right">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                              item.progres_proyek > 0
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : 'bg-gray-100 text-gray-500 border-gray-200'
+                            }`}>
+                              {Number(item.progres_proyek).toFixed(3)}%
                             </span>
                           </td>
                         </tr>

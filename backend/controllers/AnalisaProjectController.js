@@ -1,4 +1,5 @@
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
+import { generateBobotInternal } from "./BoqController.js";
 
 // CREATE
 export const createProjectAnalisa = async (req, res) => {
@@ -60,13 +61,12 @@ export const getProjectAnalisaById = async (req, res) => {
   }
 };
 
+
 export const updateProjectAnalisa = async (req, res) => {
   try {
     const { kode, nama, satuan, overhead_persen } = req.body;
 
-    const data = await ProjectAnalisa.findOne({
-      where: { id: req.params.id }
-    });
+    const data = await ProjectAnalisa.findByPk(req.params.id);
 
     if (!data) {
       return res.status(404).json({ message: "Data tidak ditemukan" });
@@ -79,8 +79,37 @@ export const updateProjectAnalisa = async (req, res) => {
       overhead_persen
     });
 
-    res.json({ message: "Berhasil update", data });
+    // =========================
+    // 🔥 AUTO UPDATE BOBOT
+    // =========================
+
+    const boqList = await Boq.findAll({
+      where: { 
+        analisa_id: data.id,
+        tipe: "item" // 🔥 FIX PENTING
+      }
+    });
+
+    console.log("BOQ LIST:", boqList.length);
+
+    const projectIds = [...new Set(
+      boqList.map(b => b.project_id)
+    )];
+
+    console.log("PROJECT IDS:", projectIds);
+
+    for (let pid of projectIds) {
+      console.log("🔥 GENERATE BOBOT:", pid);
+      await generateBobotInternal(pid);
+    }
+
+    res.json({
+      message: "Berhasil update + bobot otomatis",
+      data
+    });
+
   } catch (error) {
+    console.error("ERROR updateProjectAnalisa:", error);
     res.status(500).json({ message: error.message });
   }
 };

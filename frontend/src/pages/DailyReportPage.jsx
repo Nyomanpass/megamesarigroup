@@ -10,7 +10,7 @@ export default function DailyReportPage() {
   const [data, setData] = useState([]);
   const [plans, setPlans] = useState([]);
   const [error, setError] = useState("");
-
+  const [totalBobot, setTotalBobot] = useState(0);
   const [totalMaterial, setTotalMaterial] = useState([]);
   const [totalPekerja, setTotalPekerja] = useState([]);
   const [totalPeralatan, setTotalPeralatan] = useState([]);
@@ -43,6 +43,7 @@ export default function DailyReportPage() {
       const res = await api.get(url);
       
       setData(res.data.data);
+      setTotalBobot(res.data.total_bobot_harian || 0);
       setTotalMaterial(res.data.total_material || []);
       setTotalPekerja(res.data.total_pekerja || []);
       setTotalPeralatan(res.data.total_peralatan || []);
@@ -120,6 +121,20 @@ export default function DailyReportPage() {
           )}
         </div>
 
+<div className="mb-6">
+  <h3 className="text-xs font-bold text-emerald-800 uppercase mb-3">
+    Progress Proyek Hari Ini
+  </h3>
+
+  <div className="bg-white p-4 rounded-xl shadow border border-emerald-200 text-center">
+    <div className="text-3xl font-black text-emerald-600">
+      {Number(totalBobot).toFixed(3)}%
+    </div>
+    <div className="text-xs text-gray-500 mt-1">
+      Total Bobot Tercapai
+    </div>
+  </div>
+</div>
         {/* REPORT CONTENT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
@@ -140,6 +155,8 @@ export default function DailyReportPage() {
                       <th className="p-4 font-bold">Uraian Pekerjaan (BOQ)</th>
                       <th className="p-4 font-bold text-center">Satuan</th>
                       <th className="p-4 font-bold text-right pr-6">Volume Output</th>
+                      <th className="p-4 font-bold text-right">Bobot (%)</th>
+                      <th className="p-4 font-bold text-right pr-6">Progress (%)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -164,6 +181,15 @@ export default function DailyReportPage() {
                              <span className="bg-green-50 text-green-700 font-bold px-3 py-1 rounded-lg border border-green-100 text-sm font-mono">
                                {Number(item.volume).toFixed(3)}
                              </span>
+                          </td>
+                          <td className="p-4 text-right text-gray-600">
+                            {Number(item.bobot).toFixed(2)}
+                          </td>
+
+                          <td className="p-4 text-right pr-6">
+                            <span className="bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-lg border border-blue-100 text-sm font-mono">
+                              {Number(item.bobot_tercapai).toFixed(3)}
+                            </span>
                           </td>
                         </tr>
                       ))
