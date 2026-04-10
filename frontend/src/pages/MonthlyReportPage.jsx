@@ -212,8 +212,8 @@ export default function MonthlyReportPage() {
                           <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
 
                           <td className="p-3 text-right">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${item.persen > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                              {item.persen}%
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${item.progres_proyek > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                              {item.progres_proyek}%
                             </span>
                           </td>
                         </tr>

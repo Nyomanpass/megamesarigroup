@@ -7,6 +7,8 @@ import { useRef } from "react";
 export default function DailyProgressPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [dailyPlan, setDailyPlan] = useState([]);
+  const [editId, setEditId] = useState(null);
 
   // --- States ---
   const [boqList, setBoqList] = useState([]);
@@ -17,7 +19,7 @@ export default function DailyProgressPage() {
 
   const [form, setForm] = useState({
     boq_id: "",
-    tanggal: "",
+    hari_ke: "",
     volume: ""
   });
 
@@ -38,11 +40,21 @@ export default function DailyProgressPage() {
     setBoqList(res.data);
   };
 
+  const fetchDailyPlan = async () => {
+      try {
+        const res = await api.get(`/daily-plan/${id}`);
+        setDailyPlan(res.data);
+      } catch (err) {
+        console.error("Gagal ambil daily plan", err);
+      }
+    };
+
 
 
   useEffect(() => {
     fetchData();
     fetchBoq();
+    fetchDailyPlan();
   }, [id]);
 
 
@@ -90,9 +102,59 @@ export default function DailyProgressPage() {
   
   useEffect(() => {
     if (form.boq_id) {
-      loadPreviewAnalisa(form.boq_id, form.volume);
-    }
-  }, [form.boq_id, form.volume]);
+        loadPreviewAnalisa(form.boq_id, form.volume);
+      }
+    }, [form.boq_id, form.volume]);
+
+    const handleCopy = (item) => {
+    // 🔥 cari hari_ke dari tanggal
+    const plan = dailyPlan.find(
+      (d) => d.tanggal === item.tanggal
+    );
+
+    setForm({
+      boq_id: item.boq_id,
+      hari_ke: plan?.hari_ke || "",
+      volume: item.volume
+    });
+
+    // 🔥 pastikan ini CREATE (bukan edit)
+    setEditId(null);
+
+    // 🔥 scroll ke form
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleEdit = (item) => {
+    setEditId(item.id);
+
+    // cari hari_ke dari dailyPlan berdasarkan tanggal
+    const plan = dailyPlan.find(
+      (d) => d.tanggal === item.tanggal
+    );
+
+    setForm({
+      boq_id: item.boq_id,
+      hari_ke: plan?.hari_ke || "",
+      volume: item.volume
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (id) => {
+  const confirm = window.confirm("Yakin mau hapus data ini?");
+  if (!confirm) return;
+
+  try {
+    await api.delete(`/daily-progress/${id}`);
+    alert("✅ Berhasil dihapus");
+
+    fetchData(); // refresh data
+  } catch (err) {
+    alert("❌ Gagal hapus");
+  }
+};
 
   // ================= SUBMIT =================
 const handleSubmit = async (e) => {
@@ -102,47 +164,80 @@ const handleSubmit = async (e) => {
     const payload = {
       project_id: id,
       boq_id: form.boq_id,
-      tanggal: form.tanggal,
+      hari_ke: form.hari_ke,
       volume: form.volume
     };
 
-    await api.post("/daily-progress", payload);
-    alert("✅ Berhasil Simpan!");
+    if (editId) {
+      await api.put(`/daily-progress/${editId}`, payload);
+      alert("✅ Berhasil Update!");
+      setEditId(null);
+    } else {
+      await api.post("/daily-progress", payload);
+      alert("✅ Berhasil Simpan!");
+    }
 
     fetchData();
 
+    // 🔥 RESET FORM
+    setForm({
+      boq_id: "",
+      hari_ke: "",
+      volume: ""
+    });
+
+    setPreviewItems([]);
+
   } catch (err) {
-    alert(err.response?.data?.message || "Terjadi kesalahan update ini alernya");
+    alert(err.response?.data?.message || "Terjadi kesalahan");
   }
 };
 
   // ================= SUMMARY LOGIC =================
-  const getSummary = () => {
-    if (!form.boq_id) return null;
+const getSummary = () => {
+  // 🔥 ambil boq_id dari form ATAU dari data edit
+  const boqIdFix = form.boq_id || data.find(d => d.id === editId)?.boq_id;
 
-    const selectedBoq = boqList.find((b) => b.id == form.boq_id);
-    if (!selectedBoq) return null;
+  if (!boqIdFix) return null;
 
-    const volumeLalu = data
-      .filter((d) => d.boq_id == form.boq_id)
-      .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
+  const selectedBoq = boqList.find((b) => b.id == boqIdFix);
+  if (!selectedBoq) return null;
 
-    const volumeInputSekarang = parseFloat(form.volume || 0);
-    const totalAkumulasi = volumeLalu + volumeInputSekarang;
-    const target = parseFloat(selectedBoq.volume || 0);
-    const sisa = target - totalAkumulasi;
-    const persen = target > 0 ? (totalAkumulasi / target) * 100 : 0;
+  const volumeInput = parseFloat(form.volume || 0);
 
-    return {
-      uraian: selectedBoq.uraian,
-      satuan: selectedBoq.satuan,
-      target: target,
-      lalu: volumeLalu,
-      totalSekarang: totalAkumulasi,
-      sisa: sisa,
-      persen: persen
-    };
+  const currentItem = data.find(d => d.id === editId);
+  const volumeLama = parseFloat(currentItem?.volume || 0);
+
+  const totalSemua = data
+    .filter((d) => d.boq_id == boqIdFix)
+    .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
+
+  let totalAkumulasi;
+
+  if (editId) {
+    if (volumeInput === volumeLama) {
+      totalAkumulasi = totalSemua;
+    } else {
+      totalAkumulasi = totalSemua - volumeLama + volumeInput;
+    }
+  } else {
+    totalAkumulasi = totalSemua + volumeInput;
+  }
+
+  const target = parseFloat(selectedBoq.volume || 0);
+  const sisa = target - totalAkumulasi;
+  const persen = target > 0 ? (totalAkumulasi / target) * 100 : 0;
+
+  return {
+    uraian: selectedBoq.uraian,
+    satuan: selectedBoq.satuan,
+    target,
+    lalu: totalSemua,
+    totalSekarang: totalAkumulasi,
+    sisa,
+    persen
   };
+};
 
   const summary = getSummary();
 
@@ -202,16 +297,19 @@ const handleSubmit = async (e) => {
               </select>
             </div>
 
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Tanggal</label>
-              <input
-                type="date"
-                value={form.tanggal}
-                onChange={(e) => setForm({ ...form, tanggal: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium outline-none transition-all" 
+                <select
+                value={form.hari_ke}
+                onChange={(e) => setForm({ ...form, hari_ke: e.target.value })}
                 required
-              />
-            </div>
+              >
+                <option value="">-- Pilih Hari --</option>
+
+                {dailyPlan.map((d) => (
+                  <option key={d.hari_ke} value={d.hari_ke}>
+                    Hari ke-{d.hari_ke} ({new Date(d.tanggal).toLocaleDateString("id-ID")})
+                  </option>
+                ))}
+              </select>
 
             <div className="flex flex-col">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Volume Dikerjakan (Output)</label>
@@ -335,7 +433,7 @@ const handleSubmit = async (e) => {
                         <td className="px-5 py-3 text-right">
                           <div className="flex flex-col items-end">
                             <span className="font-black text-blue-600 text-base">
-                              {item.hasil}
+                              {parseFloat(item.hasil || 0).toFixed(2)}
                             </span>
                             <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter -mt-1">
                               Estimasi Satuan
@@ -361,6 +459,18 @@ const handleSubmit = async (e) => {
 
           {/* ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 relative z-10">
+           {editId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditId(null);
+                  setForm({ boq_id: "", hari_ke: "", volume: "" });
+                }}
+                className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300"
+              >
+                <X size={16} /> Batal Edit
+              </button>
+            )}
             <button className={`px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2  bg-blue-600 hover:bg-blue-700`}>
               <Save size={18} /> Post Data Progres
             </button>
@@ -396,7 +506,32 @@ const handleSubmit = async (e) => {
                     <td className="p-4 text-right">
                        <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
                     </td>
-                  
+                    <td className="p-4 text-center pr-6">
+                        <div className="flex justify-center gap-2">
+                          <button
+                              onClick={() => handleCopy(item)}
+                              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition"
+                            >
+                              <PlusCircle size={16} />
+                            </button>
+                          {/* EDIT */}
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
+                          >
+                            <Edit size={16} />
+                          </button>
+
+                          {/* DELETE */}
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+
+                        </div>
+                      </td>
                   </tr>
                 ))}
                 {data.length === 0 && (

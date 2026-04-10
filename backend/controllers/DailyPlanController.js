@@ -326,7 +326,9 @@ export const getWeeklyChart = async (req, res) => {
       where: { project_id }
     });
 
-    // 🔥 grouping minggu
+    // =========================
+    // 🔥 GROUPING MINGGU
+    // =========================
     const group = {};
     plans.forEach((p) => {
       if (!group[p.minggu_ke]) group[p.minggu_ke] = [];
@@ -336,8 +338,14 @@ export const getWeeklyChart = async (req, res) => {
     let kumulatifRencana = 0;
     const result = [];
 
+    // =========================
+    // 🔥 LOOP PER MINGGU
+    // =========================
     for (const minggu in group) {
       const items = group[minggu];
+
+      // pastikan urut
+      items.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 
       const tglAkhir = items[items.length - 1].tanggal;
 
@@ -348,42 +356,45 @@ export const getWeeklyChart = async (req, res) => {
       kumulatifRencana += rencana;
 
       // =========================
-      // 🔥 AMBIL PROGRESS SAMPAI TANGGAL INI (PENTING!)
+      // 🔥 PROGRESS SAMPAI TGL INI
       // =========================
       const progressSdIni = progress.filter(
-        (p) => p.tanggal <= tglAkhir
+        (p) => new Date(p.tanggal) <= new Date(tglAkhir)
       );
 
       // =========================
-      // 🔥 HITUNG REAL BERDASARKAN BOQ
+      // 🔥 HITUNG REAL (FIX UTAMA)
       // =========================
       let totalProgress = 0;
-      let totalBobot = 0;
 
       for (const boq of boqs) {
-        const boqProgress = progressSdIni
-          .filter(p => p.boq_id === boq.id)
-          .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 
-        // ambil last (kumulatif)
-        const last = boqProgress.length
-          ? Number(boqProgress[boqProgress.length - 1].volume)
+        const boqProgress = progressSdIni.filter(
+          p => p.boq_id === boq.id
+        );
+
+        // ✅ FIX: SUM volume (BUKAN LAST)
+        const totalVolumeTerpasang = boqProgress.reduce(
+          (sum, p) => sum + Number(p.volume || 0),
+          0
+        );
+
+        const totalVolume = Number(boq.volume || 0);
+        const bobot = Number(boq.bobot || 0);
+
+        // ✅ RUMUS BENAR
+        const progressItem = totalVolume
+          ? (totalVolumeTerpasang / totalVolume) * bobot
           : 0;
 
-        const persenItem = boq.volume
-          ? (last / boq.volume) * 100
-          : 0;
-
-        totalProgress += persenItem * Number(boq.bobot || 0);
-        totalBobot += Number(boq.bobot || 0);
+        totalProgress += progressItem;
       }
 
-      const real = totalBobot
-        ? totalProgress / totalBobot
-        : 0;
+      // ✅ ini kumulatif proyek
+      const real = totalProgress;
 
       // =========================
-      // 🔥 REAL MINGGUAN
+      // 🔥 REAL MINGGUAN (DELTA)
       // =========================
       const prevKum = result.at(-1)?.kum_real || 0;
       const realMingguan = real - prevKum;
@@ -405,6 +416,7 @@ export const getWeeklyChart = async (req, res) => {
     res.json(result);
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
