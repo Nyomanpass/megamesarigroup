@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
-import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle } from "lucide-react";
+import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRef } from "react";
 
 export default function DailyProgressPage() {
@@ -23,6 +23,10 @@ export default function DailyProgressPage() {
     volume: ""
   });
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
 
 
   // ================= FETCH DATA =================
@@ -30,6 +34,7 @@ export default function DailyProgressPage() {
     try {
       const res = await api.get(`/daily-progress?project_id=${id}`);
       setData(res.data.filter((d) => d.project_id == id));
+      setCurrentPage(1); // Reset to page 1 on new fetch
     } catch (err) {
       console.error("Gagal fetch progress", err);
     }
@@ -41,13 +46,13 @@ export default function DailyProgressPage() {
   };
 
   const fetchDailyPlan = async () => {
-      try {
-        const res = await api.get(`/daily-plan/${id}`);
-        setDailyPlan(res.data);
-      } catch (err) {
-        console.error("Gagal ambil daily plan", err);
-      }
-    };
+    try {
+      const res = await api.get(`/daily-plan/${id}`);
+      setDailyPlan(res.data);
+    } catch (err) {
+      console.error("Gagal ambil daily plan", err);
+    }
+  };
 
 
 
@@ -75,22 +80,22 @@ export default function DailyProgressPage() {
         ...(analisa.alat || [])
       ];
 
-    const result = allItems.map(item => {
-      let rawKoef = item.koefisien;
-      if (!rawKoef) rawKoef = item.koef;
-      const koef = parseFloat(String(rawKoef).replace(",", ".")) || 0;
-      const volNum = parseFloat(volume) || 0;
+      const result = allItems.map(item => {
+        let rawKoef = item.koefisien;
+        if (!rawKoef) rawKoef = item.koef;
+        const koef = parseFloat(String(rawKoef).replace(",", ".")) || 0;
+        const volNum = parseFloat(volume) || 0;
 
-      const hasil = koef * volNum;
+        const hasil = koef * volNum;
 
-      return {
-        nama: item.nama,
-        tipe: item.tipe,
-        satuan: item.satuan,
-        koef,
-        hasil: hasil.toFixed(3)
-      };
-    });
+        return {
+          nama: item.nama,
+          tipe: item.tipe,
+          satuan: item.satuan,
+          koef,
+          hasil: hasil.toFixed(3)
+        };
+      });
 
       setPreviewItems(result);
 
@@ -99,14 +104,14 @@ export default function DailyProgressPage() {
     }
   };
 
-  
+
   useEffect(() => {
     if (form.boq_id) {
-        loadPreviewAnalisa(form.boq_id, form.volume);
-      }
-    }, [form.boq_id, form.volume]);
+      loadPreviewAnalisa(form.boq_id, form.volume);
+    }
+  }, [form.boq_id, form.volume]);
 
-    const handleCopy = (item) => {
+  const handleCopy = (item) => {
     // 🔥 cari hari_ke dari tanggal
     const plan = dailyPlan.find(
       (d) => d.tanggal === item.tanggal
@@ -143,126 +148,138 @@ export default function DailyProgressPage() {
   };
 
   const handleDelete = async (id) => {
-  const confirm = window.confirm("Yakin mau hapus data ini?");
-  if (!confirm) return;
+    const confirm = window.confirm("Yakin mau hapus data ini?");
+    if (!confirm) return;
 
-  try {
-    await api.delete(`/daily-progress/${id}`);
-    alert("✅ Berhasil dihapus");
+    try {
+      await api.delete(`/daily-progress/${id}`);
+      alert("✅ Berhasil dihapus");
 
-    fetchData(); // refresh data
-  } catch (err) {
-    alert("❌ Gagal hapus");
-  }
-};
+      fetchData(); // refresh data
+    } catch (err) {
+      alert("❌ Gagal hapus");
+    }
+  };
 
   // ================= SUBMIT =================
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  try {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
 
-    const payload = {
-      project_id: id,
-      boq_id: form.boq_id,
-      hari_ke: form.hari_ke,
-      volume: form.volume
-    };
+      const payload = {
+        project_id: id,
+        boq_id: form.boq_id,
+        hari_ke: form.hari_ke,
+        volume: form.volume
+      };
 
-    if (editId) {
-      await api.put(`/daily-progress/${editId}`, payload);
-      alert("✅ Berhasil Update!");
-      setEditId(null);
-    } else {
-      await api.post("/daily-progress", payload);
-      alert("✅ Berhasil Simpan!");
+      if (editId) {
+        await api.put(`/daily-progress/${editId}`, payload);
+        alert("✅ Berhasil Update!");
+        setEditId(null);
+      } else {
+        await api.post("/daily-progress", payload);
+        alert("✅ Berhasil Simpan!");
+      }
+
+      fetchData();
+
+      // 🔥 RESET FORM
+      setForm({
+        boq_id: "",
+        hari_ke: "",
+        volume: ""
+      });
+
+      setPreviewItems([]);
+
+    } catch (err) {
+      alert(err.response?.data?.message || "Terjadi kesalahan");
     }
-
-    fetchData();
-
-    // 🔥 RESET FORM
-    setForm({
-      boq_id: "",
-      hari_ke: "",
-      volume: ""
-    });
-
-    setPreviewItems([]);
-
-  } catch (err) {
-    alert(err.response?.data?.message || "Terjadi kesalahan");
-  }
-};
+  };
 
   // ================= SUMMARY LOGIC =================
-const getSummary = () => {
-  // 🔥 ambil boq_id dari form ATAU dari data edit
-  const boqIdFix = form.boq_id || data.find(d => d.id === editId)?.boq_id;
+  const getSummary = () => {
+    // 🔥 ambil boq_id dari form ATAU dari data edit
+    const boqIdFix = form.boq_id || data.find(d => d.id === editId)?.boq_id;
 
-  if (!boqIdFix) return null;
+    if (!boqIdFix) return null;
 
-  const selectedBoq = boqList.find((b) => b.id == boqIdFix);
-  if (!selectedBoq) return null;
+    const selectedBoq = boqList.find((b) => b.id == boqIdFix);
+    if (!selectedBoq) return null;
 
-  const volumeInput = parseFloat(form.volume || 0);
+    const volumeInput = parseFloat(form.volume || 0);
 
-  const currentItem = data.find(d => d.id === editId);
-  const volumeLama = parseFloat(currentItem?.volume || 0);
+    const currentItem = data.find(d => d.id === editId);
+    const volumeLama = parseFloat(currentItem?.volume || 0);
 
-  const totalSemua = data
-    .filter((d) => d.boq_id == boqIdFix)
-    .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
+    const totalSemua = data
+      .filter((d) => d.boq_id == boqIdFix)
+      .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
 
-  let totalAkumulasi;
+    let totalAkumulasi;
 
-  if (editId) {
-    if (volumeInput === volumeLama) {
-      totalAkumulasi = totalSemua;
+    if (editId) {
+      if (volumeInput === volumeLama) {
+        totalAkumulasi = totalSemua;
+      } else {
+        totalAkumulasi = totalSemua - volumeLama + volumeInput;
+      }
     } else {
-      totalAkumulasi = totalSemua - volumeLama + volumeInput;
+      totalAkumulasi = totalSemua + volumeInput;
     }
-  } else {
-    totalAkumulasi = totalSemua + volumeInput;
-  }
 
-  const target = parseFloat(selectedBoq.volume || 0);
-  const sisa = target - totalAkumulasi;
-  const persen = target > 0 ? (totalAkumulasi / target) * 100 : 0;
+    const target = parseFloat(selectedBoq.volume || 0);
+    const sisa = target - totalAkumulasi;
+    const persen = target > 0 ? (totalAkumulasi / target) * 100 : 0;
 
-  return {
-    uraian: selectedBoq.uraian,
-    satuan: selectedBoq.satuan,
-    target,
-    lalu: totalSemua,
-    totalSekarang: totalAkumulasi,
-    sisa,
-    persen
+    return {
+      uraian: selectedBoq.uraian,
+      satuan: selectedBoq.satuan,
+      target,
+      lalu: totalSemua,
+      totalSekarang: totalAkumulasi,
+      sisa,
+      persen
+    };
   };
-};
 
   const summary = getSummary();
+
+  // ================= PAGINATION LOGIC =================
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = data.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(data.length / itemsPerPage);
+
+  const paginate = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
 
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
+
         {/* HEADER */}
         <div ref={formRef} className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate(`/project/${id}`)} 
+            <button
+              onClick={() => navigate(`/project/${id}`)}
               className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
             >
               <ArrowLeft size={24} className="text-gray-600" />
             </button>
             <div>
               <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <TrendingUp className="text-yellow-500"/> Daily Progress Laporan
+                <TrendingUp className="text-yellow-500" /> Daily Progress Laporan
               </h1>
               <p className="text-sm text-gray-500">Laporkan capaian volume harian di lapangan</p>
             </div>
           </div>
-        
-           
+
+
         </div>
 
         {/* ================= FORM ================= */}
@@ -270,12 +287,12 @@ const getSummary = () => {
           {/* Deco background */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
 
-          <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 relative z-10"><Edit size={20} className="text-blue-500"/> Entri Data Progres Fisik</h2>
-          
+          <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 relative z-10"><Edit size={20} className="text-blue-500" /> Entri Data Progres Fisik</h2>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
             <div className="flex flex-col">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Pekerjaan (Dari BOQ)</label>
-                <select
+              <select
                 value={form.boq_id}
                 onChange={(e) => {
                   const boq_id = e.target.value; // ✅ ini BOQ
@@ -283,7 +300,7 @@ const getSummary = () => {
 
                   setForm(newForm);
 
-    
+
                 }}
                 className="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium outline-none transition-all"
                 required
@@ -297,19 +314,19 @@ const getSummary = () => {
               </select>
             </div>
 
-                <select
-                value={form.hari_ke}
-                onChange={(e) => setForm({ ...form, hari_ke: e.target.value })}
-                required
-              >
-                <option value="">-- Pilih Hari --</option>
+            <select
+              value={form.hari_ke}
+              onChange={(e) => setForm({ ...form, hari_ke: e.target.value })}
+              required
+            >
+              <option value="">-- Pilih Hari --</option>
 
-                {dailyPlan.map((d) => (
-                  <option key={d.hari_ke} value={d.hari_ke}>
-                    Hari ke-{d.hari_ke} ({new Date(d.tanggal).toLocaleDateString("id-ID")})
-                  </option>
-                ))}
-              </select>
+              {dailyPlan.map((d) => (
+                <option key={d.hari_ke} value={d.hari_ke}>
+                  Hari ke-{d.hari_ke} ({new Date(d.tanggal).toLocaleDateString("id-ID")})
+                </option>
+              ))}
+            </select>
 
             <div className="flex flex-col">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Volume Dikerjakan (Output)</label>
@@ -319,7 +336,7 @@ const getSummary = () => {
                   placeholder="0.00"
                   value={form.volume}
                   onChange={(e) => setForm({ ...form, volume: e.target.value })}
-                  className="w-full border-2 border-green-200 rounded-xl p-3 pl-4 pr-16 bg-green-50/30 focus:bg-white focus:border-green-500 font-bold text-green-700 outline-none transition-all" 
+                  className="w-full border-2 border-green-200 rounded-xl p-3 pl-4 pr-16 bg-green-50/30 focus:bg-white focus:border-green-500 font-bold text-green-700 outline-none transition-all"
                   required
                 />
                 <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-green-600 font-bold text-sm">
@@ -333,7 +350,7 @@ const getSummary = () => {
           {summary && (
             <div className="mt-8 bg-blue-50/80 p-6 rounded-2xl border border-blue-200 relative z-10 transition-all duration-500 animate-in fade-in slide-in-from-top-4">
               <h2 className="text-blue-800 font-bold text-sm mb-4 uppercase tracking-wider flex items-center gap-2">
-                <Search size={16}/> Informasi Target BOQ: <span className="text-blue-900 border-b border-blue-300 pb-0.5">{summary.uraian}</span>
+                <Search size={16} /> Informasi Target BOQ: <span className="text-blue-900 border-b border-blue-300 pb-0.5">{summary.uraian}</span>
               </h2>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -371,18 +388,18 @@ const getSummary = () => {
                   className={`h-full rounded-full transition-all duration-700 ease-out flex items-center justify-end px-2 ${summary.persen > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
                   style={{ width: `${Math.min(summary.persen, 100)}%` }}
                 >
-                    {summary.persen > 10 && <span className="text-[9px] text-white font-bold">{summary.persen.toFixed(0)}%</span>}
+                  {summary.persen > 10 && <span className="text-[9px] text-white font-bold">{summary.persen.toFixed(0)}%</span>}
                 </div>
               </div>
               {summary.persen > 100 && (
-                <p className="text-xs font-bold text-red-500 mt-2 flex items-center gap-1"><AlertCircle size={14}/> Peringatan: Volume lapangan melebihi RAB (Over-progress)!</p>
+                <p className="text-xs font-bold text-red-500 mt-2 flex items-center gap-1"><AlertCircle size={14} /> Peringatan: Volume lapangan melebihi RAB (Over-progress)!</p>
               )}
             </div>
           )}
 
           {previewItems.length > 0 && (
             <div className="mt-8 bg-white border border-blue-100 rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-              
+
               {/* HEADER PREVIEW */}
               <div className="bg-blue-50/50 px-5 py-3 border-b border-blue-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -416,11 +433,10 @@ const getSummary = () => {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                            item.tipe === 'BAHAN' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${item.tipe === 'BAHAN' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                             item.tipe === 'TENAGA' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                            'bg-emerald-50 text-emerald-600 border-emerald-100'
-                          }`}>
+                              'bg-emerald-50 text-emerald-600 border-emerald-100'
+                            }`}>
                             {item.tipe}
                           </span>
                         </td>
@@ -459,7 +475,7 @@ const getSummary = () => {
 
           {/* ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 relative z-10">
-           {editId && (
+            {editId && (
               <button
                 type="button"
                 onClick={() => {
@@ -494,58 +510,113 @@ const getSummary = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {data.map((item, i) => (
+                {currentItems.map((item, i) => (
                   <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="p-4 pl-6 text-gray-700 font-medium">
-                       {new Date(item.tanggal).toLocaleDateString("id-ID", {day: "2-digit", month: "short", year: "numeric"})}
+                      {new Date(item.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                     </td>
                     <td className="p-4 text-gray-800 font-bold max-w-[300px] truncate" title={item.boq?.uraian}>
-                       <span className="text-blue-500 mr-2 opacity-50">•</span>{item.boq?.uraian}
+                      <span className="text-blue-500 mr-2 opacity-50">•</span>{item.boq?.uraian}
                     </td>
-                   
+
                     <td className="p-4 text-right">
-                       <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
+                      <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
                     </td>
                     <td className="p-4 text-center pr-6">
-                        <div className="flex justify-center gap-2">
-                          <button
-                              onClick={() => handleCopy(item)}
-                              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition"
-                            >
-                              <PlusCircle size={16} />
-                            </button>
-                          {/* EDIT */}
-                          <button
-                            onClick={() => handleEdit(item)}
-                            className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
-                          >
-                            <Edit size={16} />
-                          </button>
+                      <div className="flex justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleCopy(item)}
+                          className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition"
+                          title="copy data"
+                        >
+                          <PlusCircle size={18} />
+                        </button>
+                        {/* EDIT */}
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
+                          title="edit"
+                        >
+                          <Edit size={18} />
+                        </button>
 
-                          {/* DELETE */}
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                        {/* DELETE */}
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition"
+                          title="hapus"
+                        >
+                          <Trash2 size={18} />
+                        </button>
 
-                        </div>
-                      </td>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {data.length === 0 && (
-                   <tr>
-                     <td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">Belum ada riwayat progres. Coba input data progres yang pertama!</td>
-                   </tr>
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">Belum ada riwayat progres. Coba input data progres yang pertama!</td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col md:flex-row items-center justify-between p-5 bg-white border-t border-gray-100 gap-4">
+              <div className="text-sm text-gray-500">
+                Menampilkan <span className="font-bold text-gray-800">{indexOfFirstItem + 1}</span> hingga <span className="font-bold text-gray-800">{Math.min(indexOfLastItem, data.length)}</span> dari <span className="font-bold text-gray-800">{data.length}</span> entri
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95 bg-white"
+                >
+                  <ChevronLeft size={16} strokeWidth={2.5} />
+                </button>
+
+                {[...Array(totalPages)].map((_, index) => {
+                  const pageNumber = index + 1;
+                  if (
+                    pageNumber === 1 ||
+                    pageNumber === totalPages ||
+                    (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => paginate(pageNumber)}
+                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 ${currentPage === pageNumber ? 'bg-blue-600 text-white border border-blue-700 shadow-blue-500/30' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:text-gray-800'}`}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  } else if (
+                    pageNumber === currentPage - 2 ||
+                    pageNumber === currentPage + 2
+                  ) {
+                    return <span key={pageNumber} className="px-2 text-gray-400 font-bold tracking-widest">...</span>;
+                  }
+                  return null;
+                })}
+
+                <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95 bg-white"
+                >
+                  <ChevronRight size={16} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .custom-scrollbar::-webkit-scrollbar {
           height: 6px;
           width: 6px;

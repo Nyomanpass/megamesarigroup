@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Edit2, ArrowLeft, FileSpreadsheet, AlertTriangle, X, Users, Blocks, Wrench, Calculator } from "lucide-react";
-import api from "../../api";
+import { Plus, Trash2, Edit2, ArrowLeft, AlertTriangle, X, Users, Blocks, Wrench, Calculator } from "lucide-react";
+import api from "../api";
 
-const AnalisaDetailPage = () => {
-  const { id } = useParams(); // analisa_id
+const ProjectAnalisaDetailPage = () => {
+  const { id: projectId, analisaId } = useParams();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -29,17 +29,17 @@ const AnalisaDetailPage = () => {
   // 🔹 GET ANALISA DETAIL
   const fetchDetail = async () => {
     try {
-      const res = await api.get(`/master/analisa-detail/${id}`);
+      const res = await api.get(`/project-analisa-detail/${analisaId}`);
       setData(res.data);
     } catch (err) {
       console.error(err);
     }
   };
 
-  // 🔹 GET MASTER ITEM
+  // 🔹 GET PROJECT ITEM
   const fetchItems = async () => {
     try {
-      const res = await api.get("/masteritem");
+      const res = await api.get(`/project-items?project_id=${projectId}`);
       setItems(res.data);
     } catch (err) {
       console.error(err);
@@ -49,7 +49,7 @@ const AnalisaDetailPage = () => {
   useEffect(() => {
     fetchDetail();
     fetchItems();
-  }, [id]);
+  }, [projectId, analisaId]);
 
   // 🔹 MODAL HANDLERS
   const openModal = (type, item = null) => {
@@ -77,6 +77,7 @@ const AnalisaDetailPage = () => {
       setIsEdit(false);
       setEditId(null);
       setModalType("");
+      setIsDropdownOpen(false);
     }, 300);
   };
 
@@ -96,15 +97,15 @@ const AnalisaDetailPage = () => {
 
     try {
       if (isEdit) {
-        // Update jika ada endpoint /analisa-detail/:id (Sesuaikan jika endpoint beda)
-        // Asumsi edit mengupdate baris detail menggunakan PUT
-        await api.put(`/master/analisa-detail/${editId}`, {
+        // Update
+        await api.put(`/project-analisa-detail/${editId}`, {
           item_id: form.item_id,
           koefisien: form.koefisien
         });
       } else {
-        await api.post("/master/analisa-detail", {
-          analisa_id: id,
+        // Create
+        await api.post("/project-analisa-detail", {
+          project_analisa_id: analisaId,
           item_id: form.item_id,
           koefisien: form.koefisien
         });
@@ -124,7 +125,7 @@ const AnalisaDetailPage = () => {
 
   const executeDelete = async () => {
     try {
-      await api.delete(`/master/analisa-detail/${deleteModal.id}`);
+      await api.delete(`/project-analisa-detail/${deleteModal.id}`);
       setDeleteModal({ isOpen: false, id: null, itemName: "" });
       fetchDetail();
     } catch (err) {
@@ -139,7 +140,7 @@ const AnalisaDetailPage = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-secondary mb-4"></div>
-        <p className="text-gray-500 font-medium">Memuat Data Analisa...</p>
+        <p className="text-gray-500 font-medium">Memuat Data Analisa Project...</p>
       </div>
     );
   }
@@ -151,17 +152,17 @@ const AnalisaDetailPage = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/settings/analisa')}
+            onClick={() => navigate(`/project/${projectId}/analisa`)}
             className="p-2.5 bg-white border border-gray-200 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
-              Detail Komposisi Analisa
+              Detail Komposisi AHSP Project
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Atur koefisien Tenaga, Bahan, dan Alat untuk membentuk Harga Satuan Pekerjaan.
+              Atur koefisien Tenaga, Bahan, dan Alat khusus dalam lingkup Project ini.
             </p>
           </div>
         </div>
@@ -352,7 +353,7 @@ const AnalisaDetailPage = () => {
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3">
-                <div className="bg-secondary/10 text-secondary">
+                <div className="bg-secondary/10 text-secondary p-2 rounded-lg">
                   {isEdit ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                 </div>
                 {isEdit ? `Edit ${modalType}` : `Tambah ${modalType}`}
@@ -365,7 +366,7 @@ const AnalisaDetailPage = () => {
               <div className="space-y-5">
 
                 <div className="relative">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Item Master</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Item Project</label>
 
                   <div className="relative">
                     <input
@@ -405,7 +406,7 @@ const AnalisaDetailPage = () => {
                           <div className="font-bold text-gray-800 text-sm">{item.nama}</div>
                           <div className="text-xs text-gray-500 mt-1 flex gap-2">
                             <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">Satuan: {item.satuan}</span>
-                            <span className="text-gray-400 font-medium">Rp {item.harga_default?.toLocaleString('id-ID')}</span>
+                            <span className="text-gray-400 font-medium">Rp {item.harga?.toLocaleString('id-ID')}</span>
                           </div>
                         </div>
                       ))}
@@ -420,14 +421,14 @@ const AnalisaDetailPage = () => {
 
                   {filteredItems.length === 0 && (
                     <p className="text-xs text-danger mt-2 flex items-center gap-1.5 p-2 bg-danger/5 rounded-lg border border-danger/10">
-                      <AlertTriangle className="w-4 h-4" /> Data master {modalType.toLowerCase()} benar-benar kosong. Silakan tambah data di Master Item terlebih dahulu.
+                      <AlertTriangle className="w-4 h-4" /> Data item {modalType.toLowerCase()} project benar-benar kosong. Silakan tambah data di Item Project.
                     </p>
                   )}
 
 
                   {isDropdownOpen && (
                     <div
-                      className="fixed inset-0 z-0"
+                      className="fixed inset-0 z-[5]"
                       onClick={() => setIsDropdownOpen(false)}
                     ></div>
                   )}
@@ -472,7 +473,7 @@ const AnalisaDetailPage = () => {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Hapus Detail?</h2>
               <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                Menghapus <span className="font-bold text-gray-800">"{deleteModal.itemName}"</span> akan merubah perhitungan total RAB. Lanjutkan?
+                Menghapus <span className="font-bold text-gray-800">"{deleteModal.itemName}"</span> akan merubah perhitungan total RAB / BOQ. Lanjutkan?
               </p>
 
               <div className="flex gap-3 w-full">
@@ -498,4 +499,4 @@ const AnalisaDetailPage = () => {
   );
 };
 
-export default AnalisaDetailPage;
+export default ProjectAnalisaDetailPage;

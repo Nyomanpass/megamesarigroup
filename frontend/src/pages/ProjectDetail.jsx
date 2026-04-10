@@ -16,8 +16,8 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const [progres, seProgres] = useState([]);
   const lastProgress = progres.length
-  ? progres[progres.length - 1].kum_real
-  : 0;
+    ? progres[progres.length - 1].kum_real
+    : 0;
 
   const safeProgress = Math.min(lastProgress, 100);
 
@@ -57,6 +57,7 @@ export default function ProjectDetail() {
   };
 
   const menus = [
+    { title: "AHSP Proyek", path: "analisa", icon: Calculator, color: "emerald" },
     { title: "BOQ", path: "boq", icon: FileText, color: "blue" },
     { title: "Schedule", path: "schedule", icon: CalendarDays, color: "red" },
     { title: "Daily Plan", path: "daily-plan", icon: CalendarPlus, color: "green" },
@@ -67,7 +68,6 @@ export default function ProjectDetail() {
     { title: "Material", path: "material", icon: Package, color: "gray" },
     { title: "Tenaga Kerja", path: "tenaga", icon: Users, color: "orange" },
     { title: "Peralatan", path: "peralatan", icon: Wrench, color: "teal" },
-    { title: "Analisa Proyek", path: "analisa", icon: Calculator, color: "emerald" },
   ];
 
   const getColorClasses = (color) => {
@@ -93,10 +93,10 @@ export default function ProjectDetail() {
     real: d.kum_real
   }));
 
-const pieData = [
-  { name: 'Selesai', value: lastProgress, color: '#10B981' },
-  { name: 'Sisa', value: 100 - lastProgress, color: '#E2E8F0' }
-];
+  const pieData = [
+    { name: 'Selesai', value: lastProgress, color: '#10B981' },
+    { name: 'Sisa', value: 100 - lastProgress, color: '#E2E8F0' }
+  ];
 
   if (!project) {
     return (
@@ -221,12 +221,12 @@ const pieData = [
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col">
                 <span className="text-3xl font-black text-gray-800 leading-none"> {safeProgress.toFixed(2)}
-                    <span className="text-lg">%</span></span>
+                  <span className="text-lg">%</span></span>
               </div>
             </div>
             <div className="text-center relative z-10">
               <h3 className="text-lg font-bold text-gray-800">Progress Pengerjaan</h3>
-             
+
             </div>
           </div>
 
@@ -248,57 +248,57 @@ const pieData = [
 
             <div className="h-40 w-full relative z-10 -ml-5">
               <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
 
-              <defs>
-                <linearGradient id="colorRencana" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#94A3B8" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#94A3B8" stopOpacity={0}/>
-                </linearGradient>
+                  <defs>
+                    <linearGradient id="colorRencana" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#94A3B8" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#94A3B8" stopOpacity={0} />
+                    </linearGradient>
 
-                <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff5511" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#ff5511" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
+                    <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ff5511" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#ff5511" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
 
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
 
-              <XAxis 
-                dataKey="name" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 12, fill: '#64748b' }} 
-              />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                  />
 
-              <YAxis 
-                domain={[0, 100]} 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 12, fill: '#64748b' }} 
-              />
+                  <YAxis
+                    domain={[0, 100]}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                  />
 
-              <RechartsTooltip />
+                  <RechartsTooltip />
 
-              <Area 
-                type="natural" 
-                dataKey="rencana" 
-                stroke="#94A3B8"
-                strokeWidth={3}
-                fill="url(#colorRencana)"
-              />
+                  <Area
+                    type="natural"
+                    dataKey="rencana"
+                    stroke="#94A3B8"
+                    strokeWidth={3}
+                    fill="url(#colorRencana)"
+                  />
 
-              <Area 
-                type="natural" 
-                dataKey="real" 
-                stroke="#ff5511"
-                strokeWidth={4}
-                fill="url(#colorReal)"
-                dot={false}
-                activeDot={{ r: 5 }}
-              />
+                  <Area
+                    type="natural"
+                    dataKey="real"
+                    stroke="#ff5511"
+                    strokeWidth={4}
+                    fill="url(#colorReal)"
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                  />
 
-            </AreaChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -328,7 +328,7 @@ const pieData = [
 
         </div>
 
-       
+
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {menus.map((menu, index) => {
             const Icon = menu.icon;

@@ -17,6 +17,7 @@ import PekerjaPage from "./pages/PekerjaPage";
 import PeralatanPage from "./pages/PeralatanPage";
 import Project from "./pages/Project";
 import ProjectAnalisaPage from "./pages/ProjekAnalisaPage";
+import ProjectAnalisaDetailPage from "./pages/ProjectAnalisaDetailPage";
 
 import MasterItemPage from "./pages/settings/MasterItemPage";
 import AnalisaMasterPage from "./pages/settings/AnalisaMasterPage";
@@ -139,6 +140,10 @@ const router = createBrowserRouter([
       {
         path: "/project/:id/analisa",
         element: <ProjectAnalisaPage />,
+      },
+      {
+        path: "/project/:id/analisa/:analisaId",
+        element: <ProjectAnalisaDetailPage />,
       },
       {
         path: "/settings/masteritem",

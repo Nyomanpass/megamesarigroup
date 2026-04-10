@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
+import { Plus, Edit2, Trash2, Search, ArrowRight, X, AlertTriangle, Calculator, FileSpreadsheet, ArrowLeft } from "lucide-react";
 import api from "../api";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 const ProjectAnalisaPage = () => {
-  const { id } = useParams(); // 🔥 project_id
+  const { id } = useParams(); // project_id
+  const navigate = useNavigate();
 
   const [data, setData] = useState([]);
-  const [items, setItems] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState(null);
 
-  const [editDetailId, setEditDetailId] = useState(null);
-  const [isEditDetail, setIsEditDetail] = useState(false);
-
-  const [selectedAnalisa, setSelectedAnalisa] = useState(null);
-  const [detail, setDetail] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, itemName: "" });
 
   const [formMaster, setFormMaster] = useState({
     kode: "",
@@ -24,458 +24,356 @@ const ProjectAnalisaPage = () => {
     overhead_persen: 10
   });
 
-  const [formDetail, setFormDetail] = useState({
-    item_id: "",
-    koefisien: ""
-  });
-
-  // ================= MASTER =================
-
   const fetchData = async () => {
-    const res = await api.get(`/project-analisa?project_id=${id}`);
-    setData(res.data);
-  };
-
-  const fetchItems = async () => {
-    const res = await api.get(`/project-items?project_id=${id}`);
-    setItems(res.data);
-  };
-
-  const handleSubmitMaster = async (e) => {
-    e.preventDefault();
-
-    if (isEdit) {
-      await api.put(`/project-analisa/${editId}`, formMaster);
-    } else {
-      await api.post("/project-analisa", {
-        ...formMaster,
-        project_id: id // 🔥 WAJIB
-      });
+    try {
+      const res = await api.get(`/project-analisa?project_id=${id}`);
+      setData(res.data);
+      setFilteredData(res.data);
+    } catch (err) {
+      console.error(err);
     }
-
-    setFormMaster({
-      kode: "",
-      nama: "",
-      satuan: "",
-      overhead_persen: 10
-    });
-
-    setIsEdit(false);
-    setEditId(null);
-
-    fetchData();
-  };
-
-  const handleEdit = (a) => {
-    setFormMaster(a);
-    setEditId(a.id);
-    setIsEdit(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm("Yakin hapus?")) return;
-    await api.delete(`/project-analisa/${id}`);
-    fetchData();
-  };
-
-  // ================= DETAIL =================
-
-  const fetchDetail = async (id) => {
-    const res = await api.get(`/project-analisa-detail/${id}`);
-    setDetail(res.data);
-  };
-
-  const openDetail = async (analisa) => {
-    setSelectedAnalisa(analisa);
-    await fetchDetail(analisa.id);
-  };
-
-
-    const handleSubmitDetail = async (e) => {
-    e.preventDefault();
-
-    if (!selectedAnalisa) return;
-
-    if (isEditDetail) {
-        // 🔥 UPDATE
-        await api.put(`/project-analisa-detail/${editDetailId}`, {
-        item_id: formDetail.item_id,
-        koefisien: formDetail.koefisien
-        });
-    } else {
-        // 🔥 CREATE
-        await api.post("/project-analisa-detail", {
-        project_analisa_id: selectedAnalisa.id,
-        item_id: formDetail.item_id,
-        koefisien: formDetail.koefisien
-        });
-    }
-
-    // 🔥 RESET
-    setFormDetail({ item_id: "", koefisien: "" });
-    setIsEditDetail(false);
-    setEditDetailId(null);
-
-    // 🔥 REFRESH (WAJIB)
-    await fetchDetail(selectedAnalisa.id);
-    };
-
-  const handleEditDetail = (d) => {
-    setFormDetail({
-      item_id: d.item_id,
-      koefisien: d.koefisien
-    });
-
-    setEditDetailId(d.id);
-    setIsEditDetail(true);
-  };
-
-  const handleDeleteDetail = async (id) => {
-    if (!confirm("Hapus item?")) return;
-    await api.delete(`/project-analisa-detail/${id}`);
-    fetchDetail(selectedAnalisa.id);
   };
 
   useEffect(() => {
     fetchData();
-    fetchItems();
   }, [id]);
 
-  const formatRupiah = (num) => {
-  return Number(num).toLocaleString("id-ID", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-};
+  useEffect(() => {
+    let filtered = data;
+    if (searchTerm) {
+      filtered = filtered.filter(item =>
+        item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.kode.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    setFilteredData(filtered);
+  }, [searchTerm, data]);
+
+  const handleChangeMaster = (e) => {
+    setFormMaster({
+      ...formMaster,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const openFormModal = (item = null) => {
+    if (item) {
+      setFormMaster({
+        kode: item.kode,
+        nama: item.nama,
+        satuan: item.satuan,
+        overhead_persen: item.overhead_persen
+      });
+      setEditId(item.id);
+      setIsEdit(true);
+    } else {
+      setFormMaster({
+        kode: "",
+        nama: "",
+        satuan: "",
+        overhead_persen: 10
+      });
+      setEditId(null);
+      setIsEdit(false);
+    }
+    setShowModal(true);
+  };
+
+  const closeFormModal = () => {
+    setShowModal(false);
+    setTimeout(() => {
+      setIsEdit(false);
+      setEditId(null);
+    }, 300);
+  };
+
+  const handleSubmitMaster = async (e) => {
+    e.preventDefault();
+    if (!formMaster.kode || !formMaster.nama || !formMaster.satuan) {
+      alert("Kode, Nama, dan Satuan wajib diisi!");
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await api.put(`/project-analisa/${editId}`, formMaster);
+      } else {
+        await api.post("/project-analisa", {
+          ...formMaster,
+          project_id: id
+        });
+      }
+      closeFormModal();
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan data analisa project.");
+    }
+  };
+
+  const confirmDelete = (analisaId, itemName) => {
+    setDeleteModal({ isOpen: true, id: analisaId, itemName });
+  };
+
+  const executeDelete = async () => {
+    try {
+      await api.delete(`/project-analisa/${deleteModal.id}`);
+      fetchData();
+      setDeleteModal({ isOpen: false, id: null, itemName: "" });
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus data analisa.");
+    }
+  };
+
+  const openDetail = (analisaId) => {
+    navigate(`/project/${id}/analisa/${analisaId}`);
+  };
 
   return (
-    <div className="p-6">
-
-    <div className="p-8 bg-gray-100 min-h-screen">
-    <div className="max-w-5xl mx-auto">
-        
-        {/* HEADER */}
-        <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Analisa Project</h1>
-        <p className="text-gray-500 text-sm">Kelola daftar analisa dan overhead project</p>
+    <div className="p-6 bg-background min-h-screen text-text-primary">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate(`/project/${id}`)}
+            className="p-2.5 bg-white border border-gray-200 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-primary flex items-center gap-3">
+              <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+                <Calculator className="w-7 h-7 text-secondary" />
+              </div>
+              AHSP Proyek
+            </h1>
+            <p className="text-sm text-gray-500 mt-2 max-w-xl">
+              Kelola data standar Analisa Harga Satuan Pekerjaan khusus untuk project ini.
+            </p>
+          </div>
         </div>
+        <button
+          onClick={() => openFormModal()}
+          className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap"
+        >
+          <Plus className="w-5 h-5" />
+          Tambah Analisa Project
+        </button>
+      </div>
 
-        {/* 🔥 FORM MASTER */}
-        <div className="bg-white p-6 rounded-lg shadow-sm mb-8 border border-gray-200">
-        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
-            {isEdit ? "Edit Data Analisa" : "Tambah Analisa Baru"}
-        </h2>
-
-        <form onSubmit={handleSubmitMaster} className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600">Kode Analisa</label>
-            <input 
-                name="kode" 
-                placeholder="Contoh: A.2.1" 
-                value={formMaster.kode}
-                onChange={(e)=>setFormMaster({...formMaster, kode:e.target.value})}
-                className="border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            </div>
-
-            <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600">Nama Analisa</label>
-            <input 
-                name="nama" 
-                placeholder="Masukkan nama pekerjaan"
-                value={formMaster.nama}
-                onChange={(e)=>setFormMaster({...formMaster, nama:e.target.value})}
-                className="border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            </div>
-
-            <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600">Satuan</label>
-            <input 
-                name="satuan" 
-                placeholder="m2, m3, atau ls"
-                value={formMaster.satuan}
-                onChange={(e)=>setFormMaster({...formMaster, satuan:e.target.value})}
-                className="border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            </div>
-
-            <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600">Overhead (%)</label>
-            <input 
-                type="number" 
-                name="overhead_persen"
-                placeholder="0"
-                value={formMaster.overhead_persen}
-                onChange={(e)=>setFormMaster({...formMaster, overhead_persen:e.target.value})}
-                className="border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            </div>
-
-            <button className={`col-span-2 mt-2 p-3 rounded font-bold text-white transition-colors ${isEdit ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-            {isEdit ? "Update Analisa" : "Simpan Analisa"}
-            </button>
-        </form>
+      {/* TOOLBAR */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        <div className="relative w-full md:max-w-lg">
+          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari berdasarkan kode atau nama pekerjaan..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-11 pr-4 px-2.5 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all text-sm"
+          />
         </div>
+      </div>
 
-        {/* 🔥 TABLE */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      {/* TABLE SECTION */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
             <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Kode</th>
-                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Nama Analisa</th>
-                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Aksi</th>
-            </tr>
+              <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="p-5 font-bold w-32">Kode</th>
+                <th className="p-5 font-bold">Nama Pekerjaan</th>
+                <th className="p-5 font-bold w-32">Satuan</th>
+                <th className="p-5 font-bold w-32 text-center">Overhead (%)</th>
+                <th className="p-5 font-bold text-center w-64">Aksi</th>
+              </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-            {data.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 font-mono font-bold text-blue-600">{a.kode}</td>
-                <td className="px-6 py-4 text-gray-700 font-medium">{a.nama}</td>
-                <td className="px-6 py-4">
-                    <div className="flex justify-center gap-2">
-                    <button 
-                        onClick={()=>openDetail(a)}
-                        className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded text-sm font-bold border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-all"
-                    >
-                        Detail
-                    </button>
-                    <button 
-                        onClick={()=>handleEdit(a)}
-                        className="text-gray-400 hover:text-blue-600 px-2 transition-colors text-sm font-semibold"
-                    >
-                        Edit
-                    </button>
-                    <button 
-                        onClick={()=>handleDelete(a.id)}
-                        className="text-gray-400 hover:text-red-600 px-2 transition-colors text-sm font-semibold"
-                    >
-                        Hapus
-                    </button>
+            <tbody className="divide-y divide-gray-50 text-sm">
+              {filteredData.map((a) => (
+                <tr key={a.id} className="hover:bg-accent/40 transition-colors group">
+                  <td className="p-5 font-bold text-text-primary">
+                    <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 text-xs">
+                      {a.kode}
+                    </span>
+                  </td>
+                  <td className="p-5 font-medium text-text-primary">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-gray-400" />
+                      {a.nama}
                     </div>
-                </td>
+                  </td>
+                  <td className="p-5 text-gray-600 font-medium">{a.satuan}</td>
+                  <td className="p-5 text-center text-gray-600 font-medium">
+                    <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
+                      {a.overhead_persen}%
+                    </span>
+                  </td>
+                  <td className="p-5">
+                    <div className="flex justify-center items-center gap-2">
+                      <button
+                        onClick={() => openDetail(a.id)}
+                        className="flex items-center gap-1.5 text-xs font-bold bg-secondary text-white hover:bg-secondary/80 px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95"
+                      >
+                        Kelola Detail <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openFormModal(a)}
+                          className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10"
+                          title="Edit Analisa Project"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(a.id, a.nama)}
+                          className="p-2 text-danger bg-danger/5 hover:bg-danger/15 hover:scale-105 rounded-lg transition-all border border-danger/10"
+                          title="Hapus Analisa Project"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </td>
                 </tr>
-            ))}
-            {data.length === 0 && (
+              ))}
+              {filteredData.length === 0 && (
                 <tr>
-                <td colSpan="3" className="px-6 py-10 text-center text-gray-400 italic">Belum ada data analisa.</td>
+                  <td colSpan="5" className="p-16 text-center">
+                    <div className="flex flex-col items-center justify-center text-gray-400">
+                      <div className="bg-gray-50 p-4 rounded-full mb-3">
+                        <Calculator className="w-10 h-10 text-gray-300" />
+                      </div>
+                      <p className="text-base font-semibold text-gray-600">Analisa Project Kosong</p>
+                      <p className="text-sm mt-1 text-gray-500">Silakan tambahkan data analisa project baru.</p>
+                    </div>
+                  </td>
                 </tr>
-            )}
+              )}
             </tbody>
-        </table>
+          </table>
         </div>
+      </div>
 
-    </div>
-    </div>
+      {/* --- MODALS --- */}
 
-      {/* 🔥 MODAL */}
-      {selectedAnalisa && (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
-
-          <div className="bg-white w-[900px] p-6 rounded">
-
-            <h2 className="font-bold mb-4">
-              {selectedAnalisa.nama}
-            </h2>
-            <button onClick={()=>setSelectedAnalisa(null)}>
-                Tutup
-                </button>
-            {/* FORM DETAIL */}
-            <form onSubmit={handleSubmitDetail} className="flex gap-2 mb-4">
-
-              <select
-                value={formDetail.item_id}
-                onChange={(e)=>setFormDetail({...formDetail,item_id:e.target.value})}
-              >
-                <option value="">Pilih Item</option>
-                {items.map(i=>(
-                  <option key={i.id} value={i.id}>
-                    {i.nama} ({i.tipe})
-                  </option>
-                ))}
-              </select>
-
-              <input
-                placeholder="Koefisien"
-                value={formDetail.koefisien}
-                onChange={(e)=>setFormDetail({...formDetail,koefisien:e.target.value})}
-              />
-
-             <button className="bg-green-600 text-white px-4 rounded">
-                {isEditDetail ? "Update" : "+ Tambah"}
-                </button>
-            </form>
-
-            {detail && (
-            <div className="mt-4">
-                 
-
-                <table className="w-full border text-sm">
-                <thead className="bg-gray-100">
-                    <tr>
-                        <th className="p-2 border">Uraian</th>
-                        <th className="p-2 border">Koef</th>
-                        <th className="p-2 border">Harga</th>
-                        <th className="p-2 border">Jumlah</th>
-                        <th className="p-2 border">aksi</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {/* TENAGA */}
-                    <tr className="bg-gray-200 font-bold">
-                    <td colSpan="4" className="p-2">A. TENAGA</td>
-                    </tr>
-
-                    {detail.tenaga?.map((d) => (
-                    <tr key={d.id}>
-                        <td className="p-2 border">{d.nama}</td>
-                        <td className="p-2 border text-center">{d.koefisien}</td>
-                        <td className="p-2 border text-right">
-                        {Number(d.harga).toLocaleString("id-ID")}
-                        </td>
-                        <td className="p-2 border text-right">
-                        {Number(d.jumlah).toLocaleString("id-ID")}
-                        </td>
-                          <td className="p-2 border text-center">
-                            <button
-                            onClick={() => handleEditDetail(d)}
-                            className="bg-yellow-500 text-white px-2 mr-1"
-                            >
-                            Edit
-                            </button>
-
-                            <button
-                            onClick={() => handleDeleteDetail(d.id)}
-                            className="bg-red-500 text-white px-2"
-                            >
-                            Hapus
-                            </button>
-                        </td>
-                    </tr>
-                    ))}
-
-                    <tr className="font-bold">
-                    <td colSpan="3" className="p-2 text-right">Total Tenaga</td>
-                    <td className="p-2 text-right">
-                        {detail.totalTenaga?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-                    {/* BAHAN */}
-                    <tr className="bg-gray-200 font-bold">
-                    <td colSpan="4" className="p-2">B. BAHAN</td>
-                    </tr>
-
-                    {detail.bahan?.map((d) => (
-                    <tr key={d.id}>
-                        <td className="p-2 border">{d.nama}</td>
-                        <td className="p-2 border text-center">{d.koefisien}</td>
-                        <td className="p-2 border text-right">
-                        {Number(d.harga).toLocaleString("id-ID")}
-                        </td>
-                        <td className="p-2 border text-right">
-                        {Number(d.jumlah).toLocaleString("id-ID")}
-                        </td>
-
-                          <td className="p-2 border text-center">
-                    <button
-                      onClick={() => handleEditDetail(d)}
-                      className="bg-yellow-500 text-white px-2 mr-1"
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteDetail(d.id)}
-                      className="bg-red-500 text-white px-2"
-                    >
-                      Hapus
-                    </button>
-                  </td>
-                    </tr>
-                    ))}
-
-                    <tr className="font-bold">
-                    <td colSpan="3" className="p-2 text-right">Total Bahan</td>
-                    <td className="p-2 text-right">
-                        {detail.totalBahan?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-                    {/* ALAT */}
-                    <tr className="bg-gray-200 font-bold">
-                    <td colSpan="4" className="p-2">C. ALAT</td>
-                    </tr>
-
-                    {detail.alat?.map((d) => (
-                    <tr key={d.id}>
-                        <td className="p-2 border">{d.nama}</td>
-                        <td className="p-2 border text-center">{d.koefisien}</td>
-                        <td className="p-2 border text-right">
-                        {Number(d.harga).toLocaleString("id-ID")}
-                        </td>
-                        <td className="p-2 border text-right">
-                        {Number(d.jumlah).toLocaleString("id-ID")}
-                        </td>
-
-                          <td className="p-2 border text-center">
-                    <button
-                      onClick={() => handleEditDetail(d)}
-                      className="bg-yellow-500 text-white px-2 mr-1"
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteDetail(d.id)}
-                      className="bg-red-500 text-white px-2"
-                    >
-                      Hapus
-                    </button>
-                  </td>
-                    </tr>
-                    ))}
-
-                    <tr className="font-bold">
-                    <td colSpan="3" className="p-2 text-right">Total Alat</td>
-                    <td className="p-2 text-right">
-                        {detail.totalAlat?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-                    {/* TOTAL */}
-                    <tr className="bg-yellow-100 font-bold">
-                    <td colSpan="3" className="p-2 text-right">TOTAL</td>
-                    <td className="p-2 text-right">
-                        {detail.total?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-                    <tr className="bg-yellow-50 font-bold">
-                    <td colSpan="3" className="p-2 text-right">
-                        Overhead ({selectedAnalisa?.overhead_persen}%)
-                    </td>
-                    <td className="p-2 text-right">
-                        {detail.overhead?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-                    <tr className="bg-green-200 font-bold text-lg">
-                    <td colSpan="3" className="p-2 text-right">GRAND TOTAL</td>
-                    <td className="p-2 text-right">
-                        {detail.grandTotal?.toLocaleString("id-ID")}
-                    </td>
-                    </tr>
-
-
-
-                </tbody>
-                </table>
-
+      {/* Form Master Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-primary/40 flex justify-center items-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-primary flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${isEdit ? 'bg-info/10 text-info' : 'bg-secondary/10 text-secondary'}`}>
+                  {isEdit ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                </div>
+                {isEdit ? "Edit Analisa Project" : "Tambah Analisa Project"}
+              </h2>
+              <button onClick={closeFormModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-all">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            )}
+
+            <form onSubmit={handleSubmitMaster} className="p-6">
+              <div className="space-y-5">
+
+                <div className="grid grid-cols-3 gap-5">
+                  <div className="col-span-1">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Kode Analisa</label>
+                    <input
+                      type="text"
+                      name="kode"
+                      placeholder="Contoh: A.1"
+                      value={formMaster.kode}
+                      onChange={handleChangeMaster}
+                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-bold uppercase"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Satuan Analisa</label>
+                    <input
+                      type="text"
+                      name="satuan"
+                      placeholder="Contoh: M3, M2, Ls"
+                      value={formMaster.satuan}
+                      onChange={handleChangeMaster}
+                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Nama Pekerjaan (Uraian)</label>
+                  <input
+                    type="text"
+                    name="nama"
+                    placeholder="Contoh: Galian Tanah Biasa Sedalam 1m"
+                    value={formMaster.nama}
+                    onChange={handleChangeMaster}
+                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Persentase Overhead (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    name="overhead_persen"
+                    placeholder="Contoh: 10 atau 15"
+                    value={formMaster.overhead_persen}
+                    onChange={handleChangeMaster}
+                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Masukan persentase tambahan (Overhead, Jasa, Profit, dll) yang dibebankan pada master analisa ini.</p>
+                </div>
+
+              </div>
+
+              <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
+                <button type="button" onClick={closeFormModal} className="px-6 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold transition-colors">
+                  Batal
+                </button>
+                <button type="submit" className="px-6 py-3 text-white bg-secondary hover:bg-[#e64a0f] rounded-xl font-bold transition-all shadow-sm active:scale-95">
+                  {isEdit ? "Simpan Perbaikan" : "Simpan Data"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 bg-primary/60 flex justify-center items-center z-[60] p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Hapus Data?</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                Apakah Anda yakin ingin menghapus analisa<br />
+                <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
+                <br />Seluruh detail didalamnya juga kemungkinan akan terhapus.
+              </p>
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={executeDelete}
+                  className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-bold rounded-xl transition-all shadow-sm shadow-red-200 active:scale-95"
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
