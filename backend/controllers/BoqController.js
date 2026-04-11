@@ -32,15 +32,27 @@ export const generateBobotInternal = async (project_id) => {
 
     if (totalSemua === 0) return;
 
-    // 🔥 update bobot
-    const updates = temp.map((item) => {
-      const bobot = (item.jumlah / totalSemua) * 100;
+    let runningTotalBobot = 0;
 
-      return Boq.update(
-        { bobot: Number(bobot.toFixed(3)) },
-        { where: { id: item.id } }
-      );
-    });
+   const updates = temp.map((item, index) => {
+    let bobotFinal;
+
+    if (index === temp.length - 1) {
+      // Item terakhir menanggung sisa selisih pembulatan
+      // Gunakan .toFixed(3) lagi agar hasilnya konsisten 3 desimal
+      bobotFinal = (100 - runningTotalBobot).toFixed(3);
+    } else {
+      // Hitung bobot normal
+      const hitungBobot = (item.jumlah / totalSemua) * 100;
+      bobotFinal = hitungBobot.toFixed(3);
+      runningTotalBobot += Number(bobotFinal);
+    }
+
+    return Boq.update(
+      { bobot: Number(bobotFinal) },
+      { where: { id: item.id } }
+    );
+  });
 
     await Promise.all(updates);
 

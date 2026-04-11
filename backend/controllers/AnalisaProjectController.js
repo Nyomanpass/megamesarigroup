@@ -1,5 +1,7 @@
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { generateBobotInternal } from "./BoqController.js";
+import { Boq } from "../models/BoqModel.js";
+
 
 // CREATE
 export const createProjectAnalisa = async (req, res) => {
@@ -79,28 +81,44 @@ export const updateProjectAnalisa = async (req, res) => {
       overhead_persen
     });
 
-    // =========================
-    // 🔥 AUTO UPDATE BOBOT
-    // =========================
+    console.log("✅ Analisa updated:", data.id);
 
+    // =========================
+    // 🔥 AMBIL BOQ TERKAIT
+    // =========================
     const boqList = await Boq.findAll({
       where: { 
         analisa_id: data.id,
-        tipe: "item" // 🔥 FIX PENTING
+        tipe: "item"
       }
     });
 
-    console.log("BOQ LIST:", boqList.length);
+    console.log("📦 BOQ ditemukan:", boqList.length);
+
+    if (boqList.length === 0) {
+      console.log("❗ Tidak ada BOQ terkait analisa ini");
+      return res.json({
+        message: "Analisa berhasil diupdate (tanpa BOQ terkait)",
+        data
+      });
+    }
 
     const projectIds = [...new Set(
       boqList.map(b => b.project_id)
     )];
 
-    console.log("PROJECT IDS:", projectIds);
+    console.log("📊 PROJECT IDS:", projectIds);
 
+    // =========================
+    // 🔥 GENERATE BOBOT
+    // =========================
     for (let pid of projectIds) {
-      console.log("🔥 GENERATE BOBOT:", pid);
-      await generateBobotInternal(pid);
+      try {
+        console.log("🔥 GENERATE BOBOT PROJECT:", pid);
+        await generateBobotInternal(pid);
+      } catch (err) {
+        console.error("❌ ERROR GENERATE:", err);
+      }
     }
 
     res.json({
@@ -109,7 +127,7 @@ export const updateProjectAnalisa = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("ERROR updateProjectAnalisa:", error);
+    console.error("❌ ERROR FULL:", error);
     res.status(500).json({ message: error.message });
   }
 };

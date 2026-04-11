@@ -2,6 +2,7 @@ import { DailyPlan, DailyProgress, Boq } from "../models/index.js";
 import { DailyProgressItem } from "../models/index.js";
 import { ProjectItem } from "../models/index.js";
 
+
 export const getWeeklyReport = async (req, res) => {
   try {
     const { project_id } = req.params;
@@ -10,16 +11,16 @@ export const getWeeklyReport = async (req, res) => {
     // 🔥 AMBIL DATA
     // =========================
     const plans = await DailyPlan.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
       order: [["tanggal", "ASC"]],
     });
 
     const boqs = await Boq.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
     });
 
     const progress = await DailyProgress.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
     });
 
     // =========================
@@ -46,6 +47,12 @@ export const getWeeklyReport = async (req, res) => {
 
     const result = [];
 
+    // 🔥 SIMPAN KUMULATIF ITEM
+    const kumulatifPerBoq = {};
+
+    // 🔥 SIMPAN KUMULATIF PROJECT
+    let kumulatifProject = 0;
+
     // =========================
     // 🔥 LOOP TIAP MINGGU
     // =========================
@@ -55,65 +62,53 @@ export const getWeeklyReport = async (req, res) => {
       const tglAwal = items[0].tanggal;
       const tglAkhir = items[items.length - 1].tanggal;
 
-      // =========================
-      // 🔥 RENCANA
-      // =========================
       const rencanaMingguan = Number(items[0].bobot_mingguan || 0);
 
-      // =========================
-      // 🔥 HITUNG REAL (FIX UTAMA)
-      // =========================
-      let realMingguan = 0;
+      // 🔥 total kumulatif minggu ini
+      let totalKumulatif = 0;
 
-      // =========================
-      // 🔥 DETAIL PER BOQ
-      // =========================
       const laporan = [];
 
       for (const boq of sortedBoqs) {
         const total = Number(boq.volume || 0);
         const bobot = Number(boq.bobot || 0);
 
-        // 🔥 progress minggu ini
+        // =========================
+        // 🔥 PROGRESS MINGGU INI
+        // =========================
         const mingguIni = progress
           .filter(
             (p) =>
               p.boq_id === boq.id &&
-              p.tanggal >= tglAwal &&
-              p.tanggal <= tglAkhir
+              new Date(p.tanggal) >= new Date(tglAwal) &&
+              new Date(p.tanggal) <= new Date(tglAkhir)
           )
           .reduce((sum, p) => sum + Number(p.volume || 0), 0);
-
-        // 🔥 s/d minggu lalu (boleh tetap kalau mau tampil)
-        const sdLalu = progress
-          .filter(
-            (p) =>
-              p.boq_id === boq.id &&
-              p.tanggal < tglAwal
-          )
-          .reduce((sum, p) => sum + Number(p.volume || 0), 0);
-
-        const sdIni = sdLalu + mingguIni;
 
         // =========================
-        // 🔥 PROGRESS PROYEK (INI YANG DIPAKAI)
+        // 🔥 KUMULATIF ITEM
+        // =========================
+        const sdLalu = kumulatifPerBoq[boq.id] || 0;
+        const sdIni = sdLalu + mingguIni;
+
+        kumulatifPerBoq[boq.id] = sdIni;
+
+        // =========================
+        // 🔥 PROGRESS ITEM (KUMULATIF)
         // =========================
         let progresProyek = 0;
 
         if (boq.tipe === "item") {
-          const persenMingguan = total
-            ? (mingguIni / total) * 100
+          const persenKumulatif = total
+            ? (sdIni / total)
             : 0;
 
-          progresProyek = (persenMingguan * bobot) / 100;
+          progresProyek = persenKumulatif * bobot;
 
-          // 🔥 tetap hitung total weekly
-          realMingguan += progresProyek;
+          // 🔥 kumpulin kumulatif total project
+          totalKumulatif += progresProyek;
         }
 
-        // =========================
-        // 🔥 PUSH DATA (SUDAH FIX)
-        // =========================
         laporan.push({
           uraian: boq.uraian,
           bobot: Number(bobot.toFixed(3)),
@@ -126,29 +121,30 @@ export const getWeeklyReport = async (req, res) => {
           sd_lalu: Number(sdLalu.toFixed(3)),
           sd_ini: Number(sdIni.toFixed(3)),
 
-          // ❌ hapus persen lama
-          // persen: Number(persen.toFixed(1)),
-
-          // ✅ ganti ini
           progres_proyek: Number(progresProyek.toFixed(3)),
         });
       }
+
+      // =========================
+      // 🔥 REAL MINGGUAN (SELISIH)
+      // =========================
+      const realMingguan = totalKumulatif - kumulatifProject;
+
+      // update kumulatif project
+      kumulatifProject = totalKumulatif;
 
       // =========================
       // 🔥 DEVIASI
       // =========================
       const deviasi = realMingguan - rencanaMingguan;
 
-      // =========================
-      // 🔥 PUSH HASIL
-      // =========================
       result.push({
         minggu_ke: Number(minggu),
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
 
         rencana: Number(rencanaMingguan.toFixed(3)),
-        real: Number(realMingguan.toFixed(3)),
+        real: Number(realMingguan.toFixed(3)), // 🔥 FIX DISINI
         deviasi: Number(deviasi.toFixed(3)),
 
         data: laporan,
@@ -156,8 +152,9 @@ export const getWeeklyReport = async (req, res) => {
     }
 
     res.json(result);
+
   } catch (error) {
-    console.error(error);
+    console.error("ERROR WEEKLY:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -170,16 +167,16 @@ export const getMonthlyReport = async (req, res) => {
     // 🔥 AMBIL DATA
     // =========================
     const plans = await DailyPlan.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
       order: [["tanggal", "ASC"]],
     });
 
     const boqs = await Boq.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
     });
 
     const progress = await DailyProgress.findAll({
-      where: { project_id },
+      where: { project_id: Number(project_id) },
     });
 
     // =========================
@@ -206,6 +203,12 @@ export const getMonthlyReport = async (req, res) => {
 
     const result = [];
 
+    // 🔥 KUMULATIF ITEM
+    const kumulatifPerBoq = {};
+
+    // 🔥 KUMULATIF PROJECT
+    let kumulatifProject = 0;
+
     // =========================
     // 🔥 LOOP TIAP BULAN
     // =========================
@@ -229,94 +232,88 @@ export const getMonthlyReport = async (req, res) => {
         .reduce((sum, val) => sum + val, 0);
 
       // =========================
-      // 🔥 HITUNG REAL BULANAN (FIX)
+      // 🔥 TOTAL KUMULATIF BULAN INI
       // =========================
-      let realBulanan = 0;
+      let totalKumulatif = 0;
 
-      // =========================
-      // 🔥 DETAIL PER BOQ
-      // =========================
       const laporan = [];
 
-    for (const boq of sortedBoqs) {
-      const total = Number(boq.volume || 0);
-      const bobot = Number(boq.bobot || 0);
+      for (const boq of sortedBoqs) {
+        const total = Number(boq.volume || 0);
+        const bobot = Number(boq.bobot || 0);
 
-      // 🔥 progress bulan ini
-      const bulanIni = progress
-        .filter(
-          (p) =>
-            p.boq_id === boq.id &&
-            p.tanggal >= tglAwal &&
-            p.tanggal <= tglAkhir
-        )
-        .reduce((sum, p) => sum + Number(p.volume || 0), 0);
+        // =========================
+        // 🔥 BULAN INI
+        // =========================
+        const bulanIni = progress
+          .filter(
+            (p) =>
+              p.boq_id === boq.id &&
+              new Date(p.tanggal) >= new Date(tglAwal) &&
+              new Date(p.tanggal) <= new Date(tglAkhir)
+          )
+          .reduce((sum, p) => sum + Number(p.volume || 0), 0);
 
-      // 🔥 s/d bulan lalu (optional)
-      const sdLalu = progress
-        .filter(
-          (p) =>
-            p.boq_id === boq.id &&
-            p.tanggal < tglAwal
-        )
-        .reduce((sum, p) => sum + Number(p.volume || 0), 0);
+        // =========================
+        // 🔥 KUMULATIF ITEM
+        // =========================
+        const sdLalu = kumulatifPerBoq[boq.id] || 0;
+        const sdIni = sdLalu + bulanIni;
 
-      const sdIni = sdLalu + bulanIni;
+        kumulatifPerBoq[boq.id] = sdIni;
 
-      // =========================
-      // 🔥 PROGRESS PROYEK (INI YANG DIPAKAI)
-      // =========================
-      let progresProyek = 0;
+        // =========================
+        // 🔥 PROGRESS ITEM
+        // =========================
+        let progresProyek = 0;
 
-      if (boq.tipe === "item") {
-        const persenBulanan = total
-          ? (bulanIni / total) * 100
-          : 0;
+        if (boq.tipe === "item") {
+          const persenKumulatif = total
+            ? (sdIni / total)
+            : 0;
 
-        progresProyek = (persenBulanan * bobot) / 100;
+          progresProyek = persenKumulatif * bobot;
 
-        // 🔥 total monthly
-        realBulanan += progresProyek;
+          // 🔥 kumpulin kumulatif project
+          totalKumulatif += progresProyek;
+        }
+
+        laporan.push({
+          uraian: boq.uraian,
+          bobot: Number(bobot.toFixed(3)),
+          satuan: boq.satuan,
+          total: Number(total.toFixed(3)),
+
+          tipe: boq.tipe,
+
+          bulan_ini: Number(bulanIni.toFixed(3)),
+          sd_lalu: Number(sdLalu.toFixed(3)),
+          sd_ini: Number(sdIni.toFixed(3)),
+
+          progres_proyek: Number(progresProyek.toFixed(3)),
+        });
       }
 
       // =========================
-      // 🔥 PUSH DATA (SUDAH FIX)
+      // 🔥 REAL BULANAN (SELISIH)
       // =========================
-      laporan.push({
-        uraian: boq.uraian,
-        bobot: Number(bobot.toFixed(3)),
-        satuan: boq.satuan,
-        total: Number(total.toFixed(3)),
+      const realBulanan = totalKumulatif - kumulatifProject;
 
-        tipe: boq.tipe,
-
-        bulan_ini: Number(bulanIni.toFixed(3)),
-        sd_lalu: Number(sdLalu.toFixed(3)),
-        sd_ini: Number(sdIni.toFixed(3)),
-
-        // ❌ hapus ini
-        // persen: Number(persen.toFixed(1)),
-
-        // ✅ pakai ini
-        progres_proyek: Number(progresProyek.toFixed(3)),
-      });
-    }
+      // update kumulatif project
+      kumulatifProject = totalKumulatif;
 
       // =========================
       // 🔥 DEVIASI
       // =========================
       const deviasi = realBulanan - rencanaBulanan;
 
-      // =========================
-      // 🔥 HASIL FINAL
-      // =========================
       result.push({
         bulan_ke: Number(bulan),
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
 
         rencana: Number(rencanaBulanan.toFixed(3)),
-        real: Number(realBulanan.toFixed(3)),
+        real: Number(realBulanan.toFixed(3)), // 🔥 FIX DISINI
         deviasi: Number(deviasi.toFixed(3)),
 
         data: laporan,
@@ -326,7 +323,7 @@ export const getMonthlyReport = async (req, res) => {
     res.json(result);
 
   } catch (error) {
-    console.error(error);
+    console.error("ERROR MONTHLY:", error);
     res.status(500).json({ message: error.message });
   }
 };
