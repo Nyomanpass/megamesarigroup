@@ -106,6 +106,7 @@ const startServer = async () => {
       // 3. Sync tabel (Gunakan { alter: true } jika ingin update kolom otomatis tanpa hapus data)
       //await sequelize.sync();
       await sequelize.sync({ alter: true });
+      // await sequelize.sync({ force: true });
       console.log("Database synced 🔄");
 
       cron.schedule("0 0 * * *", async () => {
