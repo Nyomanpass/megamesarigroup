@@ -20,7 +20,11 @@ export default function DailyProgressPage() {
   const [form, setForm] = useState({
     boq_id: "",
     hari_ke: "",
-    volume: ""
+    volume: "",
+    cuaca: "",
+    catatan: "",
+    jam_mulai: "",
+    jam_selesai: ""
   });
 
   // Pagination state
@@ -141,7 +145,13 @@ export default function DailyProgressPage() {
     setForm({
       boq_id: item.boq_id,
       hari_ke: plan?.hari_ke || "",
-      volume: item.volume
+      volume: item.volume,
+
+      // 🔥 TAMBAHAN
+      cuaca: item.cuaca || "",
+      catatan: item.catatan || "",
+      jam_mulai: item.jam_mulai || "",
+      jam_selesai: item.jam_selesai || ""
     });
 
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -166,12 +176,18 @@ export default function DailyProgressPage() {
     e.preventDefault();
     try {
 
-      const payload = {
-        project_id: id,
-        boq_id: form.boq_id,
-        hari_ke: form.hari_ke,
-        volume: form.volume
-      };
+       const payload = {
+          project_id: id,
+          boq_id: form.boq_id,
+          hari_ke: form.hari_ke,
+          volume: form.volume,
+
+          // 🔥 TAMBAHAN
+          cuaca: form.cuaca,
+          catatan: form.catatan,
+          jam_mulai: form.jam_mulai,
+          jam_selesai: form.jam_selesai
+        };
 
       if (editId) {
         await api.put(`/daily-progress/${editId}`, payload);
@@ -188,7 +204,11 @@ export default function DailyProgressPage() {
       setForm({
         boq_id: "",
         hari_ke: "",
-        volume: ""
+        volume: "",
+        cuaca: "",
+        catatan: "",
+        jam_mulai: "",
+        jam_selesai: ""
       });
 
       setPreviewItems([]);
@@ -343,6 +363,53 @@ export default function DailyProgressPage() {
                   {summary ? summary.satuan : 'Vol'}
                 </div>
               </div>
+            </div>
+            {/* CUACA */}
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-gray-500 mb-2">Cuaca</label>
+              <select
+                value={form.cuaca}
+                onChange={(e) => setForm({ ...form, cuaca: e.target.value })}
+                className="border-2 border-gray-200 rounded-xl p-3"
+              >
+                <option value="">-- Pilih Cuaca --</option>
+                <option value="Cerah">Cerah</option>
+                <option value="Mendung">Mendung</option>
+                <option value="Hujan">Hujan</option>
+              </select>
+            </div>
+
+            {/* JAM KERJA */}
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-gray-500 mb-2">Jam Mulai</label>
+              <input
+                type="time"
+                value={form.jam_mulai}
+                onChange={(e) => setForm({ ...form, jam_mulai: e.target.value })}
+                className="border-2 border-gray-200 rounded-xl p-3"
+              />
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-gray-500 mb-2">Jam Selesai</label>
+              <input
+                type="time"
+                value={form.jam_selesai}
+                onChange={(e) => setForm({ ...form, jam_selesai: e.target.value })}
+                className="border-2 border-gray-200 rounded-xl p-3"
+              />
+            </div>
+
+            {/* CATATAN */}
+            <div className="flex flex-col md:col-span-3">
+              <label className="text-xs font-bold text-gray-500 mb-2">Catatan</label>
+              <textarea
+                value={form.catatan}
+                onChange={(e) => setForm({ ...form, catatan: e.target.value })}
+                rows={3}
+                placeholder="Keterangan pekerjaan hari ini..."
+                className="border-2 border-gray-200 rounded-xl p-3"
+              />
             </div>
           </div>
 

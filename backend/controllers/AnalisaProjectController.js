@@ -1,6 +1,7 @@
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { generateBobotInternal } from "./BoqController.js";
 import { Boq } from "../models/BoqModel.js";
+import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 
 
 // CREATE
@@ -142,9 +143,16 @@ export const deleteProjectAnalisa = async (req, res) => {
       return res.status(404).json({ message: "Data tidak ditemukan" });
     }
 
+    // 🔥 hapus detail dulu
+    await ProjectAnalisaDetail.destroy({
+      where: { project_analisa_id: data.id }
+    });
+
+    // 🔥 baru hapus parent
     await data.destroy();
 
     res.json({ message: "Berhasil hapus" });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

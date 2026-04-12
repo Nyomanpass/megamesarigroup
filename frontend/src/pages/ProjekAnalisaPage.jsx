@@ -24,6 +24,15 @@ const ProjectAnalisaPage = () => {
     overhead_persen: 10
   });
 
+  const [showAnalisaModal, setShowAnalisaModal] = useState(false);
+  const [selectedAnalisa, setSelectedAnalisa] = useState([]);
+  const [masterAnalisa, setMasterAnalisa] = useState([]);
+
+  const fetchMasterAnalisa = async () => {
+   const res = await api.get("/master/analisa");
+    setMasterAnalisa(res.data);
+  };
+
   const fetchData = async () => {
     try {
       const res = await api.get(`/project-analisa?project_id=${id}`);
@@ -36,6 +45,7 @@ const ProjectAnalisaPage = () => {
 
   useEffect(() => {
     fetchData();
+    fetchMasterAnalisa();
   }, [id]);
 
   useEffect(() => {
@@ -130,6 +140,27 @@ const ProjectAnalisaPage = () => {
     navigate(`/project/${id}/analisa/${analisaId}`);
   };
 
+  const handleImportAnalisa = async () => {
+  try {
+    await api.post("/project-analisa/import", {
+      project_id: id,
+      analisa_ids: selectedAnalisa
+    });
+
+    alert("Analisa berhasil di import");
+    fetchData();
+
+  } catch (err) {
+    alert(err.response?.data?.message || "Gagal import");
+  }
+};
+
+const filteredMasterAnalisa = masterAnalisa.filter((master) => {
+  return !data.some(
+    (item) => item.nama.toLowerCase() === master.nama.toLowerCase()
+  );
+});
+
   return (
     <div className="p-6 bg-background min-h-screen text-text-primary">
       {/* HEADER */}
@@ -153,6 +184,11 @@ const ProjectAnalisaPage = () => {
             </p>
           </div>
         </div>
+
+        <div className="flex gap-4">
+            <button className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap" onClick={() => setShowAnalisaModal(true)}>
+          Import Analisa
+        </button>
         <button
           onClick={() => openFormModal()}
           className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap"
@@ -160,6 +196,7 @@ const ProjectAnalisaPage = () => {
           <Plus className="w-5 h-5" />
           Tambah Analisa Project
         </button>
+        </div>
       </div>
 
       {/* TOOLBAR */}
@@ -257,6 +294,112 @@ const ProjectAnalisaPage = () => {
       </div>
 
       {/* --- MODALS --- */}
+
+  {showAnalisaModal && (
+  <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+    <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl">
+
+      {/* HEADER */}
+      <div className="p-5 border-b flex justify-between items-center">
+        <h2 className="text-lg font-bold text-primary">
+          Import Analisa dari Master
+        </h2>
+        <button
+          onClick={() => setShowAnalisaModal(false)}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* BODY */}
+      <div className="p-5">
+
+        {/* TABLE HEADER */}
+        <div className="grid grid-cols-4 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600 rounded-t-xl">
+          <div></div>
+          <div>Kode</div>
+          <div>Nama Analisa</div>
+          <div>Satuan</div>
+        </div>
+
+        {/* TABLE DATA */}
+        <div className="max-h-64 overflow-y-auto border border-t-0 rounded-b-xl">
+
+          {filteredMasterAnalisa.map((a) => {
+            const checked = selectedAnalisa.includes(a.id);
+
+            return (
+              <div
+                key={a.id}
+                className={`grid grid-cols-4 gap-2 p-2 border-t items-center cursor-pointer hover:bg-gray-50
+                  ${checked ? "bg-orange-50" : ""}
+                `}
+                onClick={() => {
+                  if (checked) {
+                    setSelectedAnalisa(selectedAnalisa.filter(id => id !== a.id));
+                  } else {
+                    setSelectedAnalisa([...selectedAnalisa, a.id]);
+                  }
+                }}
+              >
+                {/* CHECKBOX */}
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  readOnly
+                />
+
+                {/* KODE */}
+                <div className="font-medium">{a.kode}</div>
+
+                {/* NAMA */}
+                <div>{a.nama}</div>
+
+                {/* SATUAN */}
+                <div className="text-gray-500 text-sm">{a.satuan}</div>
+              </div>
+            );
+          })}
+
+          {masterAnalisa.length === 0 && (
+            <p className="text-center text-gray-400 py-6">
+              Tidak ada data analisa
+            </p>
+          )}
+
+        </div>
+
+        {/* INFO */}
+        <p className="text-sm text-gray-500 mt-3">
+          {selectedAnalisa.length} analisa dipilih
+        </p>
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="p-5 border-t flex justify-end gap-3">
+        <button
+          onClick={() => setShowAnalisaModal(false)}
+          className="px-4 py-2 bg-gray-200 rounded-lg"
+        >
+          Batal
+        </button>
+
+        <button
+          onClick={() => {
+            handleImportAnalisa();
+            setShowAnalisaModal(false);
+          }}
+          className="px-4 py-2 bg-secondary text-white rounded-lg"
+        >
+          Import Analisa
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
       {/* Form Master Modal */}
       {showModal && (

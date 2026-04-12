@@ -10,6 +10,11 @@ export default function Project() {
       //filters
       const [showFilter, setShowFilter] = useState(false);
       const [filterStatus, setFilterStatus] = useState("Semua");
+      const [editId, setEditId] = useState(null);
+
+      const [showDeleteModal, setShowDeleteModal] = useState(false);
+      const [selectedProject, setSelectedProject] = useState(null);
+      const [confirmText, setConfirmText] = useState("");
 
       //projects
       const [projects, setProjects] = useState([]);
@@ -28,16 +33,41 @@ export default function Project() {
             waktu_pelaksanaan: '',
             nilai_kontrak: '',
             lokasi: '',
-            tahun: ''
+            tahun: '',
+            logo_kontraktor: null,
+            logo_konsultan: null,
+            logo_client: null
       });
 
       //filters
       const filterOptions = ["Semua", "Berjalan", "Selesai", "Tertunda"];
 
+      useEffect(() => {
+        if (form.tgl_spmk && form.end_date) {
+            const start = new Date(form.tgl_spmk);
+            const end = new Date(form.end_date);
+
+            const diffTime = end - start;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+            setForm((prev) => ({
+                  ...prev,
+                  waktu_pelaksanaan: diffDays > 0 ? diffDays : 0
+            }));
+        }
+      }, [form.tgl_spmk, form.end_date]);
+
       //porjects
       useEffect(() => {
             fetchProjects();
       }, []);
+
+     const handleFile = (e) => {
+      setForm({
+      ...form,
+      [e.target.name]: e.target.files[0] // file baru
+      });
+      };
 
       const fetchProjects = async () => {
             try {
@@ -48,56 +78,110 @@ export default function Project() {
             }
       };
 
-      const handleSubmit = async (e) => {
-            e.preventDefault();
+      const formatDate = (date) => {
+      if (!date) return "";
+      return date.split("T")[0]; // 🔥 ambil YYYY-MM-DD
+      };
 
-            try {
-                  const payload = {
-                        ...form,
+      const handleEdit = (project) => {
+  setForm({
+    ...project,
 
-                        // 🔥 FIX NUMBER
-                        waktu_pelaksanaan: Number(form.waktu_pelaksanaan || 0),
-                        nilai_kontrak: Number(form.nilai_kontrak || 0),
-                        tahun: Number(form.tahun || 0),
+    tgl_kontrak: formatDate(project.tgl_kontrak),
+    tgl_spmk: formatDate(project.tgl_spmk),
+    end_date: formatDate(project.end_date),
 
-                        // 🔥 FIX DATE (biar tidak error)
-                        tgl_kontrak: form.tgl_kontrak || null,
-                        tgl_spmk: form.tgl_spmk || null,
-                        end_date: form.end_date || null
-                  };
+    logo_kontraktor: project.logo_kontraktor,
+    logo_konsultan: project.logo_konsultan,
+    logo_client: project.logo_client
+  });
 
-                  console.log("SEND:", payload); // 🔥 DEBUG
+  setEditId(project.id);
+  setShowModal(true);
+};
+   
+const resetForm = () => {
+  setForm({
+    kegiatan: "",
+    pekerjaan: "",
+    no_kontrak: "",
+    tgl_kontrak: "",
+    no_spmk: "",
+    tgl_spmk: "",
+    end_date: "",
+    kontraktor: "",
+    konsultan: "",
+    waktu_pelaksanaan: "",
+    nilai_kontrak: "",
+    lokasi: "",
+    tahun: "",
+    logo_kontraktor: null,
+    logo_konsultan: null,
+    logo_client: null
+  });
 
-                  await api.post("/projects", payload);
+  setEditId(null); // 🔥 penting
+};
 
-                  setShowModal(false);
-                  fetchProjects();
+const handleSubmit = async (e) => {
+      e.preventDefault();
 
-                  // reset form
-                  setForm({
-                        kegiatan: "",
-                        pekerjaan: "",
-                        no_kontrak: "",
-                        tgl_kontrak: "",
-                        no_spmk: "",
-                        tgl_spmk: "",
-                        end_date: "",
-                        kontraktor: "",
-                        konsultan: "",
-                        waktu_pelaksanaan: "",
-                        nilai_kontrak: "",
-                        lokasi: "",
-                        tahun: ""
-                  });
+      try {
+      const formData = new FormData();
 
-            } catch (err) {
-                  console.error("ERROR:", err.response?.data || err.message);
-                  alert("Gagal tambah project");
+      // 🔥 append semua data
+      for (let key in form) {
+            formData.append(key, form[key]);
+      }
+
+      if (editId) {
+            // 🔥 MODE EDIT
+            await api.put(`/projects/${editId}`, formData, {
+            headers: {
+            "Content-Type": "multipart/form-data"
             }
+            });
+      } else {
+            // 🔥 MODE CREATE
+            await api.post("/projects", formData, {
+            headers: {
+            "Content-Type": "multipart/form-data"
+            }
+            });
+      }
+
+      setShowModal(false);
+      fetchProjects();
+      setEditId(null);
+
+      // reset form
+      resetForm();
+
+      } catch (err) {
+      console.error(err);
+      alert("Gagal simpan project");
+      }
       };
 
       const handleChange = (e) => {
             setForm({ ...form, [e.target.name]: e.target.value });
+      };
+
+      const handleDeleteProject = async () => {
+      try {
+      await api.delete(`/projects/${selectedProject.id}`);
+
+      alert("Project berhasil dihapus");
+
+      setShowDeleteModal(false);
+      setConfirmText("");
+      setSelectedProject(null);
+
+      fetchProjects(); // refresh list
+      } catch (err) {
+      console.error(err);
+      alert("Gagal hapus project");
+      }
       };
 
       return (
@@ -217,8 +301,18 @@ export default function Project() {
                                           <p className="text-sm">{project.kegiatan}</p>
 
                                     </div>
+                                  <button
+                                    onClick={() => {
+                                    setSelectedProject(project);
+                                    setShowDeleteModal(true);
+                                    }}
+                                    className="text-red-500"
+                                    >
+                                    Hapus
+                                    </button>
 
                                     <div className="flex justify-between">
+                                          <button onClick={() => handleEdit(project)}>Edit</button>
                                           <div>
                                                 <p>Pengawas</p>
                                                 <p>CV. Ardicon</p>
@@ -243,20 +337,156 @@ export default function Project() {
                         </button>
                   </div>
 
+                  {showDeleteModal && selectedProject && (
+                  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
+
+                        <h2 className="text-lg font-bold mb-3 text-red-600">
+                        Konfirmasi Hapus Project
+                        </h2>
+
+                        <p className="text-sm text-gray-600 mb-4">
+                        Ketik nama project berikut untuk konfirmasi:
+                        </p>
+
+                        <div className="bg-gray-100 p-3 rounded-lg mb-3 font-semibold">
+                        {selectedProject.pekerjaan}
+                        </div>
+
+                        <input
+                        type="text"
+                        placeholder="Ketik nama project..."
+                        value={confirmText}
+                        onChange={(e) => setConfirmText(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2 mb-4"
+                        />
+
+                        <div className="flex justify-end gap-3">
+                        <button
+                        onClick={() => {
+                              setShowDeleteModal(false);
+                              setConfirmText("");
+                        }}
+                        className="px-4 py-2 bg-gray-200 rounded-lg"
+                        >
+                        Batal
+                        </button>
+
+                       <button
+                        disabled={confirmText !== selectedProject.pekerjaan}
+                        onClick={handleDeleteProject}
+                        className={`px-4 py-2 rounded-lg text-white ${
+                        confirmText === selectedProject.pekerjaan
+                              ? "bg-red-500"
+                              : "bg-gray-300 cursor-not-allowed"
+                        }`}
+                        >
+                        Hapus Permanen
+                        </button>
+                        </div>
+
+                  </div>
+                  </div>
+                  )}
+
                   {showModal && (
                         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                               <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
                                     {/* Header */}
                                     <div className="px-6 py-4 border-b-2 border-muted-gray flex items-center justify-between bg-gray-50 bg-neutral">
                                           <div className="size-11"></div>
-                                          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">Tambah Proyek Baru</h2>
-                                          <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"><X size={20} strokeWidth={3} /></button>
+                                          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                          {editId ? "Edit Project" : "Tambah Project"}
+                                          </h2>
+                                          <button onClick={() => {setShowModal(false);  resetForm();}}  className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"><X size={20} strokeWidth={3} /></button>
                                     </div>
 
                                     {/* Form Body */}
                                     <div className="p-6 overflow-y-auto">
                                           <form id="add-project-form" onSubmit={handleSubmit} className="space-y-6">
+                                                {/* logo proyek */}
+                                                <div>
+                                                <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 border-b pb-2">
+                                                Logo Proyek
+                                                </h3>
 
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                                                {/* KONTRAKTOR */}
+                                                <div>
+                                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                      Logo Kontraktor
+                                                      </label>
+                                                      <input
+                                                      type="file"
+                                                      name="logo_kontraktor"
+                                                      onChange={handleFile}
+                                                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                                      />
+
+                                                      {/* 🔥 PREVIEW */}
+                                                    {form.logo_kontraktor && (
+                                                      <img
+                                                      src={
+                                                            typeof form.logo_kontraktor === "string"
+                                                            ? `http://localhost:3000/uploads/${form.logo_kontraktor}` // 🔥 lama
+                                                            : URL.createObjectURL(form.logo_kontraktor) // 🔥 baru
+                                                      }
+                                                      className="h-12 mt-2 object-contain"
+                                                      />
+                                                      )}
+                                                </div>
+
+                                                {/* KONSULTAN */}
+                                                <div>
+                                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                      Logo Konsultan
+                                                      </label>
+                                                      <input
+                                                      type="file"
+                                                      name="logo_konsultan"
+                                                      onChange={handleFile}
+                                                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                                      />
+
+                                                     {form.logo_konsultan && (
+                                                      <img
+                                                      src={
+                                                            typeof form.logo_konsultan === "string"
+                                                            ? `http://localhost:3000/uploads/${form.logo_konsultan}`
+                                                            : URL.createObjectURL(form.logo_konsultan)
+                                                      }
+                                                      className="h-12 mt-2 object-contain"
+                                                      />
+                                                      )}
+                                                </div>
+
+                                                {/* CLIENT */}
+                                                <div>
+                                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                      Logo Client
+                                                      </label>
+                                                      <input
+                                                      type="file"
+                                                      name="logo_client"
+                                                      onChange={handleFile}
+                                                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                                      />
+
+                                                    {form.logo_client && (
+                                                      <img
+                                                      src={
+                                                            typeof form.logo_client === "string"
+                                                            ? `http://localhost:3000/uploads/${form.logo_client}`
+                                                            : URL.createObjectURL(form.logo_client)
+                                                      }
+                                                      className="h-12 mt-2 object-contain"
+                                                      />
+                                                      )}
+                                                </div>
+
+                                                </div>
+                                                </div>
                                                 {/* Informasi Utama */}
                                                 <div>
                                                       <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 border-b pb-2">Informasi Utama</h3>
@@ -275,6 +505,8 @@ export default function Project() {
                                                             </div>
                                                       </div>
                                                 </div>
+
+                                                
 
                                                 {/* Kontrak & SPMK */}
                                                 <div>
@@ -321,7 +553,7 @@ export default function Project() {
                                                             </div>
                                                             <div>
                                                                   <label className="block text-sm font-medium text-gray-700 mb-1">Lama Pelaksanaan (Hari)</label>
-                                                                  <input type="number" name="waktu_pelaksanaan" value={form.waktu_pelaksanaan} onChange={handleChange} required placeholder="Contoh: 90" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
+                                                                  <input type="number" name="waktu_pelaksanaan" value={form.waktu_pelaksanaan} readOnly className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
                                                             </div>
                                                             <div>
                                                                   <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Selesai (End Date)</label>
@@ -335,7 +567,7 @@ export default function Project() {
 
                                     {/* Footer / Actions */}
                                     <div className="px-6 py-4 border-t-2 border-muted-gray bg-neutral flex justify-end gap-3 rounded-b-2xl">
-                                          <button onClick={() => setShowModal(false)} type="button" className="px-6 py-2.5 rounded-lg text-gray-700 font-semibold hover:bg-gray-200 transition-colors">Batal</button>
+                                          <button onClick={() => {setShowModal(false);  resetForm();}} type="button" className="px-6 py-2.5 rounded-lg text-gray-700 font-semibold hover:bg-gray-200 transition-colors">Batal</button>
                                           <button type="submit" form="add-project-form" className="px-6 py-2.5 rounded-lg bg-secondary text-white font-semibold border-2 border-secondary hover:bg-transparent transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2 hover:text-secondary">
                                                 <Check size={18} /> Simpan Proyek
                                           </button>

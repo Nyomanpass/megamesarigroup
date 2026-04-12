@@ -37,6 +37,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     fetchProject();
     fetchChart();
+   
   }, [id]);
 
   const fetchProject = async () => {
@@ -133,6 +134,41 @@ export default function ProjectDetail() {
         {/* 🔥 INFO PROJECT CARD */}
         <div className=" mb-8 relative overflow-hidden">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-gray-100 pb-6 mb-6">
+        <div className="flex gap-6 mt-4 flex-wrap">
+          
+          {project?.logo_kontraktor && (
+            
+            <div className="flex flex-col items-center">
+              <img
+                src={`http://localhost:3000/uploads/${project.logo_kontraktor}`}
+                className="h-14 object-contain"
+              />
+              <span className="text-xs text-gray-500 mt-1">Kontraktor</span>
+              
+            </div>
+          )}
+
+          {project?.logo_konsultan && (
+            <div className="flex flex-col items-center">
+              <img
+                src={`http://localhost:3000/uploads/${project.logo_konsultan}`}
+                className="h-14 object-contain"
+              />
+              <span className="text-xs text-gray-500 mt-1">Konsultan</span>
+            </div>
+          )}
+
+          {project?.logo_client && (
+            <div className="flex flex-col items-center">
+              <img
+                src={`http://localhost:3000/uploads/${project.logo_client}`}
+                className="h-14 object-contain"
+              />
+              <span className="text-xs text-gray-500 mt-1">Client</span>
+            </div>
+          )}
+
+        </div>
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{project.no_kontrak || "No_KONTRAK"}</span>
@@ -237,7 +273,7 @@ export default function ProjectDetail() {
 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 relative z-10">
               <div>
-                <p className="text-sm text-indigo-500 font-bold uppercase tracking-wider mb-1">Kurva S (Dummy)</p>
+                <p className="text-sm text-indigo-500 font-bold uppercase tracking-wider mb-1">Kurva S</p>
                 <h3 className="text-xl font-bold text-gray-800">Rencana vs Realisasi Kumulatif</h3>
               </div>
               <div className="flex gap-4 text-xs font-bold bg-gray-50 px-3 py-1.5 rounded-full mt-3 sm:mt-0">

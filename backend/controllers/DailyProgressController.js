@@ -13,10 +13,18 @@ export const createDailyProgress = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    const { project_id, boq_id, hari_ke, volume } = req.body;
+    const { 
+      project_id, 
+      boq_id, 
+      hari_ke, 
+      volume,
+      cuaca,
+      catatan,
+      jam_mulai,
+      jam_selesai
+    } = req.body;
 
     const inputVolume = Number(volume);
-
     const fix = (num) => Number(parseFloat(num).toFixed(6));
 
     // =========================
@@ -33,17 +41,14 @@ export const createDailyProgress = async (req, res) => {
     }
 
     const plan = await DailyPlan.findOne({
-        where: {
-          project_id,
-          hari_ke
-        }
-      });
+      where: { project_id, hari_ke }
+    });
 
-      if (!plan) {
-        throw new Error(`Hari ke-${hari_ke} tidak ada di schedule`);
-      }
+    if (!plan) {
+      throw new Error(`Hari ke-${hari_ke} tidak ada di schedule`);
+    }
 
-      const tanggal = plan.tanggal;
+    const tanggal = plan.tanggal;
 
     // =========================
     // 🔥 AMBIL ANALISA DETAIL
@@ -57,17 +62,24 @@ export const createDailyProgress = async (req, res) => {
     });
 
     // =========================
-    // ✅ SIMPAN HEADER
+    // ✅ SIMPAN HEADER (UPDATED)
     // =========================
     const progress = await DailyProgress.create({
       project_id,
       boq_id,
       tanggal,
-      volume: inputVolume
+      volume: inputVolume,
+
+      // 🔥 FIELD BARU
+      cuaca,
+      catatan,
+      jam_mulai,
+      jam_selesai
+
     }, { transaction: t });
 
     // =========================
-    // 🔥 GENERATE ITEM (SINGLE TABLE)
+    // 🔥 GENERATE ITEM
     // =========================
     const items = [];
 
@@ -80,27 +92,21 @@ export const createDailyProgress = async (req, res) => {
       items.push({
         daily_progress_id: progress.id,
         item_id: d.item.id,
-
-        // 🔥 SNAPSHOT (PENTING)
         nama: d.item.nama,
         tipe: d.item.tipe,
         satuan: d.item.satuan,
-
         koef: koef,
         volume: inputVolume,
         hasil: hasil
       });
     }
 
-    // =========================
-    // 🔥 INSERT SEKALI
-    // =========================
     await DailyProgressItem.bulkCreate(items, { transaction: t });
 
     await t.commit();
 
     res.status(201).json({
-      message: "✅ Daily Progress + Items berhasil (AUTO ANALISA)",
+      message: "✅ Daily Progress + Items berhasil",
       progress,
       total_item: items.length
     });
@@ -116,7 +122,17 @@ export const updateDailyProgress = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { project_id, boq_id, hari_ke, volume } = req.body;
+
+    const { 
+      project_id, 
+      boq_id, 
+      hari_ke, 
+      volume,
+      cuaca,
+      catatan,
+      jam_mulai,
+      jam_selesai
+    } = req.body;
 
     const inputVolume = Number(volume);
     const fix = (num) => Number(parseFloat(num).toFixed(6));
@@ -135,6 +151,15 @@ export const updateDailyProgress = async (req, res) => {
 
     if (!boq.analisa_id) {
       throw new Error("BOQ belum punya analisa!");
+    }
+
+    // =========================
+    // 🔥 VALIDASI JAM (OPSIONAL TAPI BAGUS)
+    // =========================
+    if (jam_mulai && jam_selesai) {
+      if (jam_selesai < jam_mulai) {
+        throw new Error("Jam selesai tidak boleh lebih kecil dari jam mulai");
+      }
     }
 
     // =========================
@@ -162,12 +187,20 @@ export const updateDailyProgress = async (req, res) => {
     });
 
     // =========================
-    // 🔥 UPDATE HEADER
+    // 🔥 UPDATE HEADER (UPDATED)
     // =========================
     await progress.update({
+      project_id,
       boq_id,
       tanggal,
-      volume: inputVolume
+      volume: inputVolume,
+
+      // 🔥 FIELD BARU
+      cuaca,
+      catatan,
+      jam_mulai,
+      jam_selesai
+
     }, { transaction: t });
 
     // =========================

@@ -1,12 +1,8 @@
 import { Project } from "../models/ProjectModel.js";
-import { MasterItem } from "../models/MasterItem.js";
-import { ProjectItem } from "../models/ProjekItem.js";
-import { AnalisaMaster } from "../models/AnalisaMaster.js";
-import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
-import { AnalisaMasterDetail } from "../models/AnalisaMasterDetail.js";
-import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-
+import fs from "fs";
+import path from "path";
 // 🔥 GET ALL PROJECT (Dashboard)
+
 export const getProjects = async (req, res) => {
   try {
     const data = await Project.findAll({
@@ -37,75 +33,19 @@ export const getProjectById = async (req, res) => {
 // 🔥 CREATE PROJECT
 export const createProject = async (req, res) => {
   try {
-    // 🔥 ambil semua field project dari frontend
-    const project = await Project.create(req.body);
+    const data = {
+      ...req.body,
 
-    // ===============================
-    // 1. COPY MASTER ITEMS
-    // ===============================
-    const masterItems = await MasterItem.findAll();
+      // 🔥 ambil file dari multer
+      logo_kontraktor: req.files?.logo_kontraktor?.[0]?.filename || null,
+      logo_konsultan: req.files?.logo_konsultan?.[0]?.filename || null,
+      logo_client: req.files?.logo_client?.[0]?.filename || null
+    };
 
-    const createdProjectItems = await ProjectItem.bulkCreate(
-      masterItems.map((item) => ({
-        project_id: project.id,
-        nama: item.nama,
-        tipe: item.tipe,
-        satuan: item.satuan,
-        harga: item.harga_default,
-        category_id: item.category_id
-      })),
-      { returning: true }
-    );
+    const project = await Project.create(data);
 
-    // ===============================
-    // 2. MAPPING ITEM 🔥
-    // ===============================
-    const itemMap = {};
-    masterItems.forEach((m, i) => {
-      itemMap[m.id] = createdProjectItems[i].id;
-    });
-
-    // ===============================
-    // 3. COPY ANALISA
-    // ===============================
-    const masterAnalisa = await AnalisaMaster.findAll();
-
-    const createdProjectAnalisa = await ProjectAnalisa.bulkCreate(
-      masterAnalisa.map((a) => ({
-        project_id: project.id,
-        kode: a.kode,
-        nama: a.nama,
-        satuan: a.satuan,
-        overhead_persen: a.overhead_persen
-      })),
-      { returning: true }
-    );
-
-    // ===============================
-    // 4. COPY ANALISA DETAIL 🔥
-    // ===============================
-    for (let i = 0; i < masterAnalisa.length; i++) {
-      const analisa = masterAnalisa[i];
-      const projectAnalisa = createdProjectAnalisa[i];
-
-      const details = await AnalisaMasterDetail.findAll({
-        where: { analisa_id: analisa.id }
-      });
-
-      const detailData = details.map((d) => ({
-        project_analisa_id: projectAnalisa.id,
-        item_id: itemMap[d.item_id], // 🔥 mapping
-        koefisien: d.koefisien,
-        harga: 0,
-        jumlah: 0
-      }));
-
-      await ProjectAnalisaDetail.bulkCreate(detailData);
-    }
-
-    // ===============================
     res.status(201).json({
-      message: "Project berhasil dibuat + FULL template dicopy",
+      message: "Project berhasil dibuat + upload logo",
       project
     });
 
@@ -116,15 +56,63 @@ export const createProject = async (req, res) => {
 };
 
 
+
 // 🔥 UPDATE PROJECT
 export const updateProject = async (req, res) => {
   try {
-    await Project.update(req.body, {
-      where: { id: req.params.id }
-    });
+    const { id } = req.params;
 
-    res.json({ message: "Project updated" });
+    const project = await Project.findByPk(id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
+    const data = { ...req.body };
+
+    // 🔥 HANDLE LOGO KONTRAKTOR
+    if (req.files?.logo_kontraktor) {
+      // hapus file lama
+      if (project.logo_kontraktor) {
+        const oldPath = path.join("uploads", project.logo_kontraktor);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      data.logo_kontraktor = req.files.logo_kontraktor[0].filename;
+    } else {
+      data.logo_kontraktor = project.logo_kontraktor;
+    }
+
+    // 🔥 LOGO KONSULTAN
+    if (req.files?.logo_konsultan) {
+      if (project.logo_konsultan) {
+        const oldPath = path.join("uploads", project.logo_konsultan);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      data.logo_konsultan = req.files.logo_konsultan[0].filename;
+    } else {
+      data.logo_konsultan = project.logo_konsultan;
+    }
+
+    // 🔥 LOGO CLIENT
+    if (req.files?.logo_client) {
+      if (project.logo_client) {
+        const oldPath = path.join("uploads", project.logo_client);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      data.logo_client = req.files.logo_client[0].filename;
+    } else {
+      data.logo_client = project.logo_client;
+    }
+
+    await project.update(data);
+
+    res.json({ message: "Project berhasil diupdate", project });
+
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -132,12 +120,43 @@ export const updateProject = async (req, res) => {
 // 🔥 DELETE PROJECT
 export const deleteProject = async (req, res) => {
   try {
-    await Project.destroy({
-      where: { id: req.params.id }
+    const id = req.params.id;
+
+    const project = await Project.findByPk(id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
+    // 🔥 PATH FOLDER UPLOAD
+    const uploadPath = path.join(process.cwd(), "uploads");
+
+    // 🔥 HAPUS FILE (JIKA ADA)
+    const files = [
+      project.logo_kontraktor,
+      project.logo_konsultan,
+      project.logo_client
+    ];
+
+    files.forEach((file) => {
+      if (file) {
+        const filePath = path.join(uploadPath, file);
+
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
     });
 
-    res.json({ message: "Project deleted" });
+    // 🔥 DELETE PROJECT (CASCADE)
+    await Project.destroy({
+      where: { id }
+    });
+
+    res.json({ message: "Project + file berhasil dihapus" });
+
   } catch (error) {
+    console.error("DELETE PROJECT ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
