@@ -20,6 +20,10 @@ export default function PeralatanPage() {
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [masterItems, setMasterItems] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+
   const [form, setForm] = useState({
     nama: "",
     satuan: "",
@@ -33,6 +37,15 @@ export default function PeralatanPage() {
   const [showModal, setShowModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, itemName: "" });
 
+  const fetchMasterItems = async () => {
+    try {
+      const res = await api.get(`/masteritem?tipe=ALAT`);
+      setMasterItems(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchData = async () => {
     try {
         const res = await api.get(`/project-items?project_id=${id}&tipe=ALAT`);
@@ -45,6 +58,7 @@ export default function PeralatanPage() {
 
   useEffect(() => {
     fetchData();
+    fetchMasterItems();
   }, [id]);
 
   useEffect(() => {
@@ -133,6 +147,34 @@ export default function PeralatanPage() {
       }
   };
 
+  const handleBulkCreate = async () => {
+  try {
+    if (selectedItems.length === 0) {
+      alert("Pilih minimal 1 item");
+      return;
+    }
+
+    await api.post("/project-items/bulk", {
+      project_id: id,
+      items: selectedItems
+    });
+
+    fetchData(); // refresh tabel
+    setSelectedItems([]);
+    setShowBulkModal(false);
+
+  } catch (err) {
+    console.error(err);
+    alert("Gagal import alat");
+  }
+};
+
+  const filteredMasterItems = masterItems.filter((master) => {
+  return !data.some(
+    (item) => item.nama.toLowerCase() === master.nama.toLowerCase()
+  );
+});
+
   return (
     <div className="p-6 bg-background min-h-screen text-text-primary">
       {/* HEADER */}
@@ -156,6 +198,15 @@ export default function PeralatanPage() {
             </p>
           </div>
         </div>
+
+        <div className="flex gap-4">
+              <button
+          onClick={() => setShowBulkModal(true)}
+          className="flex items-center gap-2 bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold"
+        >
+          Import dari Master
+        </button>
+
         <button
             onClick={() => openFormModal()}
             className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap"
@@ -163,6 +214,7 @@ export default function PeralatanPage() {
             <Plus className="w-5 h-5" />
             Tambah Peralatan
         </button>
+        </div>
       </div>
 
       {/* TOOLBAR */}
@@ -252,6 +304,87 @@ export default function PeralatanPage() {
           </table>
         </div>
       </div>
+
+      {showBulkModal && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl">
+
+      {/* HEADER */}
+      <div className="p-5 border-b flex justify-between">
+        <h2 className="text-lg font-bold">Import Peralatan dari Master</h2>
+        <button onClick={() => setShowBulkModal(false)}>✕</button>
+      </div>
+
+      {/* BODY */}
+      <div className="p-5">
+        <div className="max-h-60 overflow-y-auto border rounded-xl">
+
+          {/* HEADER TABLE */}
+          <div className="grid grid-cols-5 gap-2 bg-gray-100 p-2 text-xs font-bold">
+            <div></div>
+            <div>Nama</div>
+            <div>Kategori</div>
+            <div>Satuan</div>
+            <div className="text-right">Harga</div>
+          </div>
+
+          {/* DATA */}
+          {filteredMasterItems.map((item) => (
+            <div
+              key={item.id}
+              className="grid grid-cols-5 gap-2 p-2 border-t items-center text-sm cursor-pointer hover:bg-gray-50"
+              onClick={() => {
+                const exists = selectedItems.some(i => i.id === item.id);
+                if (exists) {
+                  setSelectedItems(selectedItems.filter(i => i.id !== item.id));
+                } else {
+                  setSelectedItems([...selectedItems, item]);
+                }
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedItems.some(i => i.id === item.id)}
+                readOnly
+              />
+
+              <div>{item.nama}</div>
+              <div className="text-xs text-gray-500">
+                {item.ItemCategory?.nama || "-"}
+              </div>
+              <div>{item.satuan}</div>
+              <div className="text-right">
+                Rp {Number(item.harga_default || 0).toLocaleString("id-ID")}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-sm text-gray-500 mt-2">
+          {selectedItems.length} item dipilih
+        </p>
+      </div>
+
+      {/* FOOTER */}
+      <div className="p-5 border-t flex justify-end gap-3">
+        <button
+          onClick={() => setShowBulkModal(false)}
+          className="px-4 py-2 bg-gray-200 rounded-lg"
+        >
+          Batal
+        </button>
+
+        <button
+          onClick={handleBulkCreate}
+          className="px-4 py-2 bg-secondary text-white rounded-lg"
+        >
+          Import
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
       {/* --- FORM MODAL --- */}
       {showModal && (

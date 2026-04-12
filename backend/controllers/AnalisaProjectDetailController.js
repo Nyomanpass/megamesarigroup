@@ -25,6 +25,11 @@ export const getProjectAnalisaDetail = async (req, res) => {
           model: ProjectItem,
           as: "item",
           attributes: ["id", "nama", "tipe", "satuan", "harga", "project_id"]
+        },
+        {
+        model: ProjectAnalisa,
+          as: "analisa", // 🔥 penting
+          attributes: ["id", "nama"]
         }
       ]
     });
@@ -94,7 +99,8 @@ export const getProjectAnalisaDetail = async (req, res) => {
 
       total,
       overhead,
-      grandTotal
+      grandTotal,
+      nama: analisa.nama,
     });
 
   } catch (error) {

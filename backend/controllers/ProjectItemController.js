@@ -172,6 +172,34 @@ export const updateProjectItem = async (req, res) => {
   }
 };
 
+export const bulkCreateProjectItems = async (req, res) => {
+  try {
+    const { project_id, items } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ message: "Tidak ada item dipilih" });
+    }
+
+    const data = items.map((item) => ({
+      project_id,
+      nama: item.nama,
+      satuan: item.satuan,
+      harga: item.harga_default || 0, // 🔥 INI KUNCINYA
+      category_id: item.category_id,
+      tipe: item.tipe,
+      terbilang: item.terbilang 
+    }));
+
+    await ProjectItem.bulkCreate(data);
+
+    res.json({ message: "Bulk insert berhasil" });
+
+  } catch (error) {
+    console.error("ERROR BULK:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 
 // 🔹 DELETE
 export const deleteProjectItem = async (req, res) => {
@@ -186,6 +214,7 @@ export const deleteProjectItem = async (req, res) => {
 
     res.json({ message: "Berhasil hapus" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  console.error("DELETE PROJECT ERROR:", error);
+  res.status(500).json({ message: error.message });
+}
 };

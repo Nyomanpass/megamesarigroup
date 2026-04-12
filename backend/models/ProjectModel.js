@@ -19,7 +19,14 @@ export const Project = sequelize.define("Project", {
   waktu_pelaksanaan: DataTypes.INTEGER,
   nilai_kontrak: DataTypes.FLOAT,
   lokasi: DataTypes.TEXT,
-  tahun: DataTypes.INTEGER
+  tahun: DataTypes.INTEGER,
+  status_pengerjaan: {
+    type: DataTypes.ENUM("berjalan", "selesai"),
+    defaultValue: "berjalan"
+  },
+  logo_kontraktor: DataTypes.STRING,
+  logo_konsultan: DataTypes.STRING,
+  logo_client: DataTypes.STRING
 
 }, {
   tableName: "projects",

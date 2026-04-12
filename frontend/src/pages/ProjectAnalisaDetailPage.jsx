@@ -159,7 +159,7 @@ const ProjectAnalisaDetailPage = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
-              Detail Komposisi AHSP Project
+              {data?.nama || "Detail Analisa"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               Atur koefisien Tenaga, Bahan, dan Alat khusus dalam lingkup Project ini.

@@ -48,6 +48,26 @@ ProjectItem.hasMany(DailyProgressItem, {
 });
 
 
+Project.hasMany(ProjectItem, {
+  foreignKey: "project_id",
+  onDelete: "CASCADE",
+  hooks: true
+});
+
+ProjectItem.belongsTo(Project, {
+  foreignKey: "project_id"
+});
+
+Project.hasMany(ProjectAnalisa, {
+  foreignKey: "project_id",
+  onDelete: "CASCADE",
+  hooks: true
+});
+
+ProjectAnalisa.belongsTo(Project, {
+  foreignKey: "project_id"
+});
+
 
 //relasi analisa dan boq
 // 🔥 BOQ → ANALISA
@@ -129,8 +149,15 @@ MasterItem.hasMany(AnalisaMasterDetail, {
 
 
 // RELASI
-Project.hasMany(Boq, { foreignKey: "project_id" });
-Boq.belongsTo(Project, { foreignKey: "project_id" });
+Project.hasMany(Boq, {
+  foreignKey: "project_id",
+  onDelete: "CASCADE",
+  hooks: true
+});
+
+Boq.belongsTo(Project, {
+  foreignKey: "project_id"
+});
 
 Boq.hasMany(Schedule, { foreignKey: "boq_id" });
 Schedule.belongsTo(Boq, { foreignKey: "boq_id" });
@@ -147,6 +174,7 @@ Boq.hasMany(DailyProgress, {
   foreignKey: "boq_id",
   as: "daily_progress"
 });
+
 DailyProgress.belongsTo(Project, {
   foreignKey: "project_id",
   as: "project"
@@ -154,22 +182,44 @@ DailyProgress.belongsTo(Project, {
 
 Project.hasMany(DailyProgress, {
   foreignKey: "project_id",
-  as: "daily_progress"
+  onDelete: "CASCADE",
+  hooks: true
 });
 
+
+
+// 🔥 PARENT → CHILD (INI YANG PENTING)
 Project.hasMany(ProjectPeriod, {
   foreignKey: "project_id",
-  onDelete: "CASCADE"
+  onDelete: "CASCADE",
+  hooks: true
 });
 
+// 🔥 CHILD → PARENT
 ProjectPeriod.belongsTo(Project, {
   foreignKey: "project_id"
 });
 
+Project.hasMany(ProjectWeek, {
+  foreignKey: "project_id",
+  onDelete: "CASCADE",
+  hooks: true
+});
 
+ProjectWeek.belongsTo(Project, {
+  foreignKey: "project_id"
+});
 
+// 🔥 PROJECT → DAILY PLAN (WAJIB)
+Project.hasMany(DailyPlan, {
+  foreignKey: "project_id",
+  onDelete: "CASCADE",
+  hooks: true
+});
 
-
+DailyPlan.belongsTo(Project, {
+  foreignKey: "project_id"
+});
 
 
 

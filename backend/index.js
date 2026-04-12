@@ -74,6 +74,8 @@ app.get("/", (req, res) => {
    res.send("Mega Mesari API Running 🚀");
 });
 
+app.use("/uploads", express.static("uploads"));
+
 // routes
 app.use("/api", authRoutes);
 

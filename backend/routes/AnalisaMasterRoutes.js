@@ -4,7 +4,8 @@ import {
   getAnalisa,
   getAnalisaById,
   updateAnalisa,
-  deleteAnalisa
+  deleteAnalisa,
+  importAnalisaToProject
 } from "../controllers/AnalisaMasterController.js";
 
 const router = express.Router();
@@ -14,5 +15,6 @@ router.get("/master/analisa", getAnalisa);
 router.get("/master/analisa/:id", getAnalisaById);
 router.put("/master/analisa/:id", updateAnalisa);
 router.delete("/master/analisa/:id", deleteAnalisa);
+router.post("/project-analisa/import", importAnalisaToProject);
 
 export default router;

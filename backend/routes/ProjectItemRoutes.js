@@ -4,7 +4,8 @@ import {
   getProjectItemById,
   createProjectItem,
   updateProjectItem,
-  deleteProjectItem
+  deleteProjectItem,
+  bulkCreateProjectItems
 } from "../controllers/ProjectItemController.js";
 
 const router = express.Router();
@@ -14,5 +15,6 @@ router.get("/project-items/:id", getProjectItemById);
 router.post("/project-items", createProjectItem);
 router.put("/project-items/:id", updateProjectItem);
 router.delete("/project-items/:id", deleteProjectItem);
+router.post("/project-items/bulk", bulkCreateProjectItems);
 
 export default router;
