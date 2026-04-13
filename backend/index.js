@@ -25,7 +25,7 @@ import "./models/AnalisaMasterDetail.js";
 import "./models/ProjekItem.js";
 import "./models/ProjekAnalisa.js";
 import "./models/ProjekAnalisaDetail.js";
-import "./models/DailyProgresItem.js"
+import "./models/DailyProgresItem.js";
 
 
 import ScheduleRoutes from "./routes/ScheduleRoutes.js";
@@ -43,6 +43,8 @@ import AnalisaMasterDetailRoutes from "./routes/AnalisaMasterDetailRoutes.js";
 import ProjectItemRoutes from './routes/ProjectItemRoutes.js';
 import ProjekAnalisaRoutes from './routes/ProjekAnalisaRoutes.js';
 import ProjekAnalisaDetailRoutes from './routes/ProjekAnalisaDetailRoutes.js';
+import ReportExelRoutes from './routes/ReportExelRoutes.js';
+import ExportWeeklyRoutes from "./routes/ExportWeeklyRoutes.js";
 
 
 const app = express();
@@ -78,7 +80,6 @@ app.use("/uploads", express.static("uploads"));
 
 // routes
 app.use("/api", authRoutes);
-
 app.use("/api", ScheduleRoutes);
 app.use("/api", BoqRoutes);
 app.use("/api", ProjectRoutes);
@@ -96,6 +97,8 @@ app.use("/api", AnalisaMasterDetailRoutes);
 app.use("/api", ProjectItemRoutes);
 app.use("/api", ProjekAnalisaRoutes);
 app.use("/api", ProjekAnalisaDetailRoutes);
+app.use("/api", ReportExelRoutes);
+app.use("/api", ExportWeeklyRoutes);
 
 
 // koneksi database

@@ -30,13 +30,63 @@ export default function WeeklyReportPage() {
     fetchReport();
   }, [id]);
 
+  const handleExportWeeklyExcel = async () => {
+  try {
+    if (!selectedWeek) {
+      setError("Pilih minggu dulu sebelum export!");
+      return;
+    }
+
+    const response = await api.get(
+      `/export-weekly/${id}?minggu=${selectedWeek}`,
+      {
+        responseType: "blob", // 🔥 WAJIB
+      }
+    );
+
+    // 🔥 download file
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `laporan_mingguan_minggu_${selectedWeek}.xlsx`
+    );
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+  } catch (error) {
+    console.log(error);
+    setError("Gagal export laporan mingguan");
+  }
+};
+
   const minggu = data.find((m) => m.minggu_ke === selectedWeek);
 
   // Formatting helpers
   const format = (val) => Number(val || 0).toFixed(3);
-  const getDeviasiColor = (deviasi) => deviasi >= 0 ? "text-emerald-600" : "text-red-500";
-  const getDeviasiBgColor = (deviasi) => deviasi >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200";
-  const DeviasiIcon = minggu?.deviasi >= 0 ? TrendingUp : TrendingDown;
+  const getDeviasiColor = (deviasi) => {
+    if (deviasi > 0) return "text-emerald-600"; 
+    if (deviasi < 0) return "text-red-500";   
+    return "text-blue-600";
+  };
+  const getDeviasiBgColor = (deviasi) => {
+    if (deviasi > 0) return "bg-emerald-50 border-emerald-200";
+    if (deviasi < 0) return "bg-red-50 border-red-200";
+    return "bg-blue-50 border-blue-200"; // 🔥 netral
+  };
+  let DeviasiIcon;
+
+  if (minggu?.deviasi > 0) {
+    DeviasiIcon = TrendingUp;
+  } else if (minggu?.deviasi < 0) {
+    DeviasiIcon = TrendingDown;
+  } else {
+    DeviasiIcon = CheckCircle; // 🔥 sesuai target
+  }
 
   const persenTarget = minggu?.rencana ? ((minggu.real / minggu.rencana) * 100) : 0;
 
@@ -82,6 +132,14 @@ export default function WeeklyReportPage() {
             </select>
           </div>
         </div>
+
+
+        <button
+        onClick={handleExportWeeklyExcel}
+        className="bg-green-600 mb-4 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
+      >
+        📊 Export Excel
+      </button>
 
         {/* CONTENT */}
         {minggu ? (
@@ -170,6 +228,8 @@ export default function WeeklyReportPage() {
                       <th className="p-4 text-center border-l border-gray-100" colSpan={2}>Informasi BOQ</th>
                       <th className="p-4 text-center border-l bg-gray-50/50 border-gray-100" colSpan={3}>Realisasi Progress Fisik Kumulatif (%)</th>
                       <th className="p-4 text-right" rowSpan={2}>Progres Proyek</th>
+                      <th className="p-4 text-right" rowSpan={2}>Progress Item</th>
+                      
                     </tr>
                     <tr className="border-b border-gray-100">
                        <th className="p-2 text-center text-orange-600 border-l border-gray-100 bg-orange-50/30">Total Vol</th>
@@ -220,6 +280,18 @@ export default function WeeklyReportPage() {
                               {Number(item.progres_proyek).toFixed(3)}%
                             </span>
                           </td>
+                            <td className="p-3 text-right">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                item.progress_item >= 80
+                                  ? "bg-green-100 text-green-700 border-green-200"
+                                  : item.progress_item >= 50
+                                  ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                  : "bg-red-100 text-red-700 border-red-200"
+                              }`}>
+                                {Number(item.progress_item).toFixed(2)}%
+                              </span>
+                            </td>
+
                         </tr>
                       );
                     })}
