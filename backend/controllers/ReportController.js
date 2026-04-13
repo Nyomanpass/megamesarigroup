@@ -109,6 +109,14 @@ export const getWeeklyReport = async (req, res) => {
           totalKumulatif += progresProyek;
         }
 
+        let progressItem = 0;
+
+        if (boq.tipe === "item") {
+          progressItem = total
+            ? (sdIni / total) * 100
+            : 0;
+        }
+
         laporan.push({
           uraian: boq.uraian,
           bobot: Number(bobot.toFixed(3)),
@@ -120,6 +128,8 @@ export const getWeeklyReport = async (req, res) => {
           minggu_ini: Number(mingguIni.toFixed(3)),
           sd_lalu: Number(sdLalu.toFixed(3)),
           sd_ini: Number(sdIni.toFixed(3)),
+
+          progress_item: Number(progressItem.toFixed(3)), 
 
           progres_proyek: Number(progresProyek.toFixed(3)),
         });
@@ -137,7 +147,8 @@ export const getWeeklyReport = async (req, res) => {
       // 🔥 DEVIASI
       // =========================
       const deviasi = realMingguan - rencanaMingguan;
-
+      
+      
       result.push({
         minggu_ke: Number(minggu),
         tgl_awal: tglAwal,
@@ -266,6 +277,8 @@ export const getMonthlyReport = async (req, res) => {
         // 🔥 PROGRESS ITEM
         // =========================
         let progresProyek = 0;
+        let progressItem = 0;
+
 
         if (boq.tipe === "item") {
           const persenKumulatif = total
@@ -273,6 +286,7 @@ export const getMonthlyReport = async (req, res) => {
             : 0;
 
           progresProyek = persenKumulatif * bobot;
+          progressItem = persenKumulatif * 100;
 
           // 🔥 kumpulin kumulatif project
           totalKumulatif += progresProyek;
@@ -289,7 +303,7 @@ export const getMonthlyReport = async (req, res) => {
           bulan_ini: Number(bulanIni.toFixed(3)),
           sd_lalu: Number(sdLalu.toFixed(3)),
           sd_ini: Number(sdIni.toFixed(3)),
-
+          progress_item: Number(progressItem.toFixed(2)),
           progres_proyek: Number(progresProyek.toFixed(3)),
         });
       }
@@ -419,6 +433,11 @@ export const getDailyReport = async (req, res) => {
         uraian: p.boq?.uraian,
         satuan: p.boq?.satuan,
         volume: volumeHariIni,
+
+        cuaca: p.cuaca,
+        catatan: p.catatan,
+        jam_mulai: p.jam_mulai,
+        jam_selesai: p.jam_selesai,
 
         // 🔥 TAMBAHAN BARU
         bobot: Number(bobotBoq.toFixed(3)),

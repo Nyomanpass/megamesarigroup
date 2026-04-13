@@ -54,6 +54,40 @@ export default function DailyReportPage() {
     }
   };
 
+const handleExportExcel = async () => {
+  try {
+    if (!hariKe) {
+      setError("Pilih hari ke dulu sebelum export!");
+      return;
+    }
+
+    const response = await api.get(
+      `/export-daily/${id}?day=${hariKe}`,
+      {
+        responseType: "blob", // 🔥 penting
+      }
+    );
+
+    // 🔥 buat file download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+
+    link.setAttribute(
+      "download",
+      `laporan_harian_hari_${hariKe}.xlsx`
+    );
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+  } catch (error) {
+    console.log(error);
+    setError("Gagal export Excel");
+  }
+};
+
   useEffect(() => {
     fetchPlans();
   }, [id]);
@@ -121,6 +155,13 @@ export default function DailyReportPage() {
           )}
         </div>
 
+        <button
+  onClick={handleExportExcel}
+  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
+>
+  📊 Export Excel
+</button>
+
 <div className="mb-6">
   <h3 className="text-xs font-bold text-emerald-800 uppercase mb-3">
     Progress Proyek Hari Ini
@@ -147,6 +188,39 @@ export default function DailyReportPage() {
                  <h2 className="text-lg font-bold text-gray-800">Tabel Progress Fisik Harian</h2>
                  <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{data.length} Pekerjaan</span>
               </div>
+            <div className="p-5 bg-white border-b border-gray-100">
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* CUACA */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                  <p className="text-xs text-yellow-600 font-bold uppercase">Cuaca</p>
+                  <p className="text-lg font-black text-yellow-700">
+                    {data[0]?.cuaca || "-"}
+                  </p>
+                </div>
+
+                {/* JAM KERJA */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                  <p className="text-xs text-blue-600 font-bold uppercase">Jam Kerja</p>
+                  <p className="text-lg font-black text-blue-700">
+                    {data[0]?.jam_mulai && data[0]?.jam_selesai
+                      ? `${data[0].jam_mulai} - ${data[0].jam_selesai}`
+                      : "-"}
+                  </p>
+                </div>
+
+                {/* CATATAN */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 md:col-span-3">
+                  <p className="text-xs text-gray-500 font-bold uppercase">Catatan Lapangan</p>
+                  <p className="text-sm text-gray-700 mt-1">
+                    {data[0]?.catatan || "-"}
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white text-gray-500 uppercase text-xs tracking-wider border-b border-gray-100">

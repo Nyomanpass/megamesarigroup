@@ -116,7 +116,7 @@ export default function DailyProgressPage() {
   }, [form.boq_id, form.volume]);
 
   const handleCopy = (item) => {
-    // 🔥 cari hari_ke dari tanggal
+    
     const plan = dailyPlan.find(
       (d) => d.tanggal === item.tanggal
     );
@@ -124,13 +124,16 @@ export default function DailyProgressPage() {
     setForm({
       boq_id: item.boq_id,
       hari_ke: plan?.hari_ke || "",
-      volume: item.volume
-    });
+      volume: item.volume,
 
-    // 🔥 pastikan ini CREATE (bukan edit)
+      cuaca: item.cuaca || "",
+      catatan: item.catatan || "",
+      jam_mulai: item.jam_mulai || "",
+      jam_selesai: item.jam_selesai || ""
+    });
+    
     setEditId(null);
 
-    // 🔥 scroll ke form
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -147,7 +150,6 @@ export default function DailyProgressPage() {
       hari_ke: plan?.hari_ke || "",
       volume: item.volume,
 
-      // 🔥 TAMBAHAN
       cuaca: item.cuaca || "",
       catatan: item.catatan || "",
       jam_mulai: item.jam_mulai || "",
@@ -182,7 +184,6 @@ export default function DailyProgressPage() {
           hari_ke: form.hari_ke,
           volume: form.volume,
 
-          // 🔥 TAMBAHAN
           cuaca: form.cuaca,
           catatan: form.catatan,
           jam_mulai: form.jam_mulai,
@@ -200,7 +201,6 @@ export default function DailyProgressPage() {
 
       fetchData();
 
-      // 🔥 RESET FORM
       setForm({
         boq_id: "",
         hari_ke: "",
