@@ -23,6 +23,7 @@ export default function PeralatanPage() {
   const [masterItems, setMasterItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
 
   const [form, setForm] = useState({
     nama: "",
@@ -103,6 +104,32 @@ export default function PeralatanPage() {
          setEditId(null);
       }, 300);
   };
+
+  const handleImportExcel = async () => {
+  try {
+    if (!importFile) {
+      alert("Pilih file dulu!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", importFile);
+    formData.append("tipe", "ALAT"); // 🔥 tipe alat
+    formData.append("project_id", id);
+    formData.append("terbilang", 1); // 🔥 alat pakai terbilang
+
+    const res = await api.post("/import", formData);
+
+    alert(res.data.message);
+
+    fetchData(); // refresh tabel
+    setImportFile(null);
+
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Import gagal!");
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -200,6 +227,22 @@ export default function PeralatanPage() {
         </div>
 
         <div className="flex gap-4">
+          <div className="flex gap-4">
+  <div className="flex flex-col gap-2">
+    <input 
+      type="file" 
+      onChange={(e) => setImportFile(e.target.files[0])}
+      className="text-sm"
+    />
+
+    <button
+      onClick={handleImportExcel}
+      className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl font-bold"
+    >
+      Import Excel
+    </button>
+  </div>
+</div>
               <button
           onClick={() => setShowBulkModal(true)}
           className="flex items-center gap-2 bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold"
@@ -350,11 +393,11 @@ export default function PeralatanPage() {
 
               <div>{item.nama}</div>
               <div className="text-xs text-gray-500">
-                {item.ItemCategory?.nama || "-"}
+                {item.category || "-"}
               </div>
               <div>{item.satuan}</div>
               <div className="text-right">
-                Rp {Number(item.harga_default || 0).toLocaleString("id-ID")}
+                Rp {Number(item.harga || 0).toLocaleString("id-ID")}
               </div>
             </div>
           ))}

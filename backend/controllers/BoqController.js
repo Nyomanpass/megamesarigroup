@@ -3,6 +3,151 @@ import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { ProjectItem } from "../models/ProjekItem.js";
 
+
+// 🔥 ROMAWI → TEXT
+const toRoman = (num) => {
+  const romanMap = [
+    { value: 1000, numeral: "M" },
+    { value: 900, numeral: "CM" },
+    { value: 500, numeral: "D" },
+    { value: 400, numeral: "CD" },
+    { value: 100, numeral: "C" },
+    { value: 90, numeral: "XC" },
+    { value: 50, numeral: "L" },
+    { value: 40, numeral: "XL" },
+    { value: 10, numeral: "X" },
+    { value: 9, numeral: "IX" },
+    { value: 5, numeral: "V" },
+    { value: 4, numeral: "IV" },
+    { value: 1, numeral: "I" }
+  ];
+
+  let result = "";
+  for (let i = 0; i < romanMap.length; i++) {
+    while (num >= romanMap[i].value) {
+      result += romanMap[i].numeral;
+      num -= romanMap[i].value;
+    }
+  }
+  return result;
+};
+
+// 🔥 ROMAWI → ANGKA
+const romanToNumber = (roman) => {
+  const map = { I:1, V:5, X:10, L:50, C:100 };
+  let num = 0;
+
+  for (let i = 0; i < roman.length; i++) {
+    const curr = map[roman[i]];
+    const next = map[roman[i + 1]];
+    if (next > curr) num -= curr;
+    else num += curr;
+  }
+
+  return num;
+};
+
+
+// 🚀 🔥 GENERATE KODE FINAL
+const generateKode = async (parent_id, tipe) => {
+
+  // ========================
+  // 🔥 HEADER (A, B, C)
+  // ========================
+  if (!parent_id && tipe === "header") {
+    const headers = await Boq.findAll({
+      where: { parent_id: null }
+    });
+
+    if (headers.length === 0) return "A";
+
+    const chars = headers.map(h => h.kode.charCodeAt(0));
+    const max = Math.max(...chars);
+
+    return String.fromCharCode(max + 1);
+  }
+
+  // ========================
+  // 🔥 SUBHEADER (I, II, III)
+  // ========================
+  if (tipe === "subheader") {
+    const subs = await Boq.findAll({
+      where: { parent_id }
+    });
+
+    if (subs.length === 0) return "I";
+
+    const numbers = subs
+      .map(s => romanToNumber(s.kode))
+      .filter(n => !isNaN(n));
+
+    const max = Math.max(...numbers);
+
+    return toRoman(max + 1);
+  }
+
+  // ========================
+  // 🔥 ITEM (1, 2, 3)
+  // ========================
+  if (tipe === "item") {
+    const items = await Boq.findAll({
+      where: { parent_id }
+    });
+
+    const numbers = items
+      .map(i => parseInt(i.kode))
+      .filter(n => !isNaN(n));
+
+    // 🔥 kalau belum ada data
+    if (numbers.length === 0) return "1";
+
+    // 🔥 cari angka yang kosong (GAP)
+    const sorted = numbers.sort((a, b) => a - b);
+
+    let next = sorted.length + 1;
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i] !== i + 1) {
+        next = i + 1;
+        break;
+      }
+    }
+
+    return String(next);
+  }
+
+  return "1";
+};
+
+
+const buildFlatTree = (data, parentId = null, level = 0) => {
+  let result = [];
+
+  const children = data
+    .filter(item => item.parent_id === parentId)
+    .sort((a, b) => {
+      const kodeA = (a.kode || "").toString();
+      const kodeB = (b.kode || "").toString();
+
+      return kodeA.localeCompare(kodeB, undefined, {
+        numeric: true,
+        sensitivity: "base"
+      });
+    });
+
+  for (const child of children) {
+    result.push({
+      ...child,
+      level // 🔥 optional buat indent UI
+    });
+
+    const sub = buildFlatTree(data, child.id, level + 1);
+    result = result.concat(sub);
+  }
+
+  return result;
+};
+
 // 🔥 TANPA req/res
 export const generateBobotInternal = async (project_id) => {
   try {
@@ -61,28 +206,6 @@ export const generateBobotInternal = async (project_id) => {
   }
 };
 
-const generateKode = async (parent_id) => {
-  const parent = await Boq.findByPk(parent_id);
-  if (!parent) throw new Error("Parent tidak ditemukan");
-
-  const children = await Boq.findAll({
-    where: { parent_id },
-    order: [['kode', 'DESC']]
-  });
-
-  let nextNumber = 1;
-  if (children.length > 0) {
-    const lastChildKode = children[0].kode;
-    const parts = lastChildKode.split('.');
-    const lastPart = parts[parts.length - 1];
-    nextNumber = parseInt(lastPart) + 1;
-  }
-  if (!parent.kode.includes('.')) { 
-     return `${parent.kode}.1.${nextNumber}`;
-  }
-  return `${parent.kode}.${nextNumber}`;
-};
-
 
 const round2 = (num) => Math.round(num * 100) / 100;
 
@@ -130,6 +253,7 @@ export const createBulkBoq = async (req, res) => {
     }
 
     const results = [];
+    let counter = 0;
 
     for (const item of items) {
       let { uraian, satuan, volume, analisa_id, ppn } = item;
@@ -138,15 +262,18 @@ export const createBulkBoq = async (req, res) => {
         return res.status(400).json({ message: "Analisa wajib dipilih untuk item!" });
       }
 
-      // 🔥 generate kode
-      const kode = await generateKode(parent_id);
+      // 🔥 ambil base dulu
+      const baseKode = await generateKode(parent_id, "item");
 
-      // ❗ TIDAK HITUNG HARGA DI SINI
+      // 🔥 baru hitung kode
+      const kode = String(Number(baseKode) + counter);
+
+      counter++;
 
       const newItem = await Boq.create({
         project_id,
         parent_id,
-        analisa_id, // 🔥 kunci utama
+        analisa_id,
         kode: kode.trim(),
         uraian,
         satuan,
@@ -155,9 +282,9 @@ export const createBulkBoq = async (req, res) => {
         tipe: "item"
       });
 
-
       results.push(newItem);
     }
+
      await generateBobotInternal(project_id);
 
     res.status(201).json({
@@ -227,7 +354,6 @@ export const createBoq = async (req, res) => {
   }
 };
 
-
 export const getBoqByProject = async (req, res) => {
   try {
     const { project_id } = req.params;
@@ -236,27 +362,15 @@ export const getBoqByProject = async (req, res) => {
       where: { project_id }
     });
 
-    // 🔥 SORTING (tetap dipakai)
-    const sortedData = data.sort((a, b) => {
-      const kodeA = (a.kode || "").trim();
-      const kodeB = (b.kode || "").trim();
-
-      return kodeA.localeCompare(kodeB, undefined, {
-        numeric: true,
-        sensitivity: "base"
-      });
-    });
-
     // 🔥 HITUNG DINAMIS
-    const result = await Promise.all(
-      sortedData.map(async (boq) => {
+    const calculated = await Promise.all(
+      data.map(async (boq) => {
 
         let harga_satuan = 0;
         let jumlah = 0;
         let jumlah_ppn = 0;
 
         if (boq.tipe === "item" && boq.analisa_id) {
-
           harga_satuan = await hitungAnalisa(boq.analisa_id);
 
           const volume = Number(boq.volume) || 0;
@@ -268,8 +382,6 @@ export const getBoqByProject = async (req, res) => {
 
         return {
           ...boq.toJSON(),
-
-          // 🔥 override nilai DB
           harga_satuan: Number(harga_satuan.toFixed(2)),
           jumlah: Number(jumlah.toFixed(2)),
           jumlah_ppn: Number(jumlah_ppn.toFixed(2))
@@ -277,10 +389,13 @@ export const getBoqByProject = async (req, res) => {
       })
     );
 
+    // 🔥 INI KUNCINYA
+    const result = buildFlatTree(calculated);
+
     res.json(result);
 
   } catch (error) {
-    console.error("DETEKSI ERROR:", error);
+    console.error("ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -299,40 +414,86 @@ export const updateBoq = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 🔥 cari data
     const item = await Boq.findByPk(id);
     if (!item) {
       return res.status(404).json({ message: "Data tidak ditemukan" });
     }
 
-    // 🔥 ambil project_id untuk generate bobot nanti
     const project_id = item.project_id;
 
-    // 🔥 ambil field yang mau diupdate
-    const {
+    let {
+      tipe,
+      parent_id,
+      kode,
       uraian,
       satuan,
       volume,
+      harga_satuan,
       analisa_id,
-      ppn,
-      tipe,
-      kode,
-      parent_id
+      ppn
     } = req.body;
 
-    // 🔥 update manual biar aman & fleksibel
+    let jumlah = null;
+    let jumlah_ppn = null;
+
+    // =========================
+    // 🔥 HEADER / SUBHEADER
+    // =========================
+    if (tipe === "header" || tipe === "subheader") {
+
+      if (!kode) {
+        return res.status(400).json({ message: "Kode wajib diisi untuk Header/Subheader" });
+      }
+
+      // reset semua angka
+      volume = null;
+      harga_satuan = null;
+      jumlah = null;
+      jumlah_ppn = null;
+      analisa_id = null;
+    }
+
+    // =========================
+    // 🔥 ITEM
+    // =========================
+    else if (tipe === "item") {
+
+      if (!parent_id) {
+        return res.status(400).json({ message: "Item wajib punya parent!" });
+      }
+
+      // 🔥 jika parent berubah → generate ulang kode
+      if (parent_id !== item.parent_id) {
+        kode = await generateKode(parent_id, "item");
+      } else {
+        kode = item.kode; // tetap
+      }
+
+      // 🔥 hitung harga
+      if (volume && harga_satuan) {
+        jumlah = parseFloat(volume) * parseFloat(harga_satuan);
+        jumlah_ppn = jumlah + (jumlah * (ppn || 11) / 100);
+      }
+    }
+
+    // =========================
+    // 🔥 UPDATE DATA
+    // =========================
     await item.update({
-      kode: kode ?? item.kode,
+      kode: kode?.trim() ?? item.kode,
       parent_id: parent_id ?? item.parent_id,
       uraian: uraian ?? item.uraian,
       satuan: satuan ?? item.satuan,
-      volume: volume ?? item.volume,
+      volume,
+      harga_satuan,
+      jumlah,
+      jumlah_ppn,
       analisa_id: analisa_id ?? item.analisa_id,
       ppn: ppn ?? item.ppn,
       tipe: tipe ?? item.tipe
     });
 
-    // 🔥 REGENERATE BOBOT
+    // 🔥 UPDATE BOBOT
     await generateBobotInternal(project_id);
 
     res.status(200).json({
@@ -341,6 +502,7 @@ export const updateBoq = async (req, res) => {
     });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };

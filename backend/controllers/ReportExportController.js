@@ -482,7 +482,7 @@ for (let i = 11; i <= 13; i++) {
 
     sheet.getCell(`A${row2}`).value = info.cuaca || "-";
     sheet.getCell(`E${row2}`).value = `${info.jam_mulai || "-"} s/d ${info.jam_selesai || "-"}`;
-    sheet.getCell(`I${row2}`).value = info.catatan || "-";
+    sheet.getCell(`I${row2}`).value = "-";
 
     // STYLE
     for (let i = startFooter; i <= row2; i++) {

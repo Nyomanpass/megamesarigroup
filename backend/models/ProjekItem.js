@@ -33,8 +33,8 @@ export const ProjectItem = sequelize.define("ProjectItem", {
     allowNull: false
   },
 
-  category_id: {
-    type: DataTypes.INTEGER,
+  category: {
+    type: DataTypes.STRING,
     allowNull: true
   },
 

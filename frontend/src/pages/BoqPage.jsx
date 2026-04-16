@@ -21,6 +21,7 @@ export default function BoqPage() {
 
   const [boq, setBoq] = useState([]);
   const [project, setProject] = useState(null);
+  const [importFile, setImportFile] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -83,6 +84,30 @@ export default function BoqPage() {
   } catch (err) {
     console.error(err);
     alert("Gagal simpan: " + (err.response?.data?.message || err.message));
+  }
+};
+
+const handleImportBoq = async () => {
+  try {
+    if (!importFile) {
+      alert("Pilih file Excel dulu!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", importFile);
+    formData.append("project_id", id);
+
+    const res = await api.post("/import-boq", formData);
+
+    alert(res.data.message);
+
+    setImportFile(null);
+    fetchBoq(); // 🔥 reload tabel
+
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Import gagal!");
   }
 };
 
@@ -173,13 +198,16 @@ const handleSubmit = async () => {
           volume: Number(item.volume) || 0,
           analisa_id: item.analisa_id || null,
           ppn: Number(item.ppn) || 11,
-          parent_id: form.parent_id || null
+          parent_id: form.parent_id || null,
+          tipe: "item" 
         };
       } else {
         // 🔥 header / subheader
         payload = {
           uraian: form.uraian,
-          kode: form.kode
+          kode: form.kode,
+          tipe: form.tipe, 
+          parent_id: form.parent_id || null
         };
       }
 
@@ -321,6 +349,20 @@ const handleSubmit = async () => {
             </div>
           </div>
           <div className="flex gap-2">
+            <div className="flex flex-col gap-1">
+              <input
+                type="file"
+                onChange={(e) => setImportFile(e.target.files[0])}
+                className="text-xs"
+              />
+
+              <button
+                onClick={handleImportBoq}
+                className="bg-green-500 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-green-600"
+              >
+                Import BOQ
+              </button>
+            </div>
              <button
               onClick={() => setShowModal(true)}
               className="bg-blue-600 text-white px-4 py-2.5 rounded-xl transition shadow-sm hover:shadow-md hover:bg-blue-700 font-semibold flex items-center gap-2"
@@ -384,6 +426,7 @@ const handleSubmit = async () => {
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
                 <tr>
+                  {/* <th className="p-4 text-center uppercase tracking-wider text-xs">No</th> */}
                   <th className="p-4 px-6 uppercase tracking-wider text-xs">Uraian Pekerjaan</th>
                   <th className="p-4 text-center uppercase tracking-wider text-xs">Satuan</th>
                   <th className="p-4 text-right uppercase tracking-wider text-xs">Volume</th>
@@ -414,6 +457,7 @@ const handleSubmit = async () => {
                           : "hover:bg-blue-50/40 bg-white" 
                       }`}
                       >
+                      {/* <td className="p-4 text-center text-gray-500">{item.kode || "-"}</td> */}
                       {/* 1. URAIAN PEKERJAAN */}
                       <td
                           className={`p-4 px-6 text-sm ${

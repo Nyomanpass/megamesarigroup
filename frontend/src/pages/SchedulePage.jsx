@@ -14,9 +14,20 @@ export default function SchedulePage() {
   const [weeks, setWeeks] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
+  const [realData, setRealData] = useState([]);
+
+  const fetchChart = async () => {
+  try {
+    const res = await api.get(`/daily-plan/weekly-chart/${id}`);
+    setRealData(res.data);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   useEffect(() => {
     fetchAll();
+    fetchChart();
   }, [id]);
 
   const fetchAll = async () => {
@@ -50,52 +61,136 @@ export default function SchedulePage() {
     }
   };
 
-  const handleBagiRata = (item) => {
-    const startMng = prompt(`Mulai minggu ke berapa? (1-${weeks.length})`, "1");
-    const endMng = prompt(`Sampai minggu ke berapa?`, weeks.length.toString());
+ const handleBagiRata = (item) => {
+  const startMng = prompt(`Mulai minggu ke berapa? (1-${weeks.length})`, "1");
+  const endMng = prompt(`Sampai minggu ke berapa?`, weeks.length.toString());
 
-    if (!startMng || !endMng) return;
+  if (!startMng || !endMng) return;
 
-    const start = parseInt(startMng);
-    const end = parseInt(endMng);
-    const durasi = end - start + 1;
+  const start = parseInt(startMng);
+  const end = parseInt(endMng);
+  const durasi = end - start + 1;
 
-    if (durasi <= 0) return alert("Rentang minggu salah!");
+  if (durasi <= 0) return alert("Rentang minggu salah!");
 
-    const bobotPerMinggu = (Number(item.bobot) / durasi).toFixed(3);
+  const totalBobot = Number(item.bobot);
 
-    let newSchedule = [...schedule.filter(s => s.boq_id !== item.id)]; 
-    
-    for (let i = start; i <= end; i++) {
-        newSchedule.push({
-          project_id: id,
-          boq_id: item.id,
-          minggu_ke: i,
-          bobot: bobotPerMinggu
-        });
+  // 🔥 bagi rata (sementara)
+  const base = Math.floor((totalBobot / durasi) * 1000) / 1000;
+
+  let newSchedule = [...schedule.filter(s => s.boq_id !== item.id)];
+
+  let totalSementara = 0;
+
+  for (let i = start; i <= end; i++) {
+    let bobot = base;
+
+    // 🔥 minggu terakhir = sisa
+    if (i === end) {
+      bobot = Number((totalBobot - totalSementara).toFixed(3));
     }
 
-    setSchedule(newSchedule);
-  };
+    totalSementara += bobot;
 
-  const handleSingleCellChange = (boqId, mingguKe, value) => {
-    const newSchedule = [...schedule];
-    const index = newSchedule.findIndex(
-      (s) => Number(s.boq_id) === Number(boqId) && Number(s.minggu_ke) === Number(mingguKe)
+    newSchedule.push({
+      project_id: id,
+      boq_id: item.id,
+      minggu_ke: i,
+      bobot: bobot
+    });
+  }
+
+  setSchedule(newSchedule);
+};
+
+const handleSingleCellChange = (boqId, mingguKe, value) => {
+  const inputValue = value === "" ? 0 : parseFloat(value);
+  if (isNaN(inputValue) || inputValue < 0) return;
+
+  const totalTarget = boq.find(b => b.id === boqId)?.bobot || 0;
+
+  const itemWeeks = weeks.map(w => {
+    const found = schedule.find(
+      s =>
+        Number(s.boq_id) === Number(boqId) &&
+        Number(s.minggu_ke) === Number(w.minggu_ke)
+    );
+    return {
+      minggu_ke: w.minggu_ke,
+      bobot: found ? Number(found.bobot) : 0
+    };
+  });
+
+  // update input
+  let updatedWeeks = itemWeeks.map(w =>
+    w.minggu_ke === mingguKe ? { ...w, bobot: inputValue } : w
+  );
+
+  // total setelah
+  let total = updatedWeeks.reduce((sum, w) => sum + w.bobot, 0);
+
+  // selisih terhadap target
+  let selisih = total - totalTarget;
+
+  // 🔥 distribusi proporsional ke minggu lain
+  const weeksLain = updatedWeeks.filter(w => w.minggu_ke !== mingguKe);
+  const totalLain = weeksLain.reduce((sum, w) => sum + w.bobot, 0);
+
+  updatedWeeks = updatedWeeks.map(w => {
+    if (w.minggu_ke === mingguKe) return w;
+    if (totalLain === 0) return w;
+
+    const proporsi = w.bobot / totalLain;
+    const adjust = selisih * proporsi;
+
+    return {
+      ...w,
+      bobot: Math.max(0, Number((w.bobot - adjust).toFixed(3)))
+    };
+  });
+
+  // 🔥 FIX FINAL (ANTI ERROR 0.001)
+  let totalFix = updatedWeeks.reduce((sum, w) => sum + w.bobot, 0);
+  let diff = Number((totalTarget - totalFix).toFixed(3));
+
+  if (diff !== 0) {
+    // 🔥 cari minggu TERBESAR selain yg diubah
+    let targetIndex = updatedWeeks.findIndex(
+      w => w.minggu_ke !== mingguKe
     );
 
-    if (index > -1) {
-      newSchedule[index].bobot = value === "" ? 0 : value;
-    } else {
+    for (let i = 0; i < updatedWeeks.length; i++) {
+      if (
+        updatedWeeks[i].minggu_ke !== mingguKe &&
+        updatedWeeks[i].bobot > updatedWeeks[targetIndex].bobot
+      ) {
+        targetIndex = i;
+      }
+    }
+
+    updatedWeeks[targetIndex].bobot = Number(
+      (updatedWeeks[targetIndex].bobot + diff).toFixed(3)
+    );
+  }
+
+  // update schedule
+  let newSchedule = schedule.filter(
+    s => Number(s.boq_id) !== Number(boqId)
+  );
+
+  updatedWeeks.forEach(w => {
+    if (w.bobot > 0) {
       newSchedule.push({
         project_id: id,
         boq_id: boqId,
-        minggu_ke: mingguKe,
-        bobot: value === "" ? 0 : value
+        minggu_ke: w.minggu_ke,
+        bobot: w.bobot
       });
     }
-    setSchedule(newSchedule);
-  };
+  });
+
+  setSchedule(newSchedule);
+};
 
   const handleSaveSchedule = async () => {
     try {
@@ -127,11 +222,15 @@ export default function SchedulePage() {
   });
 
   // Chart Data Preparation
-  const chartData = weeks.map((w, idx) => ({
-    name: `M${w.minggu_ke}`,
-    target: rencanaKomulatif[idx] || 0,
-    mingguan: rencanaPerMinggu[idx] || 0
-  }));
+  const chartData = weeks.map((w, idx) => {
+    const real = realData.find(r => r.minggu_ke === w.minggu_ke);
+
+    return {
+      name: `M${w.minggu_ke}`,
+      target: rencanaKomulatif[idx] || 0,
+      real: real?.kum_real || 0 // 🔥 ini realisasi
+    };
+  });
 
   const isComplete = akumulasi > 99.9 && akumulasi < 100.1;
 
@@ -206,6 +305,10 @@ export default function SchedulePage() {
                         <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
                       </linearGradient>
+                       <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
@@ -214,7 +317,24 @@ export default function SchedulePage() {
                       cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }} 
                       contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
                     />
-                    <Area type="monotone" dataKey="target" name="Komulatif Target (%)" stroke="#4F46E5" strokeWidth={3} fill="url(#colorTarget)" />
+                      <Area 
+                        type="monotone" 
+                        dataKey="target" 
+                        name="Komulatif Target (%)" 
+                        stroke="#4F46E5" 
+                        strokeWidth={3} 
+                        fill="url(#colorTarget)" 
+                      />
+
+                      <Area 
+                        type="monotone" 
+                        dataKey="real" 
+                        name="Komulatif Real (%)" 
+                        stroke="#10B981" 
+                        strokeWidth={3} 
+                        fill="url(#colorReal)" 
+                      />
+
                   </AreaChart>
                  </ResponsiveContainer>
                ) : (
@@ -296,7 +416,7 @@ export default function SchedulePage() {
 
                       {weeks.map((w) => {
                         const cellData = schedule.find(s => Number(s.boq_id) === Number(item.id) && Number(s.minggu_ke) === Number(w.minggu_ke));
-                        const val = cellData && Number(cellData.bobot) !== 0 ? Number(cellData.bobot).toFixed(3) : "";
+                        const val = cellData ? cellData.bobot : "";
                         const isActive = val !== "";
                         
                         return (
@@ -305,7 +425,7 @@ export default function SchedulePage() {
                             <div className={`absolute inset-1 rounded-md transition-all -z-10 ${isActive ? 'bg-blue-200 shadow-sm border border-blue-300' : 'bg-transparent'}`}></div>
                             
                             <input
-                              type="number" step="0.001" value={val}
+                              type="number" step="0.001" value={val ?? ""}
                               onChange={(e) => handleSingleCellChange(item.id, w.minggu_ke, e.target.value)}
                               className={`w-full text-center h-[34px] rounded-md outline-none font-mono text-[11px] bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 relative z-0 transition-colors
                                 ${isActive ? "font-bold text-blue-900" : "text-gray-400 placeholder:text-gray-300"}

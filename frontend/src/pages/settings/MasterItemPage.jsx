@@ -12,6 +12,8 @@ const MasterItemPage = () => {
 
   const [categories, setCategories] = useState([]);
 
+  const [importFile, setImportFile] = useState(null);
+
   // Modals state
   const [showItemModal, setShowItemModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
@@ -22,8 +24,8 @@ const MasterItemPage = () => {
     nama: "",
     tipe: "TENAGA",
     satuan: "",
-    harga_default: "",
-    category_id: "",
+    harga: "",
+    category: "",
     terbilang: 0
   });
 
@@ -48,6 +50,29 @@ const MasterItemPage = () => {
     }
   };
 
+  const handleImportExcel = async () => {
+  try {
+    if (!importFile) {
+      alert("Pilih file dulu!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", importFile);
+    formData.append("tipe", activeTab); // 🔥 otomatis dari tab
+
+    const res = await api.post("/import-master", formData);
+
+    alert(res.data.message);
+    fetchData();
+    setImportFile(null);
+
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Import gagal!");
+  }
+};
+
   useEffect(() => {
     fetchData();
     fetchCategories();
@@ -69,7 +94,7 @@ const MasterItemPage = () => {
     setForm(prev => ({
       ...prev,
       [name]: value,
-      ...(name === "tipe" && value !== "BAHAN" && { category_id: "" })
+      ...(name === "tipe" && value !== "BAHAN" && { category: "" })
     }));
   };
 
@@ -79,8 +104,8 @@ const MasterItemPage = () => {
         nama: item.nama,
         tipe: item.tipe,
         satuan: item.satuan,
-        harga_default: item.harga_default,
-        category_id: item.category_id || "",
+        harga: item.harga,
+        category: item.category || "",
         terbilang: item.terbilang || 0
       });
       setEditId(item.id);
@@ -89,8 +114,8 @@ const MasterItemPage = () => {
         nama: "",
         tipe: activeTab, // Otomatis sesuai tab yang aktif
         satuan: "",
-        harga_default: "",
-        category_id: "",
+        harga: "",
+        category: "",
         terbilang: 0
       });
       setEditId(null);
@@ -104,8 +129,8 @@ const MasterItemPage = () => {
   };
 
   const validateItemForm = () => {
-    if (!form.nama || !form.satuan || form.harga_default === "") return "Semua field wajib diisi!";
-    if (form.tipe === "BAHAN" && !form.category_id) return "Kategori wajib dipilih untuk tipe BAHAN!";
+    if (!form.nama || !form.satuan || form.harga === "") return "Semua field wajib diisi!";
+    if (form.tipe === "BAHAN" && !form.category) return "Kategori wajib dipilih untuk tipe BAHAN!";
     return null;
   };
 
@@ -118,7 +143,14 @@ const MasterItemPage = () => {
     }
 
     try {
-      const payload = { ...form, category_id: form.category_id || null };
+      const payload = {
+        nama: form.nama,
+        tipe: form.tipe,
+        satuan: form.satuan,
+        harga: Number(form.harga),
+        category: form.tipe === "BAHAN" ? (form.category || "") : "",
+        terbilang: form.tipe !== "BAHAN" ? Number(form.terbilang || 0) : 0
+      };
       if (editId) {
         await api.put(`/masteritem/${editId}`, payload);
       } else {
@@ -133,12 +165,7 @@ const MasterItemPage = () => {
   };
 
   // CATEGORY HANDLERS
-  const openCatModal = () => setShowCatModal(true);
-  const closeCatModal = () => {
-    setShowCatModal(false);
-    setEditCatId(null);
-    setCatForm({ nama: "" });
-  };
+
 
   const submitCategory = async (e) => {
     e.preventDefault();
@@ -247,15 +274,20 @@ const MasterItemPage = () => {
           />
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          {activeTab === "BAHAN" && (
-            <button
-              onClick={openCatModal}
-              className="flex items-center gap-2 bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 px-4 py-2.5 rounded-xl font-bold transition-all w-full md:w-auto justify-center"
-            >
-              <Settings2 className="w-5 h-5" />
-              Kelola Kategori
-            </button>
-          )}
+          <div className="flex flex-col gap-2">
+          <input 
+            type="file" 
+            onChange={(e) => setImportFile(e.target.files[0])}
+            className="text-sm"
+          />
+
+          <button
+            onClick={handleImportExcel}
+            className="bg-green-500 text-white px-4 py-2 rounded-xl font-bold"
+          >
+            Import Excel
+          </button>
+        </div>
           <button
             onClick={() => openItemModal()}
             className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm active:scale-95 w-full md:w-auto justify-center ${tabDetails.btnColor}`}
@@ -297,7 +329,7 @@ const MasterItemPage = () => {
                   {activeTab === "BAHAN" && (
                     <td className="p-5">
                       <span className="text-xs text-gray-600 font-medium bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200">
-                        {item.ItemCategory?.nama || "Uncategorized"}
+                        {item.category || "Uncategorized"}
                       </span>
                     </td>
                   )}
@@ -313,7 +345,7 @@ const MasterItemPage = () => {
                   )}
 
                   <td className="p-5 text-right font-bold text-text-primary text-[15px]">
-                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.harga_default)}
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.harga)}
                   </td>
 
                   <td className="p-5 text-center">
@@ -389,22 +421,21 @@ const MasterItemPage = () => {
                   />
                 </div>
 
-                {activeTab === "BAHAN" && (
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Kategori Bahan</label>
-                    <select
-                      name="category_id"
-                      value={form.category_id}
-                      onChange={handleItemChange}
-                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm cursor-pointer font-medium"
-                    >
-                      <option value="">-- Pilih Kategori --</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>{cat.nama}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+              {activeTab === "BAHAN" && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Kategori Bahan
+                  </label>
+                  <input
+                    type="text"
+                    name="category"
+                    value={form.category}
+                    onChange={handleItemChange}
+                    placeholder="Contoh: Material"
+                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                  />
+                </div>
+              )}
 
                 <div className="grid grid-cols-2 gap-5">
                   <div>
@@ -440,9 +471,9 @@ const MasterItemPage = () => {
                   <input
                     type="number"
                     step="1"
-                    name="harga_default"
+                    name="harga"
                     placeholder="0"
-                    value={form.harga_default}
+                    value={form.harga}
                     onChange={handleItemChange}
                     className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-right font-bold text-lg text-primary"
                   />

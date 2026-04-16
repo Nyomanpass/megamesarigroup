@@ -56,13 +56,12 @@ export default function MonthlyReportPage() {
     DeviasiIcon = TrendingDown;
   }
 
-  const persenTarget = bulan?.rencana ? ((bulan.real / bulan.rencana) * 100) : 0;
 
   // Chart Data preparation
   const chartData = bulan ? [
-    { name: 'Rencana', Bobot: Number(bulan.rencana), fillColor: '#CBD5E1' }, // gray
-    { name: 'Realisasi', Bobot: Number(bulan.real), fillColor: bulan.deviasi >= 0 ? '#10B981' : '#EF4444' } // green/red
-  ] : [];
+  { name: 'Rencana', Bobot: Number(bulan.rencana_kumulatif), fillColor: '#CBD5E1' },
+  { name: 'Realisasi', Bobot: Number(bulan.real_kumulatif), fillColor: bulan.deviasi >= 0 ? '#10B981' : '#EF4444' }
+] : [];
 
   return (
     <>
@@ -157,18 +156,66 @@ export default function MonthlyReportPage() {
                </div>
 
                {/* REKAP DETAIL */}
-               <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+               <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
                   <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
                     <p className="text-xs font-bold text-gray-500 uppercase mb-1">Rencana Bulan Ini</p>
-                    <p className="text-2xl font-black text-gray-800">{format(bulan.rencana)}<span className="text-sm">%</span></p>
+                    <p className="text-2xl font-black text-gray-800">{format(bulan.rencana_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
                   <div className="bg-pink-50 p-4 rounded-2xl text-center border border-pink-100">
                     <p className="text-xs font-bold text-pink-500 uppercase mb-1">Realisasi Bulan Ini</p>
-                    <p className="text-2xl font-black text-pink-700">{format(bulan.real)}<span className="text-sm">%</span></p>
+                    <p className="text-2xl font-black text-pink-700">{format(bulan.real_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-2xl text-center border border-blue-100">
-                    <p className="text-xs font-bold text-blue-500 uppercase mb-1">Rasio Ketercapaian</p>
-                    <p className="text-2xl font-black text-blue-700">{persenTarget.toFixed(2)}<span className="text-sm">%</span></p>
+                  <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+
+                    {/* RENCANA BULAN INI */}
+                    <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
+                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">
+                        Rencana Bulan Ini
+                      </p>
+                      <p className="text-2xl font-black text-gray-800">
+                        {format(bulan.rencana_bulanan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
+                    {/* REALISASI BULAN INI */}
+                    <div className="bg-pink-50 p-4 rounded-2xl text-center border border-pink-100">
+                      <p className="text-xs font-bold text-pink-500 uppercase mb-1">
+                        Realisasi Bulan Ini
+                      </p>
+                      <p className="text-2xl font-black text-pink-700">
+                        {format(bulan.real_bulanan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
+                    {/* DEVIASI BULAN INI */}
+                    <div className={`p-4 rounded-2xl text-center border ${
+                      bulan.deviasi_bulanan > 0
+                        ? "bg-emerald-50 border-emerald-200"
+                        : bulan.deviasi_bulanan < 0
+                        ? "bg-red-50 border-red-200"
+                        : "bg-blue-50 border-blue-200"
+                    }`}>
+                      <p className={`text-xs font-bold uppercase mb-1 ${
+                        bulan.deviasi_bulanan > 0
+                          ? "text-emerald-600"
+                          : bulan.deviasi_bulanan < 0
+                          ? "text-red-500"
+                          : "text-blue-600"
+                      }`}>
+                        Deviasi Bulan Ini
+                      </p>
+                      <p className={`text-2xl font-black ${
+                        bulan.deviasi_bulanan > 0
+                          ? "text-emerald-600"
+                          : bulan.deviasi_bulanan < 0
+                          ? "text-red-500"
+                          : "text-blue-600"
+                      }`}>
+                        {bulan.deviasi_bulanan > 0 ? "+" : ""}
+                        {format(bulan.deviasi_bulanan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
                   </div>
                </div>
                

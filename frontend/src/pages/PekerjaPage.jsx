@@ -19,6 +19,7 @@ export default function PekerjaPage() {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [importFile, setImportFile] = useState(null);
 
   const [form, setForm] = useState({
     nama: "",
@@ -78,6 +79,32 @@ export default function PekerjaPage() {
       ...form,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleImportExcel = async () => {
+    try {
+      if (!importFile) {
+        alert("Pilih file dulu!");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", importFile);
+      formData.append("tipe", "TENAGA"); // karena ini halaman tenaga
+      formData.append("project_id", id);
+      formData.append("terbilang", 1); // default bisa ubah nanti
+
+      const res = await api.post("/import", formData);
+
+      alert(res.data.message);
+
+      fetchData(); // refresh data
+      setImportFile(null);
+
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Import gagal!");
+    }
   };
 
   const openFormModal = (item = null) => {
@@ -202,6 +229,20 @@ const handleBulkCreate = async () => {
         </div>
 
         <div className="flex gap-4">
+          <div className="flex flex-col gap-2">
+          <input 
+            type="file" 
+            onChange={(e) => setImportFile(e.target.files[0])}
+            className="text-sm"
+          />
+
+          <button
+            onClick={handleImportExcel}
+            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl font-bold"
+          >
+            Import Excel
+          </button>
+        </div>
               <button
             onClick={() => setShowBulkModal(true)}
             className="flex items-center gap-2 bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold"
@@ -354,7 +395,7 @@ const handleBulkCreate = async () => {
 
                   {/* KATEGORI */}
                   <div className="text-gray-500 text-xs">
-                    {item.ItemCategory?.nama || "-"}
+                    {item.category || "-"}
                   </div>
 
                   {/* SATUAN */}
@@ -362,7 +403,7 @@ const handleBulkCreate = async () => {
 
                   {/* HARGA */}
                   <div className="text-right font-medium">
-                    Rp {Number(item.harga_default || 0).toLocaleString("id-ID")}
+                    Rp {Number(item.harga || 0).toLocaleString("id-ID")}
                   </div>
                 </div>
               ))}
