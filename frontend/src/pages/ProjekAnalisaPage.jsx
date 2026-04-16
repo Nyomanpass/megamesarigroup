@@ -27,6 +27,8 @@ const ProjectAnalisaPage = () => {
   const [showAnalisaModal, setShowAnalisaModal] = useState(false);
   const [selectedAnalisa, setSelectedAnalisa] = useState([]);
   const [masterAnalisa, setMasterAnalisa] = useState([]);
+  const [importAnalisaFile, setImportAnalisaFile] = useState(null);
+  const [errors, setErrors] = useState([]);
 
   const fetchMasterAnalisa = async () => {
    const res = await api.get("/master/analisa");
@@ -155,6 +157,36 @@ const ProjectAnalisaPage = () => {
   }
 };
 
+const handleImportAnalisaexel = async () => {
+  try {
+    if (!importAnalisaFile) {
+      alert("Pilih file dulu!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", importAnalisaFile);
+    formData.append("project_id", id); // 🔥 WAJIB
+
+    const res = await api.post("/import-analisa-multi", formData);
+
+    alert(res.data.message);
+
+    fetchData(); // refresh data
+    setImportAnalisaFile(null);
+    setErrors([]);
+
+  } catch (err) {
+    console.error(err);
+
+    if (err.response?.data?.errors) {
+      setErrors(err.response.data.errors); // 🔥 tampilkan detail error
+    } else {
+      alert(err.response?.data?.message || "Import gagal!");
+    }
+  }
+};
+
 const filteredMasterAnalisa = masterAnalisa.filter((master) => {
   return !data.some(
     (item) => item.nama.toLowerCase() === master.nama.toLowerCase()
@@ -164,6 +196,16 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
   return (
     <div className="p-6 bg-background min-h-screen text-text-primary">
       {/* HEADER */}
+      {errors.length > 0 && (
+        <div className="mt-3 bg-red-100 p-3 rounded-xl">
+          <p className="font-bold text-red-700 mb-2">Error Import:</p>
+          <ul className="text-sm text-red-600 list-disc pl-5">
+            {errors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
           <button
@@ -186,6 +228,20 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
         </div>
 
         <div className="flex gap-4">
+          <div className="">
+            <input 
+                type="file" 
+                accept=".xlsx, .xls"
+                onChange={(e) => setImportAnalisaFile(e.target.files[0])}
+                className="text-sm"
+              />
+              <button
+                onClick={handleImportAnalisaexel}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold"
+              >
+                Import Analisa
+              </button>
+          </div>
             <button className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap" onClick={() => setShowAnalisaModal(true)}>
           Import Analisa
         </button>

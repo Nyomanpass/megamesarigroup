@@ -16,15 +16,6 @@ export const getProjectItems = async (req, res) => {
 
     const data = await ProjectItem.findAll({
       where,
-      include: tipe === "BAHAN"
-        ? [
-            {
-              model: ItemCategory,
-              as: "category",
-              attributes: ["id", "nama"]
-            }
-          ]
-        : [], // 🔥 selain bahan tidak perlu join
       order: [["id", "DESC"]]
     });
 
@@ -34,7 +25,6 @@ export const getProjectItems = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 // 🔹 GET BY ID
 export const getProjectItemById = async (req, res) => {
   try {
@@ -59,7 +49,7 @@ export const createProjectItem = async (req, res) => {
       nama, 
       satuan, 
       harga, 
-      category_id, 
+      category, 
       project_id, 
       tipe,
       terbilang 
@@ -82,7 +72,7 @@ export const createProjectItem = async (req, res) => {
 
     // 🔥 logic category
     if (tipe !== "BAHAN") {
-      category_id = null;
+      category = null;
     }
 
     const data = await ProjectItem.create({
@@ -91,7 +81,7 @@ export const createProjectItem = async (req, res) => {
       satuan,
       harga,
       project_id,
-      category_id: category_id || null,
+      category: category || null,
       terbilang // 🔥 masuk sini
     });
 
@@ -106,7 +96,7 @@ export const createProjectItem = async (req, res) => {
 // 🔹 UPDATE
 export const updateProjectItem = async (req, res) => {
   try {
-    let { nama, satuan, harga, category_id, tipe, terbilang } = req.body;
+    let { nama, satuan, harga, category, tipe, terbilang } = req.body;
 
     const data = await ProjectItem.findByPk(req.params.id);
 
@@ -119,7 +109,7 @@ export const updateProjectItem = async (req, res) => {
 
     // 🔥 logic category
     if (tipe !== "BAHAN") {
-      category_id = null;
+      category = null;
     }
 
     await data.update({
@@ -127,7 +117,7 @@ export const updateProjectItem = async (req, res) => {
       satuan,
       harga,
       tipe,
-      category_id: category_id || null,
+      category: category || null,
       terbilang
     });
 
@@ -184,8 +174,8 @@ export const bulkCreateProjectItems = async (req, res) => {
       project_id,
       nama: item.nama,
       satuan: item.satuan,
-      harga: item.harga_default || 0, // 🔥 INI KUNCINYA
-      category_id: item.category_id,
+      harga: item.harga || 0, // 🔥 INI KUNCINYA
+      category: item.category,
       tipe: item.tipe,
       terbilang: item.terbilang 
     }));

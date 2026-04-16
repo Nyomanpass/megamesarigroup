@@ -15,12 +15,6 @@ export const getMasterItems = async (req, res) => {
 
     const data = await MasterItem.findAll({
       where,
-      include: [
-        {
-          model: ItemCategory,
-          attributes: ["id", "nama"] // 🔥 ambil nama kategori saja
-        }
-      ],
       order: [["id", "DESC"]]
     });
 
@@ -50,14 +44,14 @@ export const getMasterItemById = async (req, res) => {
 // 🔹 CREATE
 export const createMasterItem = async (req, res) => {
   try {
-    const { nama, tipe, satuan, harga_default, category_id, terbilang } = req.body;
+    const { nama, tipe, satuan, harga, category, terbilang } = req.body;
 
     const data = await MasterItem.create({
       nama,
       tipe,
       satuan,
-      harga_default,
-      category_id,
+      harga,
+      category,
       terbilang
     });
 
@@ -70,7 +64,7 @@ export const createMasterItem = async (req, res) => {
 // 🔹 UPDATE
 export const updateMasterItem = async (req, res) => {
   try {
-    let { nama, tipe, satuan, harga_default, category_id, terbilang } = req.body;
+    let { nama, tipe, satuan, harga, category, terbilang } = req.body;
 
     const data = await MasterItem.findByPk(req.params.id);
 
@@ -79,16 +73,16 @@ export const updateMasterItem = async (req, res) => {
     }
 
     // 🔥 FIX UTAMA
-    if (!category_id || tipe !== "BAHAN") {
-      category_id = null;
+    if (!category || tipe !== "BAHAN") {
+      category = null;
     }
 
     await data.update({
       nama,
       tipe,
       satuan,
-      harga_default,
-      category_id,
+      harga,
+      category,
       terbilang
     });
 

@@ -22,7 +22,6 @@ export default function DailyProgressPage() {
     hari_ke: "",
     volume: "",
     cuaca: "",
-    catatan: "",
     jam_mulai: "",
     jam_selesai: ""
   });
@@ -127,7 +126,6 @@ export default function DailyProgressPage() {
       volume: item.volume,
 
       cuaca: item.cuaca || "",
-      catatan: item.catatan || "",
       jam_mulai: item.jam_mulai || "",
       jam_selesai: item.jam_selesai || ""
     });
@@ -151,7 +149,6 @@ export default function DailyProgressPage() {
       volume: item.volume,
 
       cuaca: item.cuaca || "",
-      catatan: item.catatan || "",
       jam_mulai: item.jam_mulai || "",
       jam_selesai: item.jam_selesai || ""
     });
@@ -185,7 +182,6 @@ export default function DailyProgressPage() {
           volume: form.volume,
 
           cuaca: form.cuaca,
-          catatan: form.catatan,
           jam_mulai: form.jam_mulai,
           jam_selesai: form.jam_selesai
         };
@@ -206,7 +202,6 @@ export default function DailyProgressPage() {
         hari_ke: "",
         volume: "",
         cuaca: "",
-        catatan: "",
         jam_mulai: "",
         jam_selesai: ""
       });
@@ -400,17 +395,7 @@ export default function DailyProgressPage() {
               />
             </div>
 
-            {/* CATATAN */}
-            <div className="flex flex-col md:col-span-3">
-              <label className="text-xs font-bold text-gray-500 mb-2">Catatan</label>
-              <textarea
-                value={form.catatan}
-                onChange={(e) => setForm({ ...form, catatan: e.target.value })}
-                rows={3}
-                placeholder="Keterangan pekerjaan hari ini..."
-                className="border-2 border-gray-200 rounded-xl p-3"
-              />
-            </div>
+            
           </div>
 
           {/* ================= SUMMARY CARD ================= */}

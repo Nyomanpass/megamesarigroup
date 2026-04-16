@@ -19,7 +19,6 @@ export const createDailyProgress = async (req, res) => {
       hari_ke, 
       volume,
       cuaca,
-      catatan,
       jam_mulai,
       jam_selesai
     } = req.body;
@@ -72,7 +71,6 @@ export const createDailyProgress = async (req, res) => {
 
       // 🔥 FIELD BARU
       cuaca,
-      catatan,
       jam_mulai,
       jam_selesai
 
@@ -129,7 +127,6 @@ export const updateDailyProgress = async (req, res) => {
       hari_ke, 
       volume,
       cuaca,
-      catatan,
       jam_mulai,
       jam_selesai
     } = req.body;
@@ -197,7 +194,6 @@ export const updateDailyProgress = async (req, res) => {
 
       // 🔥 FIELD BARU
       cuaca,
-      catatan,
       jam_mulai,
       jam_selesai
 

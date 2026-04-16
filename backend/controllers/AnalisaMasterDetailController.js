@@ -16,7 +16,7 @@ export const getAnalisaDetail = async (req, res) => {
         {
           model: MasterItem,
           as: "item",
-          attributes: ["id", "nama", "tipe", "satuan", "harga_default"]
+          attributes: ["id", "nama", "tipe", "satuan", "harga"]
         }
       ]
     });
@@ -33,7 +33,7 @@ export const getAnalisaDetail = async (req, res) => {
     details.forEach((d) => {
       if (!d.item) return;
 
-      const harga = round2(Number(d.item.harga_default) || 0);
+      const harga = round2(Number(d.item.harga) || 0);
       const koef = Number(d.koefisien) || 0;
 
       // 🔥 ROUND DI SINI

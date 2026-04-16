@@ -88,13 +88,12 @@ export default function WeeklyReportPage() {
     DeviasiIcon = CheckCircle; // 🔥 sesuai target
   }
 
-  const persenTarget = minggu?.rencana ? ((minggu.real / minggu.rencana) * 100) : 0;
 
   // Chart Data preparation
-  const chartData = minggu ? [
-    { name: 'Rencana', Bobot: Number(minggu.rencana), fillColor: '#CBD5E1' }, // gray
-    { name: 'Realisasi', Bobot: Number(minggu.real), fillColor: minggu.deviasi >= 0 ? '#10B981' : '#EF4444' } // green/red
-  ] : [];
+ const chartData = minggu ? [
+  { name: 'Rencana', Bobot: Number(minggu.rencana_kumulatif), fillColor: '#CBD5E1' },
+  { name: 'Realisasi', Bobot: Number(minggu.real_kumulatif), fillColor: minggu.deviasi >= 0 ? '#10B981' : '#EF4444' }
+] : [];
 
   return (
     <>
@@ -197,20 +196,70 @@ export default function WeeklyReportPage() {
                </div>
 
                {/* REKAP DETAIL */}
-               <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+               <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
                   <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
-                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">Rencana Minggu Ini</p>
-                    <p className="text-2xl font-black text-gray-800">{format(minggu.rencana)}<span className="text-sm">%</span></p>
+                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">Rencana Komulatif Minggu Ini</p>
+                    <p className="text-2xl font-black text-gray-800">{format(minggu.rencana_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
                   <div className="bg-indigo-50 p-4 rounded-2xl text-center border border-indigo-100">
-                    <p className="text-xs font-bold text-indigo-500 uppercase mb-1">Realisasi Minggu Ini</p>
-                    <p className="text-2xl font-black text-indigo-700">{format(minggu.real)}<span className="text-sm">%</span></p>
+                    <p className="text-xs font-bold text-indigo-500 uppercase mb-1">Realisasi Komulatif Minggu Ini</p>
+                    <p className="text-2xl font-black text-indigo-700">{format(minggu.real_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-2xl text-center border border-blue-100">
-                    <p className="text-xs font-bold text-blue-500 uppercase mb-1">Rasio Ketercapaian</p>
-                    <p className="text-2xl font-black text-blue-700">{persenTarget.toFixed(2)}<span className="text-sm">%</span></p>
+
+                  <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+
+                    {/* RENCANA MINGGU INI */}
+                    <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
+                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">
+                        Rencana Minggu Ini
+                      </p>
+                      <p className="text-2xl font-black text-gray-800">
+                        {format(minggu.rencana_mingguan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
+                    {/* REALISASI MINGGU INI */}
+                    <div className="bg-indigo-50 p-4 rounded-2xl text-center border border-indigo-100">
+                      <p className="text-xs font-bold text-indigo-500 uppercase mb-1">
+                        Realisasi Minggu Ini
+                      </p>
+                      <p className="text-2xl font-black text-indigo-700">
+                        {format(minggu.real_mingguan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
+                    {/* DEVIASI MINGGU INI */}
+                    <div className={`p-4 rounded-2xl text-center border ${
+                      minggu.deviasiMingguan > 0
+                        ? "bg-emerald-50 border-emerald-200"
+                        : minggu.deviasiMingguan < 0
+                        ? "bg-red-50 border-red-200"
+                        : "bg-blue-50 border-blue-200"
+                    }`}>
+                      <p className={`text-xs font-bold uppercase mb-1 ${
+                        minggu.deviasiMingguan > 0
+                          ? "text-emerald-600"
+                          : minggu.deviasiMingguan < 0
+                          ? "text-red-500"
+                          : "text-blue-600"
+                      }`}>
+                        Deviasi Minggu Ini
+                      </p>
+                      <p className={`text-2xl font-black ${
+                        minggu.deviasiMingguan > 0
+                          ? "text-emerald-600"
+                          : minggu.deviasiMingguan < 0
+                          ? "text-red-500"
+                          : "text-blue-600"
+                      }`}>
+                        {format(minggu.deviasiMingguan)}<span className="text-sm">%</span>
+                      </p>
+                    </div>
+
                   </div>
+                  
                </div>
+               
                
             </div>
 

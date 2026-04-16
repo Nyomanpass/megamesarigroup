@@ -24,12 +24,13 @@ export default function MaterialPage() {
   const [masterItems, setMasterItems] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [importFile, setImportFile] = useState(null);
 
   const [form, setForm] = useState({
     nama: "",
     satuan: "",
     harga: "",
-    category_id: ""
+    category: ""
   });
 
   const [isEdit, setIsEdit] = useState(false);
@@ -66,6 +67,31 @@ export default function MaterialPage() {
     }
   };
 
+  const handleImportExcel = async () => {
+  try {
+    if (!importFile) {
+      alert("Pilih file dulu!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", importFile);
+    formData.append("tipe", "BAHAN"); // 🔥 wajib BAHAN
+    formData.append("project_id", id);
+
+    const res = await api.post("/import", formData);
+
+    alert(res.data.message);
+
+    fetchData(); // refresh tabel
+    setImportFile(null);
+
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Import gagal!");
+  }
+};
+
   useEffect(() => {
     fetchData();
     fetchCategories();
@@ -90,21 +116,26 @@ export default function MaterialPage() {
   };
 
   const openFormModal = (item = null) => {
-      if (item) {
-          setForm({
-              nama: item.nama,
-              satuan: item.satuan,
-              harga: item.harga || "",
-              category_id: item.category_id || ""
-          });
-          setEditId(item.id);
-          setIsEdit(true);
-      } else {
-          setForm({ nama: "", satuan: "", harga: "", category_id: "" });
-          setEditId(null);
-          setIsEdit(false);
-      }
-      setShowModal(true);
+    if (item) {
+      setForm({
+        nama: item.nama,
+        satuan: item.satuan,
+        harga: item.harga || "",
+        category: item.category || "" // 🔥 ganti ini
+      });
+      setEditId(item.id);
+      setIsEdit(true);
+    } else {
+      setForm({
+        nama: "",
+        satuan: "",
+        harga: "",
+        category: "" // 🔥 ganti ini juga
+      });
+      setEditId(null);
+      setIsEdit(false);
+    }
+    setShowModal(true);
   };
 
   const closeFormModal = () => {
@@ -201,6 +232,20 @@ export default function MaterialPage() {
         </div>
 
         <div className="flex gap-4">
+              <div className="flex flex-col gap-2">
+          <input 
+            type="file" 
+            onChange={(e) => setImportFile(e.target.files[0])}
+            className="text-sm"
+          />
+
+          <button
+            onClick={handleImportExcel}
+            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl font-bold"
+          >
+            Import Excel
+          </button>
+        </div>
           <button
             onClick={() => setShowBulkModal(true)}
             className="flex items-center gap-2 bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold"
@@ -258,7 +303,7 @@ export default function MaterialPage() {
                     </div>
                   </td>
                   <td className="p-5 text-gray-500 font-medium text-xs uppercase">
-                      {item.category?.nama || "-"}
+                      {item.category || "-"}
                   </td>
                   <td className="p-5 text-gray-600 font-medium">
                       <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-center w-full block">
@@ -354,7 +399,7 @@ export default function MaterialPage() {
 
                   {/* KATEGORI */}
                   <div className="text-gray-500 text-xs">
-                    {item.ItemCategory?.nama || "-"}
+                    {item.category || "-"}
                   </div>
 
                   {/* SATUAN */}
@@ -362,7 +407,7 @@ export default function MaterialPage() {
 
                   {/* HARGA */}
                   <div className="text-right font-medium">
-                    Rp {Number(item.harga_default || 0).toLocaleString("id-ID")}
+                    Rp {Number(item.harga || 0).toLocaleString("id-ID")}
                   </div>
                 </div>
               ))}
@@ -427,22 +472,19 @@ export default function MaterialPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Kategori</label>
-                    <select
-                      name="category_id"
-                      value={form.category_id}
-                      onChange={handleChange}
-                      className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium cursor-pointer"
-                    >
-                      <option value="">-- Pilih Kategori --</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nama}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Kategori
+                </label>
+                <input
+                  type="text"
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  placeholder="Contoh: Material"
+                  className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
+                />
+              </div>
 
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Satuan</label>

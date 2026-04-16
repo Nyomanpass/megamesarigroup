@@ -21,11 +21,6 @@ export const DailyProgress = sequelize.define("DailyProgress", {
     allowNull: true 
   },
 
-  catatan: { 
-    type: DataTypes.TEXT, 
-    allowNull: true 
-  },
-
   jam_mulai: { 
     type: DataTypes.TIME, 
     allowNull: true 

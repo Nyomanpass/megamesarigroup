@@ -104,26 +104,12 @@ ProjectAnalisa.hasMany(ProjectAnalisaDetail, {
 });
 
 
-ProjectItem.belongsTo(ItemCategory, {
-  foreignKey: "category_id",
-  as: "category" // 🔥 HARUS SAMA DENGAN INCLUDE
-});
 
-ItemCategory.hasMany(ProjectItem, {
-  foreignKey: "category_id",
-  as: "project_items"
-});
 // =====================
 // ANALISA MASTER RELATION
 // =====================
 
-MasterItem.belongsTo(ItemCategory, {
-  foreignKey: "category_id"
-});
 
-ItemCategory.hasMany(MasterItem, {
-  foreignKey: "category_id"
-});
 
 // AnalisaMaster → Detail
 AnalisaMaster.hasMany(AnalisaMasterDetail, {

@@ -23,15 +23,16 @@ export const MasterItem = sequelize.define("MasterItem", {
     allowNull: false 
   },
 
-    harga_default: {
+    harga: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false
     },
 
-    category_id: {
-      type: DataTypes.INTEGER,
+    category: { // 🔥 opsional kalau mau samakan juga
+      type: DataTypes.STRING,
       allowNull: true
     },
+
 
     terbilang: {
     type: DataTypes.INTEGER,
