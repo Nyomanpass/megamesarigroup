@@ -8,9 +8,11 @@ import { MasterItem } from "../models/MasterItem.js";
 import { Boq } from "../models/BoqModel.js";
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-
+import { parseNumber } from "../utils/parseNumber.js";
+import { generateBobotInternal } from "../controllers/BoqController.js";
 
 const router = express.Router();
+
 
 const getTipe = (kode) => {
   if (!kode) return "item";
@@ -44,6 +46,8 @@ const normalizeKey = (obj) => {
 };
 
 router.post("/import-boq", upload.single("file"), async (req, res) => {
+  let filePath = null;
+
   try {
     const file = req.file;
     const projectId = Number(req.body.project_id);
@@ -56,77 +60,123 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
       return res.status(400).json({ message: "project_id wajib diisi!" });
     }
 
-    const workbook = XLSX.readFile(file.path);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    filePath = file.path;
 
-    // 🔥 pakai header sederhana
+    const workbook = XLSX.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    // 🔥 ambil semua analisa project
+    const analisaList = await ProjectAnalisa.findAll({
+      where: { project_id: projectId }
+    });
+
+    // 🔥 mapping kode → analisa_id
+    const analisaMap = {};
+    analisaList.forEach(a => {
+      if (a.kode) {
+        analisaMap[a.kode.trim()] = a.id;
+      }
+    });
 
     let currentHeaderId = null;
     let currentSubHeaderId = null;
 
-    for (let i = 0; i < data.length; i++) {
-    const row = normalizeKey(data[i]);
+    const missingKode = [];
 
-    const kode = String(row.no || "").trim();
-    const uraian = row["uraian pekerjaan"];
-    const satuan = row.sat || row["sat."] || "";
-    const volume = Number(row.vol || row["vol."] || 0);
+ for (let i = 0; i < data.length; i++) {
+  const row = normalizeKey(data[i]);
 
-    if (!uraian) continue;
+  const no = String(row.no || "").trim(); // 🔥 struktur
+  const kodeAnalisa = String(row.kode || "").trim(); // 🔥 analisa
 
-    const tipe = getTipe(kode);
+  const uraian = row["uraian pekerjaan"];
+  const satuan = row.sat || row["sat."] || "";
+  const volume = Number(row.vol || row["vol."] || 0);
 
-    let parent_id = null;
+  if (!uraian) continue;
 
-    // 🔥 RULE UTAMA
-    if (tipe === "header") {
-        parent_id = null;
-    } else if (tipe === "subheader") {
-        parent_id = currentHeaderId; // 🔥 ikut header terdekat
+  const tipe = getTipe(no);
+
+  let parent_id = null;
+
+  if (tipe === "header") {
+    parent_id = null;
+  } else if (tipe === "subheader") {
+    parent_id = currentHeaderId;
+  } else {
+    parent_id = currentSubHeaderId || currentHeaderId;
+  }
+
+  // 🔥 LINK ANALISA DARI KOLOM "Kode"
+  let analisa_id = null;
+
+  if (kodeAnalisa && tipe === "item") {
+    if (analisaMap[kodeAnalisa]) {
+      analisa_id = analisaMap[kodeAnalisa];
     } else {
-        parent_id = currentSubHeaderId || currentHeaderId;
+      missingKode.push(kodeAnalisa);
+    }
+  }
+
+  const boq = await Boq.create({
+    project_id: projectId,
+    kode: no, // 🔥 struktur tetap dari No
+    uraian,
+    satuan: tipe === "item" ? satuan : null,
+    volume: tipe === "item" ? volume : null,
+    tipe,
+    parent_id,
+    analisa_id
+  });
+
+  if (tipe === "header") {
+    currentHeaderId = boq.id;
+    currentSubHeaderId = null;
+  }
+
+  if (tipe === "subheader") {
+    currentSubHeaderId = boq.id;
+  }
+}
+
+    // 🔥 hitung ulang BOQ
+    await generateBobotInternal(projectId);
+
+    // 🔥 kalau ada kode tidak ditemukan
+    if (missingKode.length > 0) {
+      return res.json({
+        message: "Import selesai dengan warning",
+        warning: true,
+        missingKode: [...new Set(missingKode)]
+      });
     }
 
-    const boq = await Boq.create({
-        project_id: projectId,
-        kode,
-        uraian,
-        satuan: tipe === "item" ? satuan : null,
-        volume: tipe === "item" ? volume : null,
-        tipe,
-        parent_id
+    res.json({
+      message: "Import BOQ berhasil!",
+      warning: false
     });
 
-    // 🔥 TRACKING
-    if (tipe === "header") {
-        currentHeaderId = boq.id;
-        currentSubHeaderId = null;
-    }
-
-    if (tipe === "subheader") {
-        currentSubHeaderId = boq.id;
-    }
-
-   
-    }
-
-    res.json({ message: "Import BOQ berhasil!" });
-
   } catch (err) {
-   
+    console.error(err);
     res.status(500).json({ message: err.message });
-  }finally {
-    // 🔥 INI KUNCI NYA
+
+  } finally {
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
   }
 });
 
+
+
+
 router.post("/import", upload.single("file"), async (req, res) => {
+    let filePath = null; // ✅ di dalam
   try {
     const file = req.file;
+    filePath = file?.path; // aman
+
     const { tipe, project_id, terbilang } = req.body;
 
     // =========================
@@ -154,7 +204,7 @@ router.post("/import", upload.single("file"), async (req, res) => {
     // =========================
     // 🔥 BACA EXCEL (FIX DI SINI ❗)
     // =========================
-    const workbook = XLSX.readFile(file.path);
+    const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
     const data = XLSX.utils.sheet_to_json(sheet, {
@@ -191,9 +241,7 @@ router.post("/import", upload.single("file"), async (req, res) => {
       }
 
       // 🔥 FORMAT HARGA
-      const harga = Number(
-        String(hargaRaw).replace(/[^0-9]/g, "")
-      );
+      const harga = parseNumber(hargaRaw);
 
       if (isNaN(harga)) {
         throw new Error(`Harga tidak valid di baris ${index + 2}`);
@@ -241,7 +289,16 @@ router.post("/import", upload.single("file"), async (req, res) => {
 });
 
 
+// 🔥 NORMALIZE TEXT (BIAR MATCH NAMA)
+const normalizeText = (text) => {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+};
+
 router.post("/import-master", upload.single("file"), async (req, res) => {
+    let filePath = null; // ✅ WAJIB ADA
   try {
     const file = req.file;
     const { tipe } = req.body;
@@ -250,7 +307,9 @@ router.post("/import-master", upload.single("file"), async (req, res) => {
       return res.status(400).json({ message: "File tidak ada!" });
     }
 
-    const workbook = XLSX.readFile(file.path);
+    filePath = file.path;
+
+    const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet);
 
@@ -316,28 +375,34 @@ router.post("/import-master", upload.single("file"), async (req, res) => {
 
 
 
-// 🔥 NORMALIZE TEXT (BIAR MATCH NAMA)
-const normalizeText = (text) => {
-  return String(text)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-};
 
 router.post("/import-analisa-multi", upload.single("file"), async (req, res) => {
+  let filePath = req.file?.path;
+
   try {
     const { project_id } = req.body;
 
-    const workbook = XLSX.readFile(req.file.path);
+    const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-    const errors = [];
-    const detailBuffer = [];
+    // 🔥 baca excel sebagai array
+    const data = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: "",
+      blankrows: false
+    });
 
     let currentAnalisa = null;
+    let currentTipe = null;
 
-    // 🔥 CACHE ITEM (BIAR CEPAT ⚡)
+    const analisaList = {};
+    const detailBuffer = [];
+    const errors = [];
+
+    const normalizeText = (text) =>
+      String(text || "").toLowerCase().trim();
+
+    // 🔥 ambil semua item
     const allItems = await ProjectItem.findAll();
     const itemMap = {};
 
@@ -346,76 +411,101 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       itemMap[key] = item;
     });
 
-    for (const rawRow of data) {
-      const row = normalizeKey(rawRow);
+    // =========================
+    // 🔥 LOOP EXCEL
+    // =========================
+    for (const row of data) {
 
-      const kode = row.kode;
-      const nama = row.nama;
-      const satuan = row.satuan;
-      const tipe = String(row.tipe || "").toUpperCase();
-      const itemName = row.item;
-      const koef = Number(row.koefisien || 0);
+      // 🔥 skip kosong
+      if (!row || row.length === 0 || row.every(v => v === "")) continue;
+
+      const colA = row[0] || "";
+      const colB = row[1] || "";
+      const colC = row[2] || "";
+      const colE = row[4] || "";
+
+      console.log("ROW:", colA, colB, colC);
 
       // =========================
-      // 🔥 HEADER ANALISA (1 BARIS)
+      // 🔥 DETEKSI ANALISA (A.1 / B.1)
       // =========================
-      if (kode && nama) {
+      const textAnalisa = [colA, colB, colC]
+        .map(v => String(v).trim())
+        .find(v => /^[A-Z]\.\d/.test(v));
+
+      if (textAnalisa) {
+        const kode = textAnalisa.split(" ")[0];
+        const nama = textAnalisa.replace(kode, "").trim();
+
         currentAnalisa = {
           project_id,
-          kode: kode.trim(),
-          nama: nama.trim(),
-          satuan: satuan || "",
+          kode,
+          nama,
+          satuan: colE || "",
           overhead_persen: 10
         };
 
-       
+        analisaList[kode] = { ...currentAnalisa };
+        currentTipe = null;
+
+        console.log("SET ANALISA:", kode);
         continue;
       }
 
       // =========================
-      // 🔥 SKIP BARIS KOSONG
+      // 🔥 DETEKSI TIPE
       // =========================
-      if (!itemName && !tipe) continue;
+      if (String(colB).toUpperCase().includes("TENAGA")) {
+        currentTipe = "TENAGA";
+        console.log("SET TIPE: TENAGA");
+        continue;
+      }
 
-      // =========================
-      // ❌ VALIDASI ANALISA
-      // =========================
-      if (!currentAnalisa) {
-        errors.push(`Item tanpa analisa: ${itemName}`);
+      if (String(colB).toUpperCase().includes("BAHAN")) {
+        currentTipe = "BAHAN";
+        console.log("SET TIPE: BAHAN");
+        continue;
+      }
+
+      if (String(colB).toUpperCase().includes("ALAT")) {
+        currentTipe = "ALAT";
+        console.log("SET TIPE: ALAT");
         continue;
       }
 
       // =========================
-      // ❌ VALIDASI TIPE
+      // 🔥 ITEM
       // =========================
-      if (!["TENAGA", "BAHAN", "ALAT"].includes(tipe)) {
-        errors.push(`Tipe tidak valid: ${tipe}`);
-        continue;
-      }
+      if (!currentAnalisa || !currentTipe) continue;
 
-      // =========================
-      // 🔥 CARI ITEM (PAKAI CACHE)
-      // =========================
-      const key = `${tipe}_${normalizeText(itemName)}`;
+      const itemName = colB;
+      const koef = Number(colC || 0);
+
+      if (!itemName) continue;
+
+      const key = `${currentTipe}_${normalizeText(itemName)}`;
       const item = itemMap[key];
 
       if (!item) {
-        errors.push(`${itemName} tidak ditemukan (${tipe})`);
+        console.log("❌ ITEM TIDAK KETEMU:", itemName);
+        errors.push(`${itemName} tidak ditemukan (${currentTipe})`);
         continue;
       }
 
-      // =========================
-      // 🔥 SIMPAN BUFFER
-      // =========================
+      console.log("✅ ITEM:", item.nama);
+
       detailBuffer.push({
-        analisa: currentAnalisa,
+        kode: currentAnalisa.kode,
         item_id: item.id,
         koefisien: koef
       });
     }
 
+    console.log("ANALISA:", Object.keys(analisaList));
+    console.log("TOTAL DETAIL:", detailBuffer.length);
+
     // =========================
-    // ❌ STOP JIKA ADA ERROR
+    // ❌ VALIDASI ERROR
     // =========================
     if (errors.length > 0) {
       return res.status(400).json({
@@ -425,35 +515,41 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
     }
 
     // =========================
-    // ✅ INSERT DB
+    // 🔥 INSERT ANALISA DULU
     // =========================
     let analisaMap = {};
 
+    for (const kode in analisaList) {
+      const newAnalisa = await ProjectAnalisa.create(analisaList[kode]);
+      analisaMap[kode] = newAnalisa.id;
+
+      console.log("INSERT ANALISA:", kode);
+    }
+
+    // =========================
+    // 🔥 INSERT DETAIL
+    // =========================
     for (const row of detailBuffer) {
-      const key = row.analisa.kode;
-
-      if (!analisaMap[key]) {
-        const newAnalisa = await ProjectAnalisa.create(row.analisa);
-        analisaMap[key] = newAnalisa.id;
-      }
-
       await ProjectAnalisaDetail.create({
-        project_analisa_id: analisaMap[key],
+        project_analisa_id: analisaMap[row.kode],
         item_id: row.item_id,
         koefisien: row.koefisien
       });
     }
 
-
+    // =========================
+    // ✅ RESPONSE
+    // =========================
     res.json({
-      message: "Import multi analisa berhasil!"
+      message: "Import berhasil!",
+      total_analisa: Object.keys(analisaList).length,
+      total_detail: detailBuffer.length
     });
 
   } catch (err) {
-   
+    console.error(err);
     res.status(500).json({ message: err.message });
-  }finally {
-    // 🔥 INI KUNCI NYA
+  } finally {
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

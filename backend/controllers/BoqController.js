@@ -32,6 +32,10 @@ const toRoman = (num) => {
   return result;
 };
 
+const formatRupiah = (num) => {
+  return "Rp " + Number(Math.floor(num || 0)).toLocaleString("id-ID") + ",00";
+};
+
 // 🔥 ROMAWI → ANGKA
 const romanToNumber = (roman) => {
   const map = { I:1, V:5, X:10, L:50, C:100 };
@@ -161,9 +165,10 @@ export const generateBobotInternal = async (project_id) => {
     // 🔥 hitung jumlah semua item
     for (let boq of data) {
       if (boq.tipe === "item" && boq.analisa_id) {
-        const harga_satuan = await hitungAnalisa(boq.analisa_id);
-        const volume = Number(boq.volume) || 0;
+        const analisaResult = await hitungAnalisa(boq.analisa_id);
+        const harga_satuan = analisaResult.grandTotal;
 
+        const volume = Number(boq.volume) || 0;
         const jumlah = harga_satuan * volume;
 
         temp.push({
@@ -209,6 +214,7 @@ export const generateBobotInternal = async (project_id) => {
 
 const round2 = (num) => Math.round(num * 100) / 100;
 
+
 const hitungAnalisa = async (analisa_id) => {
   const analisa = await ProjectAnalisa.findByPk(analisa_id);
 
@@ -228,20 +234,22 @@ const hitungAnalisa = async (analisa_id) => {
     const harga = round2(Number(d.item?.harga || 0));
     const koef = Number(d.koefisien) || 0;
 
-    // 🔥 round tiap item
     const subtotal = round2(koef * harga);
-
     total = round2(total + subtotal);
   });
 
-  // 🔥 round total sebelum overhead
   const totalFix = round2(total);
 
-  // 🔥 overhead
-  const overhead = round2((analisa.overhead_persen / 100) * totalFix);
+  const persen = Number(analisa.overhead_persen) || 0;
+  const overhead = round2((persen / 100) * totalFix);
 
-  // 🔥 final
-  return round2(totalFix + overhead);
+  const grandTotal = Math.floor(totalFix + overhead);
+
+  return {
+    total: totalFix,
+    overhead,
+    grandTotal
+  };
 };
 
 export const createBulkBoq = async (req, res) => {
@@ -262,13 +270,21 @@ export const createBulkBoq = async (req, res) => {
         return res.status(400).json({ message: "Analisa wajib dipilih untuk item!" });
       }
 
-      // 🔥 ambil base dulu
+      // 🔥 generate kode
       const baseKode = await generateKode(parent_id, "item");
-
-      // 🔥 baru hitung kode
       const kode = String(Number(baseKode) + counter);
-
       counter++;
+
+      // 🔥 AMBIL HASIL ANALISA
+      const analisaResult = await hitungAnalisa(analisa_id);
+
+      const harga_satuan = analisaResult.grandTotal; // 🔥 INI KUNCI
+
+      const vol = Number(volume) || 0;
+      const persenPPN = Number(ppn) || 11;
+
+      const jumlah = harga_satuan * vol;
+      const jumlah_ppn = jumlah + (jumlah * persenPPN / 100);
 
       const newItem = await Boq.create({
         project_id,
@@ -277,15 +293,19 @@ export const createBulkBoq = async (req, res) => {
         kode: kode.trim(),
         uraian,
         satuan,
-        volume,
-        ppn,
+        volume: vol,
+        ppn: persenPPN,
+        harga_satuan,   // ✅ sekarang ada
+        jumlah,         // ✅ sekarang ada
+        jumlah_ppn,     // ✅ sekarang ada
         tipe: "item"
       });
 
       results.push(newItem);
     }
 
-     await generateBobotInternal(project_id);
+    // 🔥 hitung bobot
+    await generateBobotInternal(project_id);
 
     res.status(201).json({
       message: `${results.length} Item berhasil ditambahkan`,
@@ -371,7 +391,8 @@ export const getBoqByProject = async (req, res) => {
         let jumlah_ppn = 0;
 
         if (boq.tipe === "item" && boq.analisa_id) {
-          harga_satuan = await hitungAnalisa(boq.analisa_id);
+         const analisaResult = await hitungAnalisa(boq.analisa_id);
+          harga_satuan = analisaResult.grandTotal;
 
           const volume = Number(boq.volume) || 0;
           jumlah = harga_satuan * volume;
@@ -382,9 +403,14 @@ export const getBoqByProject = async (req, res) => {
 
         return {
           ...boq.toJSON(),
-          harga_satuan: Number(harga_satuan.toFixed(2)),
-          jumlah: Number(jumlah.toFixed(2)),
-          jumlah_ppn: Number(jumlah_ppn.toFixed(2))
+
+          harga_satuan,
+          jumlah,
+          jumlah_ppn,
+
+          harga_satuan_rp: formatRupiah(harga_satuan),
+          jumlah_rp: formatRupiah(jumlah),
+          jumlah_ppn_rp: formatRupiah(jumlah_ppn)
         };
       })
     );
@@ -398,6 +424,42 @@ export const getBoqByProject = async (req, res) => {
     console.error("ERROR:", error);
     res.status(500).json({ message: error.message });
   }
+};
+
+export const getBoqStructured = async (project_id) => {
+  const data = await Boq.findAll({
+    where: { project_id }
+  });
+
+  const calculated = await Promise.all(
+    data.map(async (boq) => {
+
+      let harga_satuan = 0;
+      let jumlah = 0;
+      let jumlah_ppn = 0;
+
+      if (boq.tipe === "item" && boq.analisa_id) {
+        const analisaResult = await hitungAnalisa(boq.analisa_id);
+
+        harga_satuan = analisaResult.grandTotal;
+
+        const volume = Number(boq.volume) || 0;
+        jumlah = harga_satuan * volume;
+
+        const ppn = Number(boq.ppn) || 0;
+        jumlah_ppn = jumlah + (jumlah * ppn / 100);
+      }
+
+      return {
+        ...boq.toJSON(),
+        harga_satuan,
+        jumlah,
+        jumlah_ppn
+      };
+    })
+  );
+
+  return buildFlatTree(calculated); // 🔥 PAKAI YANG SUDAH ADA
 };
 
 // 🔥 GET DETAIL
@@ -469,11 +531,16 @@ export const updateBoq = async (req, res) => {
         kode = item.kode; // tetap
       }
 
-      // 🔥 hitung harga
-      if (volume && harga_satuan) {
-        jumlah = parseFloat(volume) * parseFloat(harga_satuan);
-        jumlah_ppn = jumlah + (jumlah * (ppn || 11) / 100);
-      }
+      if (analisa_id) {
+          const analisaResult = await hitungAnalisa(analisa_id);
+
+          harga_satuan = analisaResult.grandTotal; // 🔥 ambil dari analisa
+        }
+
+        if (volume && harga_satuan) {
+          jumlah = Math.floor(parseFloat(volume) * parseFloat(harga_satuan));
+          jumlah_ppn = Math.floor(jumlah + (jumlah * (ppn || 11) / 100));
+        }
     }
 
     // =========================
@@ -529,6 +596,52 @@ export const deleteBoq = async (req, res) => {
     });
 
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const linkAnalisaBoq = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { analisa_id } = req.body;
+
+    const item = await Boq.findByPk(id);
+
+    if (!item) {
+      return res.status(404).json({ message: "BOQ tidak ditemukan" });
+    }
+
+    if (!analisa_id) {
+      return res.status(400).json({ message: "Analisa wajib dipilih!" });
+    }
+
+    // 🔥 pakai 1 sumber perhitungan
+    const analisaResult = await hitungAnalisa(analisa_id);
+
+    const harga_satuan = analisaResult.grandTotal;
+
+    const volume = Number(item.volume) || 0;
+    const ppn = Number(item.ppn) || 11;
+
+    const jumlah = harga_satuan * volume;
+    const jumlah_ppn = jumlah + (jumlah * ppn / 100);
+
+    await item.update({
+      analisa_id,
+      harga_satuan,
+      jumlah,
+      jumlah_ppn
+    });
+
+    await generateBobotInternal(item.project_id);
+
+    res.json({
+      message: "Berhasil link analisa",
+      data: item
+    });
+
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };

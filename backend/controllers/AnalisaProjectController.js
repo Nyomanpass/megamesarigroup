@@ -2,7 +2,9 @@ import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { generateBobotInternal } from "./BoqController.js";
 import { Boq } from "../models/BoqModel.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
+import { ProjectItem } from "../models/ProjekItem.js";
 
+const round2 = (num) => Number(num.toFixed(2));
 
 // CREATE
 export const createProjectAnalisa = async (req, res) => {
@@ -27,26 +29,85 @@ export const createProjectAnalisa = async (req, res) => {
   }
 };
 
+
+const formatRupiah = (angka) => {
+  const tanpaDesimal = Math.floor(angka);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(tanpaDesimal);
+};
+
 export const getProjectAnalisa = async (req, res) => {
   try {
     const { project_id } = req.query;
 
-    const where = {};
-
-    if (project_id) {
-      where.project_id = Number(project_id);
+    if (!project_id) {
+      return res.status(400).json({
+        message: "project_id wajib dikirim!"
+      });
     }
 
-    const data = await ProjectAnalisa.findAll({
-      where,
+    const analisaList = await ProjectAnalisa.findAll({
+      where: { project_id: Number(project_id) },
       order: [["id", "DESC"]]
     });
 
-    res.json(data);
+    const result = [];
+
+    for (let analisa of analisaList) {
+
+      // 🔥 ambil detail
+      const details = await ProjectAnalisaDetail.findAll({
+        where: { project_analisa_id: analisa.id }
+      });
+
+      let total = 0;
+
+      // 🔥 hitung total dari detail
+      for (let d of details) {
+        const item = await ProjectItem.findByPk(d.item_id);
+
+        if (!item) continue;
+
+        const harga = Number(item.harga) || 0;
+        const koef = Number(d.koefisien) || 0;
+
+        total += koef * harga; // ❌ jangan round di sini
+      }
+
+      total = round2(total); // 🔥 round di akhir
+
+      // 🔥 ambil overhead dari ANALISA (INI YANG PENTING)
+      const persen = Number(analisa.overhead_persen) || 0;
+
+      const overhead = round2((persen / 100) * total);
+
+      const grandTotal = round2(total + overhead);
+
+      result.push({
+        id: analisa.id,
+        nama: analisa.nama,
+        kode: analisa.kode,
+        satuan: analisa.satuan,
+
+        total,
+        overhead_persen: persen,
+        overhead,
+        grandTotal_rp: formatRupiah(grandTotal),
+      });
+    }
+
+    res.json(result);
+
   } catch (error) {
+    console.error("ERROR getProjectAnalisa:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 export const getProjectAnalisaById = async (req, res) => {
   try {

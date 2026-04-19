@@ -12,7 +12,7 @@ export default function BoqPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [analisaList, setAnalisaList] = useState([]);
-  const [rounding, setRounding] = useState(-5); 
+  const [rounding, setRounding] = useState(-3); 
   const [bulkItems, setBulkItems] = useState([
     { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
   ]);
@@ -33,6 +33,40 @@ export default function BoqPage() {
     ppn: 11,
     tipe: "item"
   });
+
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [selectedBoq, setSelectedBoq] = useState(null);
+  const [selectedAnalisa, setSelectedAnalisa] = useState("");
+  const [searchAnalisa, setSearchAnalisa] = useState("");
+
+  const openLinkAnalisa = (item) => {
+    setSelectedBoq(item);
+    setSelectedAnalisa(item.analisa_id || "");
+    setShowLinkModal(true);
+  };
+
+  const handleLinkAnalisa = async () => {
+    try {
+      if (!selectedAnalisa) {
+        alert("Pilih analisa dulu!");
+        return;
+      }
+
+      await api.patch(`/boq/${selectedBoq.id}/link-analisa`, {
+        analisa_id: selectedAnalisa
+      });
+
+      setShowLinkModal(false);
+      setSelectedAnalisa("");
+      setSelectedBoq(null);
+
+      fetchBoq(); // 🔥 refresh tabel
+
+    } catch (err) {
+      console.error(err);
+      alert("Gagal link analisa");
+    }
+  };
 
   const addBulkRow = () => {
     setBulkItems([...bulkItems, { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }]);
@@ -99,6 +133,15 @@ const handleImportBoq = async () => {
     formData.append("project_id", id);
 
     const res = await api.post("/import-boq", formData);
+
+    // 🔥 HANDLE WARNING DI SINI
+    if (res.data.warning) {
+      const lanjut = window.confirm(
+        `Kode berikut tidak ditemukan:\n\n${res.data.missingKode.join(", ")}\n\nTetap lanjutkan?`
+      );
+
+      if (!lanjut) return;
+    }
 
     alert(res.data.message);
 
@@ -438,143 +481,285 @@ const handleSubmit = async () => {
                   <th className="p-4 text-right px-6 uppercase tracking-wider text-xs">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                  {boq.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-400">
-                        Belum ada rincian Bill of Quantities untuk proyek ini.
-                      </td>
-                    </tr>
-                  )}
-                  {boq.map((item) => (
-                      <tr 
-                      key={item.id} 
-                      className={`transition-colors ${
-                          item.tipe === "header" 
-                          ? "bg-slate-100/80" 
-                          : item.tipe === "subheader"
-                          ? "bg-slate-50/50"   
-                          : "hover:bg-blue-50/40 bg-white" 
-                      }`}
-                      >
-                      {/* <td className="p-4 text-center text-gray-500">{item.kode || "-"}</td> */}
-                      {/* 1. URAIAN PEKERJAAN */}
-                      <td
-                          className={`p-4 px-6 text-sm ${
-                          item.tipe === "header"
-                              ? "font-bold text-gray-900 uppercase tracking-wide" 
-                              : item.tipe === "subheader"
-                              ? "font-semibold text-gray-800 pl-8" 
-                              : "text-gray-600 pl-14" 
-                          }`}
-                      >
-                          <div className="flex items-center gap-2">
-                             {item.tipe !== "item" && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
-                             {item.uraian}
-                          </div>
-                      </td>
+             <tbody className="divide-y divide-gray-100">
 
-                      {/* 2. SATUAN */}
-                      <td className="p-4 text-center text-gray-500">{item.satuan || "-"}</td>
+  {/* 🔥 EMPTY */}
+  {boq.length === 0 && (
+    <tr>
+      <td colSpan={9} className="p-8 text-center text-gray-400">
+        Belum ada rincian Bill of Quantities untuk proyek ini.
+      </td>
+    </tr>
+  )}
 
-                      {/* 3. VOLUME */}
-                      <td className="p-4 text-right font-medium text-gray-700">
-                          {item.volume ? Number(item.volume).toLocaleString("id-ID") : "-"}
-                      </td>
+  {boq.map((item) => {
 
-                      {/* 4. HARGA SATUAN */}
-                      <td className="p-4 text-right font-medium text-gray-700">
-                          {item.harga_satuan ? Number(item.harga_satuan).toLocaleString("id-ID") : "-"}
-                      </td>
+    // =========================
+    // 🔷 HEADER
+    // =========================
+    if (item.tipe === "header") {
+      return (
+        <tr key={item.id} className="bg-slate-200 border-b">
+          <td colSpan={9} className="p-4 font-black text-gray-900 uppercase text-sm tracking-wide">
+            🔷 {item.kode} - {item.uraian}
+          </td>
+        </tr>
+      );
+    }
 
-                      {/* 5. JUMLAH */}
-                      <td className={`p-4 text-right ${item.tipe !== 'item' ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
-                          {item.jumlah ? Number(item.jumlah).toLocaleString("id-ID") : "-"}
-                      </td>
+    // =========================
+    // 🔹 SUBHEADER
+    // =========================
+    if (item.tipe === "subheader") {
+      return (
+        <tr key={item.id} className="bg-slate-100 border-b">
+          <td colSpan={9} className="p-3 pl-8 font-bold text-gray-700 text-xs">
+            🔹 {item.kode} - {item.uraian}
+          </td>
+        </tr>
+      );
+    }
 
-                      {/* 6. PPN */}
-                      <td className="p-4 text-center">
-                          {item.tipe === "item" ? (
-                          <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg text-xs font-bold border border-indigo-100">
-                              {item.ppn || 0}%
-                          </span>
-                          ) : "-"}
-                      </td>
+    // =========================
+    // 📌 ITEM
+    // =========================
+    return (
+      <tr key={item.id} className="hover:bg-blue-50/40 transition-colors">
 
-                      {/* 7. GRAND TOTAL */}
-                      <td className={`p-4 text-right font-bold ${item.tipe === 'item' ? 'text-blue-600' : 'text-gray-900'}`}>
-                          {item.jumlah_ppn ? Number(item.jumlah_ppn).toLocaleString("id-ID") : "-"}
-                      </td>
-                      
-                      {/* 8. BOBOT */}
-                      <td className="p-4 text-right px-6">
-                        {item.tipe === "item" && item.bobot 
-                            ? <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-md text-xs font-bold border border-amber-200">
-                                {Number(item.bobot).toLocaleString("id-ID", { minimumFractionDigits: 3 })}%
-                              </span>
-                            : "-"}
-                      </td>
+        {/* URAIAN */}
+        <td
+          className="p-3 text-gray-700 font-semibold"
+          style={{ paddingLeft: `${item.level * 20 + 16}px` }}
+        >
+          {item.uraian}
+        </td>
 
-                      <td className="p-4 text-center">
-                       
-                          <div className="flex gap-2 justify-center">
+        {/* SATUAN */}
+        <td className="p-3 text-center text-gray-400 text-xs">
+          {item.satuan || "-"}
+        </td>
 
-                            {/* UPDATE */}
-                            <button
-                              onClick={() => handleEdit(item.id)}
-                              className="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs"
-                            >
-                              Edit
-                            </button>
+        {/* VOLUME */}
+        <td className="p-3 text-right font-medium text-gray-700">
+          {item.volume
+            ? Number(item.volume).toLocaleString("id-ID")
+            : "-"}
+        </td>
 
-                            {/* DELETE */}
-                            <button
-                              onClick={() => handleDeleteBoq(item.id)}
-                              className="bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 text-xs"
-                            >
-                              Hapus
-                            </button>
+        {/* HARGA SATUAN */}
+        <td className="p-3 text-right font-medium text-gray-700">
+          {item.harga_satuan
+            ? Number(item.harga_satuan).toLocaleString("id-ID")
+            : "-"}
+        </td>
 
-                          </div>
-                        
-                      </td>
-                      </tr>
-                  ))}
-                  <tr className="bg-gray-800 text-white font-bold">
-                      <td colSpan={3} className="p-4 px-6 text-center uppercase tracking-wider text-xs text-gray-300">Total Seluruh Pekerjaan</td>
-                      <td className="p-4 text-right">
-                        {totalHargaSatuan.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-4 text-right text-green-400">
-                        {totalJumlah.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-4 text-center">-</td>
-                      <td className="p-4 text-right text-blue-400">
-                        {totalGrandTotal.toLocaleString("id-ID")}
-                      </td>
-                      <td className="p-4 text-right px-6 text-amber-400">
-                          {totalBobot.toFixed(2)}%
-                      </td>
-                  </tr>
+        {/* JUMLAH */}
+        <td className="p-3 text-right text-gray-600">
+          {item.jumlah
+            ? Number(item.jumlah).toLocaleString("id-ID")
+            : "-"}
+        </td>
 
-                  <tr className="bg-yellow-500/10 text-yellow-700 font-bold border-t border-yellow-400">
-                    <td colSpan={6} className="p-3 px-6 text-right uppercase text-xs">
-                      Pembulatan
-                    </td>
+        {/* PPN */}
+        <td className="p-3 text-center">
+          <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-bold border">
+            {item.ppn || 0}%
+          </span>
+        </td>
 
-                    <td className="p-3 text-right">
-                      {totalBulat.toLocaleString("id-ID")},00
-                    </td>
+        {/* GRAND TOTAL */}
+        <td className="p-3 text-right font-bold text-blue-600">
+          {item.jumlah_ppn
+            ? Number(item.jumlah_ppn).toLocaleString("id-ID", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })
+            : "-"}
+        </td>
 
-                    <td className="p-3"></td>
-                  </tr>
-                 
-                   
-              </tbody>
+        {/* BOBOT */}
+        <td className="p-3 text-right">
+          {item.bobot ? (
+            <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold border">
+              {Number(item.bobot).toFixed(3)}%
+            </span>
+          ) : "-"}
+        </td>
+
+        {/* AKSI */}
+        <td className="p-3 text-center">
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => openLinkAnalisa(item)}
+              className="bg-purple-100 text-purple-600 px-2 py-1 rounded text-xs"
+            >
+              Link
+            </button>
+
+            <button
+              onClick={() => handleEdit(item.id)}
+              className="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs"
+            >
+              Edit
+            </button>
+
+            <button
+              onClick={() => handleDeleteBoq(item.id)}
+              className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs"
+            >
+              Hapus
+            </button>
+          </div>
+        </td>
+
+      </tr>
+    );
+  })}
+
+  {/* ========================= */}
+  {/* 🔶 TOTAL PROJECT */}
+  {/* ========================= */}
+  <tr className="bg-gray-900 text-white font-bold border-t-4 border-gray-700">
+    <td colSpan={3} className="p-4 px-6 uppercase text-xs tracking-wider text-gray-300">
+      🔶 Total Seluruh Pekerjaan
+    </td>
+
+    <td className="p-4 text-right">
+      {totalHargaSatuan.toLocaleString("id-ID")}
+    </td>
+
+    <td className="p-4 text-right text-green-400">
+      {totalJumlah.toLocaleString("id-ID")}
+    </td>
+
+    <td className="p-4 text-center">-</td>
+
+    <td className="p-4 text-right text-blue-400">
+      {totalGrandTotal.toLocaleString("id-ID")}
+    </td>
+
+    <td className="p-4 text-right text-amber-400">
+      {totalBobot.toFixed(2)}%
+    </td>
+
+    <td></td>
+  </tr>
+
+  {/* ========================= */}
+  {/* 🔸 PEMBULATAN */}
+  {/* ========================= */}
+  <tr className="bg-yellow-50 text-yellow-700 font-bold border-t border-yellow-300">
+    <td colSpan={6} className="p-3 px-6 text-right uppercase text-xs">
+      🔸 Pembulatan
+    </td>
+
+    <td className="p-3 text-right">
+      {totalBulat.toLocaleString("id-ID")},00
+    </td>
+
+    <td colSpan={2}></td>
+  </tr>
+
+</tbody>
             </table>
           </div>
         </div>
 
+{showLinkModal && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    
+    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
+
+      {/* HEADER */}
+      <div className="px-5 py-4 border-b flex justify-between items-center">
+        <h2 className="font-bold text-gray-800 text-lg">Link Analisa</h2>
+        <button
+          onClick={() => setShowLinkModal(false)}
+          className="text-gray-400 hover:text-red-500"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* BODY */}
+      <div className="p-5">
+
+        {/* 🔍 SEARCH */}
+        <input
+          type="text"
+          placeholder="Cari analisa..."
+          value={searchAnalisa || ""}
+          onChange={(e) => setSearchAnalisa(e.target.value)}
+          className="w-full border-2 border-gray-200 p-2.5 rounded-xl mb-4 focus:border-blue-500 outline-none"
+        />
+
+        {/* 📋 LIST ANALISA */}
+        <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+
+          {analisaList
+            .filter(a =>
+              a.nama.toLowerCase().includes((searchAnalisa || "").toLowerCase())
+            )
+            .map((a) => (
+              <div
+                key={a.id}
+                onClick={() => setSelectedAnalisa(a.id)}
+                className={`p-3 rounded-xl border cursor-pointer transition-all
+                  ${selectedAnalisa == a.id
+                    ? "bg-blue-50 border-blue-400"
+                    : "bg-white border-gray-200 hover:bg-gray-50"}
+                `}
+              >
+                <div className="text-sm font-semibold text-gray-800">
+                  {a.kode ? `${a.kode} - ` : ""}{a.nama}
+                </div>
+
+                <div className="text-xs text-gray-400">
+                  ID: {a.id}
+                </div>
+                <span className="text-[10px] text-gray-400">
+                  Harga Analisa
+                </span>
+                  
+              <div className="text-xs text-green-600 font-bold">
+                Rp {a.grandTotal_rp.toLocaleString("id-ID")}
+              </div>
+              </div>
+          ))}
+
+          {/* kosong */}
+          {analisaList.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-6">
+              Tidak ada analisa
+            </div>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="px-5 py-4 border-t flex justify-end gap-2 bg-gray-50">
+
+        <button
+          onClick={() => setShowLinkModal(false)}
+          className="px-4 py-2 bg-gray-200 rounded-xl text-sm"
+        >
+          Batal
+        </button>
+
+        <button
+          onClick={handleLinkAnalisa}
+          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700"
+        >
+          Simpan
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
        {/* 🔥 MODALS */}
        {showModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">

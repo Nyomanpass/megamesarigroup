@@ -9,12 +9,14 @@ import {
 export default function SchedulePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const [statusMap, setStatusMap] = useState({});
   const [boq, setBoq] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [realData, setRealData] = useState([]);
+  const [mode, setMode] = useState("manual"); 
+
 
   const fetchChart = async () => {
   try {
@@ -61,7 +63,8 @@ export default function SchedulePage() {
     }
   };
 
- const handleBagiRata = (item) => {
+
+  const handleBagiRata = (item) => {
   const startMng = prompt(`Mulai minggu ke berapa? (1-${weeks.length})`, "1");
   const endMng = prompt(`Sampai minggu ke berapa?`, weeks.length.toString());
 
@@ -75,8 +78,8 @@ export default function SchedulePage() {
 
   const totalBobot = Number(item.bobot);
 
-  // 🔥 bagi rata (sementara)
-  const base = Math.floor((totalBobot / durasi) * 1000) / 1000;
+  // 🔥 STEP 1: bagi rata (round 3 angka)
+  const base = Number((totalBobot / durasi).toFixed(3));
 
   let newSchedule = [...schedule.filter(s => s.boq_id !== item.id)];
 
@@ -85,7 +88,7 @@ export default function SchedulePage() {
   for (let i = start; i <= end; i++) {
     let bobot = base;
 
-    // 🔥 minggu terakhir = sisa
+    // 🔥 minggu terakhir = sisa (biar pas 100%)
     if (i === end) {
       bobot = Number((totalBobot - totalSementara).toFixed(3));
     }
@@ -103,94 +106,109 @@ export default function SchedulePage() {
   setSchedule(newSchedule);
 };
 
+
 const handleSingleCellChange = (boqId, mingguKe, value) => {
   const inputValue = value === "" ? 0 : parseFloat(value);
   if (isNaN(inputValue) || inputValue < 0) return;
 
   const totalTarget = boq.find(b => b.id === boqId)?.bobot || 0;
 
-  const itemWeeks = weeks.map(w => {
-    const found = schedule.find(
-      s =>
-        Number(s.boq_id) === Number(boqId) &&
-        Number(s.minggu_ke) === Number(w.minggu_ke)
-    );
-    return {
-      minggu_ke: w.minggu_ke,
-      bobot: found ? Number(found.bobot) : 0
-    };
-  });
+  let newSchedule = [...schedule];
 
-  // update input
-  let updatedWeeks = itemWeeks.map(w =>
-    w.minggu_ke === mingguKe ? { ...w, bobot: inputValue } : w
+  const index = newSchedule.findIndex(
+    s =>
+      Number(s.boq_id) === Number(boqId) &&
+      Number(s.minggu_ke) === Number(mingguKe)
   );
 
-  // total setelah
-  let total = updatedWeeks.reduce((sum, w) => sum + w.bobot, 0);
+  if (index >= 0) {
+    newSchedule[index].bobot = Number(inputValue.toFixed(3));
+  } else {
+    newSchedule.push({
+      project_id: id,
+      boq_id: boqId,
+      minggu_ke: mingguKe,
+      bobot: Number(inputValue.toFixed(3))
+    });
+  }
 
-  // selisih terhadap target
-  let selisih = total - totalTarget;
+  // 🔥 HAPUS kalau 0
+  newSchedule = newSchedule.filter(
+    s => !(s.boq_id === boqId && Number(s.bobot) === 0)
+  );
 
-  // 🔥 distribusi proporsional ke minggu lain
-  const weeksLain = updatedWeeks.filter(w => w.minggu_ke !== mingguKe);
-  const totalLain = weeksLain.reduce((sum, w) => sum + w.bobot, 0);
+  // =========================
+  // 🔵 MODE AUTO
+  // =========================
+  if (mode === "auto") {
+    let itemWeeks = newSchedule.filter(s => s.boq_id === boqId);
 
-  updatedWeeks = updatedWeeks.map(w => {
-    if (w.minggu_ke === mingguKe) return w;
-    if (totalLain === 0) return w;
+    let total = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
+    let selisih = Number((total - totalTarget).toFixed(3));
 
-    const proporsi = w.bobot / totalLain;
-    const adjust = selisih * proporsi;
+    if (selisih !== 0) {
+      const others = itemWeeks.filter(s => s.minggu_ke !== mingguKe);
 
-    return {
-      ...w,
-      bobot: Math.max(0, Number((w.bobot - adjust).toFixed(3)))
-    };
-  });
+      if (others.length > 0) {
+        const totalOthers = others.reduce((sum, s) => sum + Number(s.bobot), 0);
 
-  // 🔥 FIX FINAL (ANTI ERROR 0.001)
-  let totalFix = updatedWeeks.reduce((sum, w) => sum + w.bobot, 0);
-  let diff = Number((totalTarget - totalFix).toFixed(3));
+        for (let w of others) {
+          if (totalOthers === 0) break;
 
-  if (diff !== 0) {
-    // 🔥 cari minggu TERBESAR selain yg diubah
-    let targetIndex = updatedWeeks.findIndex(
-      w => w.minggu_ke !== mingguKe
-    );
+          const proporsi = w.bobot / totalOthers;
+          const adjust = selisih * proporsi;
 
-    for (let i = 0; i < updatedWeeks.length; i++) {
-      if (
-        updatedWeeks[i].minggu_ke !== mingguKe &&
-        updatedWeeks[i].bobot > updatedWeeks[targetIndex].bobot
-      ) {
-        targetIndex = i;
+          w.bobot = Number((w.bobot - adjust).toFixed(3));
+          if (w.bobot < 0) w.bobot = 0;
+        }
       }
     }
 
-    updatedWeeks[targetIndex].bobot = Number(
-      (updatedWeeks[targetIndex].bobot + diff).toFixed(3)
-    );
+    // 🔥 FIX rounding akhir
+    let fixTotal = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
+    let diff = Number((fixTotal - totalTarget).toFixed(3));
+
+    if (diff !== 0 && itemWeeks.length > 0) {
+      let last = itemWeeks[itemWeeks.length - 1];
+      last.bobot = Number((last.bobot - diff).toFixed(3));
+    }
   }
 
-  // update schedule
-  let newSchedule = schedule.filter(
-    s => Number(s.boq_id) !== Number(boqId)
-  );
+  // =========================
+  // 🟢 MODE MANUAL
+  // =========================
+  // tidak ada auto apapun
 
-  updatedWeeks.forEach(w => {
-    if (w.bobot > 0) {
-      newSchedule.push({
-        project_id: id,
-        boq_id: boqId,
-        minggu_ke: w.minggu_ke,
-        bobot: w.bobot
-      });
-    }
-  });
+  // 🔥 HITUNG TOTAL UNTUK STATUS
+const itemWeeksFinal = newSchedule.filter(s => s.boq_id === boqId);
 
-  setSchedule(newSchedule);
+const totalFinal = itemWeeksFinal.reduce(
+  (sum, s) => sum + Number(s.bobot),
+  0
+);
+
+const totalRounded = Number(totalFinal.toFixed(3));
+
+const status =
+  totalRounded > totalTarget
+    ? "lebih"
+    : totalRounded < totalTarget
+    ? "kurang"
+    : "pas";
+
+// 🔥 SIMPAN KE STATUS MAP
+setStatusMap(prev => ({
+  ...prev,
+  [boqId]: {
+    total: totalRounded,
+    target: totalTarget,
+    status
+  }
+}));
+
+  setSchedule([...newSchedule]);
 };
+
 
   const handleSaveSchedule = async () => {
     try {
@@ -372,6 +390,40 @@ const handleSingleCellChange = (boqId, mingguKe, value) => {
           </div>
 
           <div className="overflow-x-auto custom-scrollbar">
+             <div className="flex justify-between items-center mb-3">
+
+    <div className="flex gap-2">
+      <button
+        onClick={() => setMode("manual")}
+        className={`px-3 py-1 rounded ${
+          mode === "manual"
+            ? "bg-blue-600 text-white"
+            : "bg-gray-200"
+        }`}
+      >
+        Manual
+      </button>
+
+      <button
+        onClick={() => setMode("auto")}
+        className={`px-3 py-1 rounded ${
+          mode === "auto"
+            ? "bg-green-600 text-white"
+            : "bg-gray-200"
+        }`}
+      >
+        Auto Balance
+      </button>
+    </div>
+
+    {/* 🔥 INFO MODE */}
+    <div className="text-xs text-gray-500">
+      Mode: {mode === "manual"
+        ? "Manual (bebas edit)"
+        : "Auto (otomatis balance)"}
+    </div>
+
+  </div>
             <table className="w-full text-sm border-collapse min-w-[800px]">
               <thead className="bg-white text-gray-600 shadow-sm relative z-10">
                 <tr>
@@ -390,6 +442,7 @@ const handleSingleCellChange = (boqId, mingguKe, value) => {
                   )) : (
                     <th className="p-4 border-b border-gray-200 text-center italic text-gray-400 font-normal">Buat kolom minggu terlebih dahulu.</th>
                   )}
+
                 </tr>
               </thead>
 
@@ -409,6 +462,25 @@ const handleSingleCellChange = (boqId, mingguKe, value) => {
                              AUTO
                           </button>
                         </div>
+                          <div className="text-xs mt-1">
+                        {statusMap[item.id]?.status === "kurang" && (
+                          <span className="text-orange-500">
+                            Kurang ({statusMap[item.id].total} / {statusMap[item.id].target})
+                          </span>
+                        )}
+
+                        {statusMap[item.id]?.status === "lebih" && (
+                          <span className="text-red-500">
+                            Lebih ({statusMap[item.id].total})
+                          </span>
+                        )}
+
+                        {statusMap[item.id]?.status === "pas" && (
+                          <span className="text-green-600">
+                            ✔ Pas
+                          </span>
+                        )}
+                      </div>
                       </td>
                       <td className="p-2 border-b border-r border-gray-100 text-center font-bold bg-amber-50/50 text-amber-700 font-mono text-[11px]">
                         {bobotResmi.toFixed(3)}

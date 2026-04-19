@@ -252,18 +252,25 @@ export default function MonthlyReportPage() {
                     {bulan.data.map((item, i) => {
 
                       // HEADER GROUP
-                      if (item.tipe !== "item") {
-                        return (
-                          <tr key={i} className="bg-gray-100/70 border-b border-gray-200">
-                            <td colSpan="8" className="p-3 px-4 font-black text-gray-800 uppercase text-xs">
-                              <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-                                {item.uraian}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
+                       if (item.tipe === "header") {
+                          return (
+                            <tr key={i} className="bg-gray-200 border-b">
+                              <td colSpan="9" className="p-4 font-black text-gray-900 uppercase text-sm">
+                                {item.kode} - {item.uraian}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        if (item.tipe === "subheader") {
+                          return (
+                            <tr key={i} className="bg-gray-100 border-b">
+                              <td colSpan="9" className="p-3 pl-8 font-bold text-gray-700 text-xs">
+                                {item.kode} - {item.uraian}
+                              </td>
+                            </tr>
+                          );
+                        }
 
                       // ITEM ROW
                       return (

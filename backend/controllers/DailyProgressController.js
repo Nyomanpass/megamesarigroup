@@ -281,7 +281,10 @@ export const getDailyProgress = async (req, res) => {
         { model: Boq, as: "boq" },
         { model: Project, as: "project" }
       ],
-      order: [["tanggal", "ASC"]]
+      order: [
+        ["tanggal", "DESC"], // terbaru dulu
+        ["id", "ASC"]        // id kecil dulu dalam tanggal
+      ] 
     });
 
     res.json(data);

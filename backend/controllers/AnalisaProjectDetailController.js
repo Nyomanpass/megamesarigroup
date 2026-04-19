@@ -6,6 +6,15 @@ import { Boq } from "../models/BoqModel.js";
 
 const round2 = (num) => Number(num.toFixed(2));
 
+const formatRupiah = (angka) => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(angka);
+};
+
 export const getProjectAnalisaDetail = async (req, res) => {
   try {
     const { id } = req.params;
@@ -81,8 +90,7 @@ export const getProjectAnalisaDetail = async (req, res) => {
 
     const persen = Number(analisa.overhead_persen) || 0;
     const overhead = round2((persen / 100) * total);
-
-    const grandTotal = round2(total + overhead);
+    const grandTotal = Math.floor(total + overhead);
 
     // 🔥 RESPONSE FINAL (TAMBAH INFO PROJECT)
     res.json({
@@ -97,9 +105,9 @@ export const getProjectAnalisaDetail = async (req, res) => {
       totalBahan,
       totalAlat,
 
-      total,
-      overhead,
-      grandTotal,
+      total: formatRupiah(total),
+      overhead: formatRupiah(overhead),
+      grandTotal: grandTotal,
       nama: analisa.nama,
     });
 
