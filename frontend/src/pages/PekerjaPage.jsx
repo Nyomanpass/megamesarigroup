@@ -50,6 +50,14 @@ export default function PekerjaPage() {
     }
   };
 
+  const handleSelectAll = (checked) => {
+  if (checked) {
+    setSelectedItems(filteredMasterItems);
+  } else {
+    setSelectedItems([]);
+  }
+};
+
    const fetchMasterItems = async () => {
     try {
       const res = await api.get(`/masteritem?tipe=TENAGA`);
@@ -353,17 +361,27 @@ const handleBulkCreate = async () => {
 
           {/* HEADER */}
           <div className="p-5 border-b flex justify-between">
-            <h2 className="text-lg font-bold">Import Material dari Master</h2>
+            <h2 className="text-lg font-bold">Import Pekerja dari Master</h2>
             <button onClick={() => setShowBulkModal(false)}>✕</button>
           </div>
 
           {/* BODY */}
           <div className="p-5">
             <div className="max-h-60 overflow-y-auto border rounded-xl">
-
+        
               {/* HEADER */}
               <div className="grid grid-cols-5 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600">
-                <div></div>
+                  <div className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedItems.length === filteredMasterItems.length &&
+                      filteredMasterItems.length > 0
+                    }
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                  />
+                  <span className="text-xs">All</span>
+                </div>
                 <div>Nama</div>
                 <div>Kategori</div>
                 <div>Satuan</div>
@@ -377,18 +395,19 @@ const handleBulkCreate = async () => {
                   className="grid grid-cols-5 gap-2 p-2 border-t items-center text-sm hover:bg-gray-50"
                 >
                   {/* CHECKBOX */}
-                  <input
-                    type="checkbox"
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedItems([...selectedItems, item]);
-                      } else {
-                        setSelectedItems(
-                          selectedItems.filter((i) => i.id !== item.id)
-                        );
-                      }
-                    }}
-                  />
+                <input
+                          type="checkbox"
+                          checked={selectedItems.some(i => i.id === item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItems([...selectedItems, item]);
+                            } else {
+                              setSelectedItems(
+                                selectedItems.filter((i) => i.id !== item.id)
+                              );
+                            }
+                          }}
+                        />
 
                   {/* NAMA */}
                   <div className="font-medium">{item.nama}</div>

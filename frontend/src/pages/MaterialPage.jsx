@@ -48,6 +48,14 @@ export default function MaterialPage() {
     }
   };
 
+    const handleSelectAll = (checked) => {
+      if (checked) {
+        setSelectedItems(filteredMasterItems);
+      } else {
+        setSelectedItems([]);
+      }
+    };
+
   const fetchData = async () => {
     try {
         const res = await api.get(`/project-items?project_id=${id}&tipe=${tipe}`);
@@ -155,7 +163,7 @@ export default function MaterialPage() {
 
       fetchData();
       setSelectedItems([]);
-      setShowModal(false);
+      setShowBulkModal(false);
 
     } catch (err) {
       console.error(err);
@@ -364,7 +372,17 @@ export default function MaterialPage() {
           {/* BODY */}
           <div className="p-5">
             <div className="max-h-60 overflow-y-auto border rounded-xl">
-
+               <div className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedItems.length === filteredMasterItems.length &&
+                      filteredMasterItems.length > 0
+                    }
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                  />
+                  <span className="text-xs">All</span>
+                </div>
               {/* HEADER */}
               <div className="grid grid-cols-5 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600">
                 <div></div>
@@ -381,8 +399,9 @@ export default function MaterialPage() {
                   className="grid grid-cols-5 gap-2 p-2 border-t items-center text-sm hover:bg-gray-50"
                 >
                   {/* CHECKBOX */}
-                  <input
+                 <input
                     type="checkbox"
+                    checked={selectedItems.some(i => i.id === item.id)}
                     onChange={(e) => {
                       if (e.target.checked) {
                         setSelectedItems([...selectedItems, item]);

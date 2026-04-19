@@ -1,6 +1,7 @@
 import { DailyPlan, DailyProgress, Boq } from "../models/index.js";
 import { DailyProgressItem } from "../models/index.js";
 import { ProjectItem } from "../models/index.js";
+import { getBoqStructured } from "./BoqController.js";
 
 
 export const getWeeklyReport = async (req, res) => {
@@ -15,10 +16,6 @@ export const getWeeklyReport = async (req, res) => {
       order: [["tanggal", "ASC"]],
     });
 
-    const boqs = await Boq.findAll({
-      where: { project_id: Number(project_id) },
-    });
-
     const progress = await DailyProgress.findAll({
       where: { project_id: Number(project_id) },
     });
@@ -26,15 +23,7 @@ export const getWeeklyReport = async (req, res) => {
     // =========================
     // 🔥 SORT BOQ
     // =========================
-    const sortedBoqs = boqs.sort((a, b) => {
-      const kodeA = (a.kode || "").trim();
-      const kodeB = (b.kode || "").trim();
-
-      return kodeA.localeCompare(kodeB, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    });
+    const sortedBoqs = await getBoqStructured(Number(project_id));
 
     // =========================
     // 🔥 GROUP PER MINGGU
@@ -114,6 +103,7 @@ export const getWeeklyReport = async (req, res) => {
 
         laporan.push({
           uraian: boq.uraian,
+          level: boq.level,
           bobot: Number(bobot.toFixed(3)),
           satuan: boq.satuan,
           total: Number(total.toFixed(3)),
@@ -189,22 +179,12 @@ export const getMonthlyReport = async (req, res) => {
       order: [["tanggal", "ASC"]],
     });
 
-    const boqs = await Boq.findAll({
-      where: { project_id: Number(project_id) },
-    });
 
     const progress = await DailyProgress.findAll({
       where: { project_id: Number(project_id) },
     });
 
-    const sortedBoqs = boqs.sort((a, b) => {
-      const kodeA = (a.kode || "").trim();
-      const kodeB = (b.kode || "").trim();
-      return kodeA.localeCompare(kodeB, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    });
+    const sortedBoqs = await getBoqStructured(Number(project_id));
 
     // 🔥 GROUP PER BULAN
     const group = {};
@@ -271,6 +251,7 @@ export const getMonthlyReport = async (req, res) => {
 
         laporan.push({
           uraian: boq.uraian,
+          level: boq.level,
           bobot: Number(bobot.toFixed(3)),
           satuan: boq.satuan,
           total: Number(total.toFixed(3)),

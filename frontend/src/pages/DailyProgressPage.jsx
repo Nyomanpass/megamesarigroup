@@ -10,6 +10,9 @@ export default function DailyProgressPage() {
   const [dailyPlan, setDailyPlan] = useState([]);
   const [editId, setEditId] = useState(null);
 
+  const [searchBoqQuery, setSearchBoqQuery] = useState("");
+  const [isBoqDropdownOpen, setIsBoqDropdownOpen] = useState(false);
+
   // --- States ---
   const [boqList, setBoqList] = useState([]);
   const [data, setData] = useState([]);
@@ -29,8 +32,31 @@ export default function DailyProgressPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const filteredBoq = boqList.filter(
+    b => b.tipe === "item"
+  );
+  const boqMap = {};
+  boqList.forEach(b => {
+    boqMap[b.id] = b;
+  });
 
 
+  const getBoqFullLabel = (item) => {
+  let result = [];
+  let current = item;
+
+  while (current) {
+    result.unshift(
+      current.kode
+        ? `${current.kode} - ${current.uraian}`
+        : current.uraian
+    );
+
+    current = boqMap[current.parent_id];
+  }
+
+  return result.join(" > ");
+};
 
   // ================= FETCH DATA =================
   const fetchData = async () => {
@@ -262,10 +288,35 @@ export default function DailyProgressPage() {
   const summary = getSummary();
 
   // ================= PAGINATION LOGIC =================
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = data.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(data.length / itemsPerPage);
+// ================= GROUP BY HARI (FIXED) =================
+// ================= GROUP BY TANGGAL =================
+const groupedByTanggal = {};
+
+data.forEach(item => {
+  const key = new Date(item.tanggal).toDateString(); // 🔥 fix pakai tanggal
+
+  if (!groupedByTanggal[key]) {
+    groupedByTanggal[key] = [];
+  }
+
+  groupedByTanggal[key].push(item);
+});
+
+// 🔥 urut terbaru di atas
+const tanggalKeys = Object.keys(groupedByTanggal).sort(
+  (a, b) => new Date(b) - new Date(a)
+);
+
+// 🔥 ambil current
+const currentTanggal = tanggalKeys[currentPage - 1] || null;
+
+const currentItems = currentTanggal
+  ? groupedByTanggal[currentTanggal]
+  : [];
+
+const totalPages = tanggalKeys.length;
+
+
 
   const paginate = (pageNumber) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
@@ -305,29 +356,98 @@ export default function DailyProgressPage() {
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 relative z-10"><Edit size={20} className="text-blue-500" /> Entri Data Progres Fisik</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Pekerjaan (Dari BOQ)</label>
-              <select
-                value={form.boq_id}
-                onChange={(e) => {
-                  const boq_id = e.target.value; // ✅ ini BOQ
-                  const newForm = { ...form, boq_id };
+            <div className="relative">
+  <label className="block text-sm font-bold text-gray-700 mb-2">
+    Pekerjaan BOQ
+  </label>
 
-                  setForm(newForm);
+  {/* INPUT SEARCH */}
+  <div className="relative">
+    <input
+      type="text"
+      placeholder="-- Ketik pekerjaan BOQ --"
+      value={searchBoqQuery}
+      onChange={(e) => {
+        setSearchBoqQuery(e.target.value);
+        setIsBoqDropdownOpen(true);
 
+        if (form.boq_id) {
+          setForm({ ...form, boq_id: "" });
+        }
+      }}
+      onFocus={() => setIsBoqDropdownOpen(true)}
+      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl 
+        focus:ring-2 focus:ring-blue-300 focus:border-blue-500 
+        focus:bg-white outline-none transition-all text-sm font-medium"
+    />
 
-                }}
-                className="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium outline-none transition-all"
-                required
-              >
-                <option value="">-- Pilih Pekerjaan BOQ --</option>
-                {boqList.filter(b => b.tipe === 'item').map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.kode ? `${b.kode} - ` : ''}{b.uraian}
-                  </option>
-                ))}
-              </select>
+    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+      ▼
+    </div>
+  </div>
+
+  {/* DROPDOWN */}
+  {isBoqDropdownOpen && (
+    <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+
+      {filteredBoq
+        .filter(b =>
+          `${b.kode || ""} ${b.uraian}`
+            .toLowerCase()
+            .includes(searchBoqQuery.toLowerCase())
+        )
+        .map((b) => (
+          <div
+            key={b.id}
+            className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+            onMouseDown={(e) => {
+              e.preventDefault();
+
+              setForm({ ...form, boq_id: b.id });
+              setSearchBoqQuery(
+                `${b.kode ? b.kode + " - " : ""}${b.uraian}`
+              );
+              setIsBoqDropdownOpen(false);
+            }}
+          >
+              <div className="text-[11px] text-gray-400">
+                {getBoqFullLabel(boqMap[b.parent_id] || null)}
+              </div>
+
+            <div className="font-bold text-gray-800 text-sm">
+              {b.kode ? `${b.kode} - ` : ""}{b.uraian}
             </div>
+
+            <div className="text-xs text-gray-500 mt-1 flex gap-2">
+              <span className="bg-gray-100 px-2 py-0.5 rounded">
+                Bobot: {Number(b.bobot || 0).toFixed(3)}
+              </span>
+            </div>
+          </div>
+        ))}
+
+      {/* EMPTY */}
+      {filteredBoq.filter(b =>
+        `${b.kode || ""} ${b.uraian}`
+          .toLowerCase()
+          .includes(searchBoqQuery.toLowerCase())
+      ).length === 0 && (
+        <div className="px-4 py-5 text-sm text-gray-500 text-center">
+          Data BOQ tidak ditemukan
+        </div>
+      )}
+    </div>
+  )}
+
+  {/* OVERLAY */}
+  {isBoqDropdownOpen && (
+    <div
+      className="fixed inset-0 z-[5]"
+      onClick={() => setIsBoqDropdownOpen(false)}
+    ></div>
+  )}
+</div>
+            
 
             <select
               value={form.hari_ke}
@@ -552,6 +672,22 @@ export default function DailyProgressPage() {
             <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full">{data.length} Entri</span>
           </div>
           <div className="overflow-x-auto custom-scrollbar">
+            <div className="p-4 bg-blue-50 border-b text-sm font-bold text-blue-700">
+            
+                📅 {currentTanggal
+                  ? new Date(currentTanggal).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric"
+                    })
+                  : "Tidak ada data"}
+           
+            {currentItems[0]?.tanggal && (
+              <span className="ml-2 text-gray-500 font-normal">
+                ({new Date(currentItems[0].tanggal).toLocaleDateString("id-ID")})
+              </span>
+            )}
+          </div>
             <table className="w-full text-left text-sm">
               <thead className="bg-white">
                 <tr className="text-xs uppercase tracking-wider text-gray-500 border-b border-gray-100">
@@ -618,8 +754,8 @@ export default function DailyProgressPage() {
           {totalPages > 1 && (
             <div className="flex flex-col md:flex-row items-center justify-between p-5 bg-white border-t border-gray-100 gap-4">
               <div className="text-sm text-gray-500">
-                Menampilkan <span className="font-bold text-gray-800">{indexOfFirstItem + 1}</span> hingga <span className="font-bold text-gray-800">{Math.min(indexOfLastItem, data.length)}</span> dari <span className="font-bold text-gray-800">{data.length}</span> entri
-              </div>
+              Menampilkan <span className="font-bold text-gray-800">{currentItems.length}</span> data pada tanggal ini dari total <span className="font-bold text-gray-800">{data.length}</span> entri
+            </div>
               <div className="flex items-center gap-1.5 flex-wrap justify-center">
                 <button
                   onClick={() => paginate(currentPage - 1)}
@@ -629,30 +765,23 @@ export default function DailyProgressPage() {
                   <ChevronLeft size={16} strokeWidth={2.5} />
                 </button>
 
-                {[...Array(totalPages)].map((_, index) => {
-                  const pageNumber = index + 1;
-                  if (
-                    pageNumber === 1 ||
-                    pageNumber === totalPages ||
-                    (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
-                  ) {
-                    return (
-                      <button
-                        key={pageNumber}
-                        onClick={() => paginate(pageNumber)}
-                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 ${currentPage === pageNumber ? 'bg-blue-600 text-white border border-blue-700 shadow-blue-500/30' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:text-gray-800'}`}
-                      >
-                        {pageNumber}
-                      </button>
-                    );
-                  } else if (
-                    pageNumber === currentPage - 2 ||
-                    pageNumber === currentPage + 2
-                  ) {
-                    return <span key={pageNumber} className="px-2 text-gray-400 font-bold tracking-widest">...</span>;
-                  }
-                  return null;
-                })}
+{tanggalKeys.map((tgl, index) => (
+  <button
+    key={index}
+    onClick={() => setCurrentPage(index + 1)}
+    className={`px-3 py-2 rounded-xl text-sm font-bold ${
+      currentPage === index + 1
+        ? "bg-blue-600 text-white"
+        : "bg-white border"
+    }`}
+  >
+    {new Date(tgl).toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short"
+    })}
+  </button>
+))}
+
 
                 <button
                   onClick={() => paginate(currentPage + 1)}

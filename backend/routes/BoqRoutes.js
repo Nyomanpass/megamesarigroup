@@ -6,6 +6,7 @@ import {
   updateBoq,
   deleteBoq,
   createBulkBoq,
+  linkAnalisaBoq
  
 } from "../controllers/BoqController.js";
 
@@ -28,5 +29,5 @@ router.delete("/boq/:id", deleteBoq);
 
 router.post('/boq/bulk', createBulkBoq);
 
-
+router.patch("/boq/:id/link-analisa", linkAnalisaBoq);
 export default router;

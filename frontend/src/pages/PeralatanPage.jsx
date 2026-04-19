@@ -47,6 +47,14 @@ export default function PeralatanPage() {
     }
   };
 
+  const handleSelectAll = (checked) => {
+  if (checked) {
+    setSelectedItems(filteredMasterItems);
+  } else {
+    setSelectedItems([]);
+  }
+};
+
   const fetchData = async () => {
     try {
         const res = await api.get(`/project-items?project_id=${id}&tipe=ALAT`);
@@ -364,7 +372,17 @@ export default function PeralatanPage() {
 
           {/* HEADER TABLE */}
           <div className="grid grid-cols-5 gap-2 bg-gray-100 p-2 text-xs font-bold">
-            <div></div>
+              <div className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={
+                selectedItems.length === filteredMasterItems.length &&
+                filteredMasterItems.length > 0
+              }
+              onChange={(e) => handleSelectAll(e.target.checked)}
+            />
+            <span className="text-xs">All</span>
+          </div>
             <div>Nama</div>
             <div>Kategori</div>
             <div>Satuan</div>
@@ -388,9 +406,16 @@ export default function PeralatanPage() {
               <input
                 type="checkbox"
                 checked={selectedItems.some(i => i.id === item.id)}
-                readOnly
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedItems([...selectedItems, item]);
+                  } else {
+                    setSelectedItems(
+                      selectedItems.filter((i) => i.id !== item.id)
+                    );
+                  }
+                }}
               />
-
               <div>{item.nama}</div>
               <div className="text-xs text-gray-500">
                 {item.category || "-"}
