@@ -22,6 +22,8 @@ import { ProjectAnalisa } from "./ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "./ProjekAnalisaDetail.js";
 import { DailyProgressItem } from "./DailyProgresItem.js";
 
+import { TtdTemplate } from "./TtdTemplate.js";
+
 
 // PARENT → CHILD
 DailyProgress.hasMany(DailyProgressItem, {
@@ -101,6 +103,18 @@ ProjectAnalisaDetail.belongsTo(ProjectAnalisa, {
 ProjectAnalisa.hasMany(ProjectAnalisaDetail, {
   foreignKey: "project_analisa_id",
   as: "details"
+});
+
+// 🔥 1 PROJECT punya banyak template (harian, mingguan, bulanan)
+Project.hasMany(TtdTemplate, {
+  foreignKey: "project_id",
+  as: "ttd_templates"
+});
+
+// 🔥 tiap template milik 1 project
+TtdTemplate.belongsTo(Project, {
+  foreignKey: "project_id",
+  as: "project"
 });
 
 
@@ -226,5 +240,6 @@ export {
   ProjectAnalisaDetail,
   ProjectItem,
   ProjectAnalisa,
-  DailyProgressItem
+  DailyProgressItem,
+  TtdTemplate
 };

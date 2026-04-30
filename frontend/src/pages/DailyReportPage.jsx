@@ -14,6 +14,7 @@ export default function DailyReportPage() {
   const [totalMaterial, setTotalMaterial] = useState([]);
   const [totalPekerja, setTotalPekerja] = useState([]);
   const [totalPeralatan, setTotalPeralatan] = useState([]);
+  
 
   // ambil daily plan (buat dropdown hari)
   const fetchPlans = async () => {

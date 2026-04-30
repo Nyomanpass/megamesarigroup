@@ -5,6 +5,7 @@ export const Project = sequelize.define("Project", {
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 
   kegiatan: DataTypes.STRING,
+  sub_kegiatan: DataTypes.STRING,
   pekerjaan: DataTypes.STRING,
   no_kontrak: DataTypes.STRING,
   tgl_kontrak: DataTypes.DATE,

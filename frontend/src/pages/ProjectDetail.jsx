@@ -4,7 +4,7 @@ import api from "../api";
 import {
   MapPin, Calendar, Building2, Briefcase, FileText,
   CalendarDays, CalendarPlus, TrendingUp, FileCheck, BarChart as BarChartIcon,
-  BarChart3, Package, Users, Wrench, Wallet, Folder, Calculator
+  BarChart3, Package, Users, Wrench, Wallet, Folder, Calculator, FileSignature
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -69,6 +69,7 @@ export default function ProjectDetail() {
     { title: "Material", path: "material", icon: Package, color: "gray" },
     { title: "Tenaga Kerja", path: "tenaga", icon: Users, color: "orange" },
     { title: "Peralatan", path: "peralatan", icon: Wrench, color: "teal" },
+    { title: "Template TTD", path: "ttd-template", icon: FileSignature, color: "teal" },
   ];
 
   const getColorClasses = (color) => {

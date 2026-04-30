@@ -22,6 +22,7 @@ import ProjectAnalisaDetailPage from "./pages/ProjectAnalisaDetailPage";
 import MasterItemPage from "./pages/settings/MasterItemPage";
 import AnalisaMasterPage from "./pages/settings/AnalisaMasterPage";
 import AnalisaDetailPage from "./pages/settings/AnalisaDetailPage";
+import TtdTemplatePage from "./pages/TtdTemplatePage";
 
 
 // Error boundary component
@@ -156,6 +157,10 @@ const router = createBrowserRouter([
         {
           path: "/settings/analisa/:id",
           element: <AnalisaDetailPage />,
+        },
+        {
+          path: "/project/:id/ttd-template",
+          element: <TtdTemplatePage />,
         }
       ]
   },
