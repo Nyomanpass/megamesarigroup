@@ -1,12 +1,12 @@
 import ExcelJS from "exceljs";
 import path from "path";
-import { getWeeklyReport } from "./ReportController.js";
+import { getMonthlyReport } from "./ReportController.js";
 import { Project } from "../models/ProjectModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
 
-export const exportWeeklyReportExcel = async (req, res) => {
+export const exportMonthlyReportExcel = async (req, res) => {
   try {
-    const { minggu } = req.query;
+    const { bulan } = req.query;
     const { project_id } = req.params;
 
     // =========================
@@ -21,17 +21,17 @@ export const exportWeeklyReportExcel = async (req, res) => {
       }
     };
 
-    await getWeeklyReport(req, fakeRes);
-    const weekly = fakeRes.jsonData;
+    await getMonthlyReport(req, fakeRes);
+    const monthly = fakeRes.jsonData;
 
-    const dataMinggu = weekly.find(w => w.minggu_ke == minggu);
+    const dataBulan = monthly.find(b => b.bulan_ke == bulan);
 
-    if (!dataMinggu) {
-      return res.status(404).json({ message: "Data minggu tidak ditemukan" });
+    if (!dataBulan) {
+      return res.status(404).json({ message: "Data bulan tidak ditemukan" });
     }
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Laporan Mingguan");
+    const sheet = workbook.addWorksheet("Laporan Bulanan");
 
     // =========================
     // 🔥 SET COLUMN (A-N)
@@ -246,7 +246,7 @@ export const exportWeeklyReportExcel = async (req, res) => {
   // 🔥 INFO KANAN (ANTI ERROR)
   // =========================
 
-const titleStartRow = 7;
+  const titleStartRow = 7;
 const titleEndRow = 10;
 
 // 🔥 merge
@@ -255,7 +255,7 @@ try {
 } catch (e) {}
 
 const cell = sheet.getCell(`J${titleStartRow}`);
-cell.value = "LAPORAN MINGGUAN";
+cell.value = "LAPORAN BULANAN";
 
 // 🔥 style text
 cell.font = {
@@ -311,32 +311,34 @@ const angkaKeHuruf = (n) => {
     1:"Satu",2:"Dua",3:"Tiga",4:"Empat",5:"Lima",
     6:"Enam",7:"Tujuh",8:"Delapan",9:"Sembilan",10:"Sepuluh"
   };
-  return map[n] || n;
+  return map[n] || `${n}`;
 };
 
 // 🔥 DATA DUMMY
 const dataRight = [
   [
-    "    MINGGU",
-    `${dataMinggu.minggu_ke} (${angkaKeHuruf(dataMinggu.minggu_ke)})`
+    "    BULAN",
+    `${dataBulan.bulan_ke} (${angkaKeHuruf(dataBulan.bulan_ke)})`
   ],
   [
     "    TANGGAL",
-    `${formatTanggal(dataMinggu.tgl_awal)} s/d ${formatTanggal(dataMinggu.tgl_akhir)}`
+    `${formatTanggal(dataBulan.tgl_awal)} s/d ${formatTanggal(dataBulan.tgl_akhir)}`
   ],
   [
     "    WAKTU PELAKSANAAN",
-    `${dataMinggu.waktu_pelaksanaan} Hari`
+    `${dataBulan.waktu_pelaksanaan} Hari`
   ],
   [
     "    WAKTU BERJALAN",
-    `${dataMinggu.waktu_berjalan} Hari`
+    `${dataBulan.waktu_berjalan} Hari`
   ],
   [
     "    SISA WAKTU",
-    `${dataMinggu.sisa_waktu} Hari`
+    `${dataBulan.sisa_waktu} Hari`
   ],
 ];
+
+
 
 const startBox = rowRight;
 
@@ -425,9 +427,9 @@ sheet.getRow(startRow + 1).values = [
   "",
   "",
   "",
-  "S/D MINGGU LALU",
-  "DALAM MINGGU INI",
-  "S/D MINGGU INI",
+  "S/D BULAN LALU",
+  "DALAM BULAN INI",
+  "S/D BULAN INI",
   "",
   "",
   ""
@@ -538,7 +540,8 @@ sheet.getRow(startRow + 1).height = 40;
 // =========================
 // 🔥 BARIS NOMOR KOLOM
 // =========================
-
+// 🔥 BARIS NOMOR KOLOM (FINAL FIX)
+// =========================
 const numberRow = startRow + 2;
 
 // 🔥 isi manual per cell (BIAR CENTER SEMPURNA)
@@ -633,7 +636,7 @@ let lastTipe = null;
 
 const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
 
-dataMinggu.data.forEach((item) => {
+dataBulan.data.forEach((item) => {
 
   // =========================
   // 🔥 HEADER
@@ -706,7 +709,7 @@ dataMinggu.data.forEach((item) => {
     sheet.getCell(`G${rowIndex}`).value = item.total || 0;
     sheet.getCell(`H${rowIndex}`).value = item.bobot || 0;
     sheet.getCell(`I${rowIndex}`).value = item.sd_lalu || 0;
-    sheet.getCell(`J${rowIndex}`).value = item.minggu_ini || 0;
+    sheet.getCell(`J${rowIndex}`).value = item.bulan_ini || 0;
     sheet.getCell(`K${rowIndex}`).value = item.sd_ini || 0;
     sheet.getCell(`L${rowIndex}`).value = item.progress_item || 0;
     sheet.getCell(`M${rowIndex}`).value = item.progres_proyek || 0;
@@ -803,7 +806,7 @@ for (let r = startRow + 3; r < rowIndex; r++) {
 
   setNumber(row.getCell(8), row.getCell(8).value);   // bobot
   setNumber(row.getCell(9), row.getCell(9).value);   // sd lalu
-  setNumber(row.getCell(10), row.getCell(10).value); // minggu ini
+  setNumber(row.getCell(10), row.getCell(10).value); // bulan ini
   setNumber(row.getCell(11), row.getCell(11).value); // sd ini
 
   setPercent(row.getCell(12), row.getCell(12).value); // progress_item
@@ -870,9 +873,9 @@ const startPersenRow = totalRow;
 
 // 🔥 DATA
 const persenData = [
-  ["Persentase Minggu Ini", dataMinggu.real_kumulatif],
-  ["Rencana", dataMinggu.rencana_kumulatif],
-  ["Deviasi", dataMinggu.deviasi],
+  ["Persentase Bulan Ini", dataBulan.real_kumulatif],
+  ["Rencana", dataBulan.rencana_kumulatif],
+  ["Deviasi", dataBulan.deviasi],
 ];
 
 // 🔥 LOOP
@@ -947,7 +950,7 @@ for (let r = startPersenRow; r < startPersenRow + 3; r++) {
 const ttdData = await TtdTemplate.findOne({
   where: {
     project_id: project.id,
-    tipe_laporan: "mingguan"
+    tipe_laporan: "bulanan"
   }
 });
 
@@ -1098,7 +1101,7 @@ for (let col = 1; col <= 14; col++) {
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Laporan_Mingguan_${minggu}.xlsx`
+      `attachment; filename=Laporan_Bulanan_${bulan}.xlsx`
     );
 
     await workbook.xlsx.write(res);

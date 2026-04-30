@@ -35,6 +35,10 @@ export const getWeeklyReport = async (req, res) => {
     });
 
     const result = [];
+    // 🔥 TOTAL HARI PROJECT
+    const totalHari = plans.length;
+
+    const projectStart = new Date(plans[0].tanggal);
 
     // 🔥 KUMULATIF PER ITEM
     const kumulatifPerBoq = {};
@@ -53,6 +57,19 @@ export const getWeeklyReport = async (req, res) => {
 
       const tglAwal = items[0].tanggal;
       const tglAkhir = items[items.length - 1].tanggal;
+
+      // =========================
+      // 🔥 HITUNG WAKTU
+      // =========================
+
+      // 🔥 durasi minggu ini
+      const waktuBerjalan =
+        (new Date(tglAkhir) - projectStart) / (1000 * 60 * 60 * 24) + 1;
+
+
+
+      // 🔥 sisa waktu
+      const sisaWaktu = totalHari - waktuBerjalan;
 
       const rencanaMingguan = Number(items[0].bobot_mingguan || 0);
 
@@ -147,6 +164,10 @@ export const getWeeklyReport = async (req, res) => {
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
 
+        waktu_pelaksanaan: totalHari,
+        waktu_berjalan: Number(waktuBerjalan),
+        sisa_waktu: Number(sisaWaktu),
+
         // 🔥 mingguan
         rencana_mingguan: Number(rencanaMingguan.toFixed(3)),
         real_mingguan: Number(realMingguan.toFixed(3)),
@@ -186,6 +207,11 @@ export const getMonthlyReport = async (req, res) => {
 
     const sortedBoqs = await getBoqStructured(Number(project_id));
 
+    const totalHari = plans.length;
+
+    // 🔥 tanggal mulai project
+    const projectStart = new Date(plans[0].tanggal);
+
     // 🔥 GROUP PER BULAN
     const group = {};
     plans.forEach((p) => {
@@ -200,10 +226,22 @@ export const getMonthlyReport = async (req, res) => {
     let kumulatifRencana = 0; // 🔥 TAMBAHAN
 
     for (const bulan in group) {
+   
       const items = group[bulan];
 
       const tglAwal = items[0].tanggal;
       const tglAkhir = items[items.length - 1].tanggal;
+
+      // =========================
+      // 🔥 HITUNG WAKTU (SAMA SEPERTI WEEKLY)
+      // =========================
+
+      // 🔥 waktu berjalan (hari)
+      const waktuBerjalan =
+        (new Date(tglAkhir) - projectStart) / (1000 * 60 * 60 * 24) + 1;
+
+      // 🔥 sisa waktu
+      const sisaWaktu = totalHari - waktuBerjalan;
 
       // 🔥 RENCANA BULANAN
       const mingguMap = {};
@@ -287,6 +325,10 @@ export const getMonthlyReport = async (req, res) => {
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
 
+         waktu_pelaksanaan: Number(totalHari),
+        waktu_berjalan: Number(waktuBerjalan),
+        sisa_waktu: Number(sisaWaktu < 0 ? 0 : sisaWaktu),
+
         // 🔥 BULAN INI
         rencana_bulanan: Number(rencanaBulanan.toFixed(3)),
         real_bulanan: Number(realBulanan.toFixed(3)),
@@ -363,7 +405,15 @@ export const getDailyReport = async (req, res) => {
         {
           model: Boq,
           as: "boq",
-          attributes: ["uraian", "satuan", "volume", "bobot"] // 🔥 penting
+          attributes: [
+            "id",          // 🔥 WAJIB
+            "parent_id",   // 🔥 WAJIB
+            "tipe",        // 🔥 WAJIB
+            "uraian",
+            "satuan",
+            "volume",
+            "bobot"
+          ]
         },
         {
           model: DailyProgressItem,
@@ -402,6 +452,8 @@ export const getDailyReport = async (req, res) => {
         uraian: p.boq?.uraian,
         satuan: p.boq?.satuan,
         volume: volumeHariIni,
+
+        boq_id: p.boq?.id,  
 
         cuaca: p.cuaca,
         catatan: p.catatan,

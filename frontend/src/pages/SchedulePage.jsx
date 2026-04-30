@@ -18,6 +18,33 @@ export default function SchedulePage() {
   const [mode, setMode] = useState("manual"); 
 
 
+
+  const handleExportTimeSchedule = async () => {
+  try {
+    const response = await api.get(
+      `/export-time-schedule/${id}`,
+      {
+        responseType: "blob", // 🔥 wajib
+      }
+    );
+
+    // 🔥 download file
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.setAttribute("download", "time_schedule.xlsx");
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+  } catch (error) {
+    console.log(error);
+    setError("Gagal export Time Schedule");
+  }
+};
+
   const fetchChart = async () => {
   try {
     const res = await api.get(`/daily-plan/weekly-chart/${id}`);
@@ -272,6 +299,13 @@ setStatusMap(prev => ({
               <p className="text-sm text-gray-500">Buat Kurva S Rencana dan jadwalkan bobot bobot pekerjaan</p>
             </div>
           </div>
+
+          <button
+                onClick={handleExportTimeSchedule}
+                className="bg-purple-600 mb-4 hover:bg-purple-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
+              >
+                📊 Export Time Schedule
+          </button>
 
           <div className="flex gap-2">
             <button 

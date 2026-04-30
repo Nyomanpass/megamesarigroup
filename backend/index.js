@@ -46,6 +46,8 @@ import ProjekAnalisaDetailRoutes from './routes/ProjekAnalisaDetailRoutes.js';
 import ReportExelRoutes from './routes/ReportExelRoutes.js';
 import ExportWeeklyRoutes from "./routes/ExportWeeklyRoutes.js";
 import importRoutes from "./routes/Import.js";
+import TtdRoutes from "./routes/TtdRoutes.js";
+import exportMounthlyRoutes from "./routes/ExportMonthlyRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
@@ -99,8 +101,9 @@ app.use("/api", ProjekAnalisaRoutes);
 app.use("/api", ProjekAnalisaDetailRoutes);
 app.use("/api", ReportExelRoutes);
 app.use("/api", ExportWeeklyRoutes);
-
 app.use("/api", importRoutes);
+app.use("/api", TtdRoutes);
+app.use("/api", exportMounthlyRoutes);
 
 // koneksi database
 const startServer = async () => {

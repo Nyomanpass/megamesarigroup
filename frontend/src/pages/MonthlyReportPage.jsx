@@ -63,6 +63,41 @@ export default function MonthlyReportPage() {
   { name: 'Realisasi', Bobot: Number(bulan.real_kumulatif), fillColor: bulan.deviasi >= 0 ? '#10B981' : '#EF4444' }
 ] : [];
 
+
+const handleExportMonthlyExcel = async () => {
+  try {
+    if (!selectedMonth) {
+      setError("Pilih bulan dulu sebelum export!");
+      return;
+    }
+
+    const response = await api.get(
+      `/export-monthly/${id}?bulan=${selectedMonth}`,
+      {
+        responseType: "blob", // 🔥 WAJIB
+      }
+    );
+
+    // 🔥 download file
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `laporan_bulanan_bulan_${selectedMonth}.xlsx`
+    );
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+  } catch (error) {
+    console.log(error);
+    setError("Gagal export laporan bulanan");
+  }
+};
+
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -99,6 +134,13 @@ export default function MonthlyReportPage() {
             </select>
           </div>
         </div>
+
+        <button
+  onClick={handleExportMonthlyExcel}
+  className="bg-blue-600 mb-4 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
+>
+  📊 Export Bulanan
+</button>
 
         {/* CONTENT */}
         {bulan ? (
