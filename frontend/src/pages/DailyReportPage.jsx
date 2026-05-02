@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 import api from "../api";
 import { ArrowLeft, CalendarDays, Search, Package, Users, Wrench, FileCheck, Info } from "lucide-react";
 
 export default function DailyReportPage() {
-  const { id } = useParams();
+  const { id: paramId } = useParams();
+  const { selectedProject } = useProject();
+  const id = selectedProject?.id || paramId;
   const navigate = useNavigate();
   const [hariKe, setHariKe] = useState("");
   const [data, setData] = useState([]);
@@ -99,10 +102,10 @@ const handleExportExcel = async () => {
 
         {/* HEADER */}
         <div className="flex items-center gap-4 mb-8">
-          <button 
-            onClick={() => navigate(`/project/${id}`)} 
-            className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
-          >
+            <button 
+              onClick={() => navigate("/dashboard")} 
+              className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
+            >
             <ArrowLeft size={24} className="text-gray-600" />
           </button>
           <div>

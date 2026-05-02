@@ -57,7 +57,7 @@ app.use(
    cors({
       origin: function (origin, callback) {
          // List origins yang diizinkan
-         const allowedOrigins = ["http://localhost", "http://localhost:3000", "http://localhost:5173", "http://localhost:80", process.env.CLIENT_ORIGIN];
+         const allowedOrigins = ["http://localhost", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:80", process.env.CLIENT_ORIGIN];
 
          // Jika tidak ada origin (request dari mobile app atau server-to-server), izinkan
          if (!origin || allowedOrigins.indexOf(origin) !== -1) {

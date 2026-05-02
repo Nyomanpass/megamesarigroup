@@ -1,10 +1,11 @@
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+import { ProjectProvider } from "./context/ProjectContext";
 
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ProjectDetail from "./pages/ProjectDetail";
+// import ProjectDetail removed; functionality moved to Dashboard
 import BoqPage from "./pages/BoqPage";
 import SchedulePage from "./pages/SchedulePage";
 import DailyPlanPage from "./pages/DailyPlanPage";
@@ -82,7 +83,7 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
-    element: <ProtectedElement element={<Layout />} />,
+    element: <ProtectedElement element={<ProjectProvider><Layout /></ProjectProvider>} />,
     loader: authLoader,
     errorElement: <ErrorPage />,
     children: [
@@ -90,60 +91,60 @@ const router = createBrowserRouter([
         path: "/dashboard",
         element: <Dashboard />,
       },
+      // Removed project list route; projects now managed via dashboard dropdown
       {
         path: "/project",
-        element: <Project />,
+        element: <Navigate to="/dashboard" replace />,
       },
       {
-        path: "/project/:id",
-        element: <ProjectDetail />,
+        // Removed project detail route; functionality now on dashboard
       },
       {
-        path: "/project/:id/boq",
+        path: "/boq",
         element: <BoqPage />,
       },
       {
-        path: "/project/:id/schedule",
+        path: "/schedule",
         element: <SchedulePage />,
       },
       {
-        path: "/project/:id/daily-plan",
+        path: "/daily-plan",
         element: <DailyPlanPage />,
       },
       {
-        path: "/project/:id/progress",
+        path: "/progress",
         element: <DailyProgressPage />,
       },
       {
-        path: "/project/:id/laporan-mingguan",
+        path: "/laporan-mingguan",
         element: <WeeklyReportPage />,
       },
       {
-        path: "/project/:id/laporan-bulanan",
+        path: "/laporan-bulanan",
         element: <MonthlyReportPage />,
       },
       {
-        path: "/project/:id/laporan-harian",
+        path: "/laporan-harian",
         element: <DailyReportPage />,
       },
       {
-        path: "/project/:id/material",
+        path: "/material",
         element: <MaterialPage />,
       },
       {
-        path: "/project/:id/tenaga",
+        path: "/tenaga",
         element: <PekerjaPage />,
       },
       {
-        path: "/project/:id/peralatan",
+        path: "/peralatan",
         element: <PeralatanPage />,
       },
       {
-        path: "/project/:id/analisa",
+        path: "/analisa",
         element: <ProjectAnalisaPage />,
       },
       {
-        path: "/project/:id/analisa/:analisaId",
+        path: "/analisa/:analisaId",
         element: <ProjectAnalisaDetailPage />,
       },
       {
@@ -159,7 +160,7 @@ const router = createBrowserRouter([
           element: <AnalisaDetailPage />,
         },
         {
-          path: "/project/:id/ttd-template",
+          path: "/ttd-template",
           element: <TtdTemplatePage />,
         }
       ]

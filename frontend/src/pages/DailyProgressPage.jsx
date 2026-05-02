@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 import api from "../api";
-import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight, Calendar, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useRef } from "react";
 
 export default function DailyProgressPage() {
-  const { id } = useParams();
+  const { id: paramId } = useParams();
+  const { selectedProject } = useProject();
+  const id = selectedProject?.id || paramId;
   const navigate = useNavigate();
   const [dailyPlan, setDailyPlan] = useState([]);
   const [editId, setEditId] = useState(null);
@@ -31,6 +35,7 @@ export default function DailyProgressPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
   const itemsPerPage = 10;
   const filteredBoq = boqList.filter(
     b => b.tipe === "item"
@@ -332,7 +337,7 @@ const totalPages = tanggalKeys.length;
         <div ref={formRef} className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(`/project/${id}`)}
+              onClick={() => navigate("/dashboard")}
               className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
             >
               <ArrowLeft size={24} className="text-gray-600" />
@@ -754,9 +759,10 @@ const totalPages = tanggalKeys.length;
           {totalPages > 1 && (
             <div className="flex flex-col md:flex-row items-center justify-between p-5 bg-white border-t border-gray-100 gap-4">
               <div className="text-sm text-gray-500">
-              Menampilkan <span className="font-bold text-gray-800">{currentItems.length}</span> data pada tanggal ini dari total <span className="font-bold text-gray-800">{data.length}</span> entri
-            </div>
-              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                Menampilkan <span className="font-bold text-gray-800">{currentItems.length}</span> data dari total <span className="font-bold text-gray-800">{data.length}</span> entri
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Prev button */}
                 <button
                   onClick={() => paginate(currentPage - 1)}
                   disabled={currentPage === 1}
@@ -765,24 +771,60 @@ const totalPages = tanggalKeys.length;
                   <ChevronLeft size={16} strokeWidth={2.5} />
                 </button>
 
-{tanggalKeys.map((tgl, index) => (
-  <button
-    key={index}
-    onClick={() => setCurrentPage(index + 1)}
-    className={`px-3 py-2 rounded-xl text-sm font-bold ${
-      currentPage === index + 1
-        ? "bg-blue-600 text-white"
-        : "bg-white border"
-    }`}
-  >
-    {new Date(tgl).toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short"
-    })}
-  </button>
-))}
+                {/* Animated Date Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDateDropdown(prev => !prev)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm shadow-sm hover:bg-blue-700 transition-colors min-w-[180px] justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Calendar size={15} />
+                      <span>
+                        {currentTanggal
+                          ? new Date(currentTanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })
+                          : "Pilih Tanggal"}
+                      </span>
+                    </div>
+                    <motion.div animate={{ rotate: showDateDropdown ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                      <ChevronDown size={15} />
+                    </motion.div>
+                  </button>
 
+                  <AnimatePresence>
+                    {showDateDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowDateDropdown(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                          transition={{ duration: 0.18, ease: "easeOut" }}
+                          className="absolute bottom-full mb-2 left-0 bg-white rounded-xl shadow-2xl border border-gray-100 z-20 overflow-hidden min-w-[220px] max-h-56 overflow-y-auto"
+                        >
+                          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pilih Tanggal</p>
+                          </div>
+                          {tanggalKeys.map((tgl, index) => (
+                            <button
+                              key={index}
+                              onClick={() => { setCurrentPage(index + 1); setShowDateDropdown(false); }}
+                              className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${
+                                currentPage === index + 1
+                                  ? "bg-blue-600 text-white font-bold"
+                                  : "hover:bg-blue-50 text-gray-700"
+                              }`}
+                            >
+                              <Calendar size={13} className={currentPage === index + 1 ? "text-white/70" : "text-gray-400"} />
+                              {new Date(tgl).toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "long", year: "numeric" })}
+                            </button>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
 
+                {/* Next button */}
                 <button
                   onClick={() => paginate(currentPage + 1)}
                   disabled={currentPage === totalPages}

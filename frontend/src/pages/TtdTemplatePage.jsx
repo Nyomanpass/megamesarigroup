@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import api from "../api";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 
 export default function TtdTemplatePage() {
   const [tipe, setTipe] = useState("harian");
   const [layout, setLayout] = useState("");
-  const { id } = useParams();
-    const projectId = Number(id);
+  const { id: paramId } = useParams();
+  const { selectedProject } = useProject();
+  const projectId = selectedProject?.id || Number(paramId);
+  const navigate = useNavigate();
 
   const fetchData = async () => {
   try {
@@ -113,6 +116,13 @@ const handleSave = async () => {
           className="bg-red-500 text-white px-4 py-2 rounded"
         >
           Delete
+        </button>
+
+        <button 
+          onClick={() => navigate("/dashboard")} 
+          className="p-2.5 rounded bg-gray-500 text-white px-4 py-2 rounded"
+        >
+          Back
         </button>
       </div>
     </div>

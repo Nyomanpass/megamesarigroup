@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, Search, ArrowRight, X, AlertTriangle, Calculator, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { Plus, Edit2, Trash2, Search, ArrowRight, X, AlertTriangle, Calculator, FileSpreadsheet, ArrowLeft, Upload, Database, CheckCircle } from "lucide-react";
 import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
+import { useRef } from 'react';
+import { m, AnimatePresence } from 'framer-motion';
 
 const ProjectAnalisaPage = () => {
-  const { id } = useParams(); // project_id
+  const { id: paramId } = useParams();
+  const { selectedProject } = useProject();
+  const id = selectedProject?.id || paramId;
+  const projectId = id;
   const navigate = useNavigate();
 
   const [data, setData] = useState([]);
@@ -31,9 +37,16 @@ const ProjectAnalisaPage = () => {
   const [errors, setErrors] = useState([]);
 
   const fetchMasterAnalisa = async () => {
-   const res = await api.get("/master/analisa");
+    const res = await api.get("/master/analisa");
     setMasterAnalisa(res.data);
   };
+
+  const fileInputRef = useRef(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
 
   const fetchData = async () => {
     try {
@@ -139,59 +152,59 @@ const ProjectAnalisaPage = () => {
   };
 
   const openDetail = (analisaId) => {
-    navigate(`/project/${id}/analisa/${analisaId}`);
+    navigate(`/analisa/${analisaId}`);
   };
 
   const handleImportAnalisa = async () => {
-  try {
-    await api.post("/project-analisa/import", {
-      project_id: id,
-      analisa_ids: selectedAnalisa
-    });
+    try {
+      await api.post("/project-analisa/import", {
+        project_id: id,
+        analisa_ids: selectedAnalisa
+      });
 
-    alert("Analisa berhasil di import");
-    fetchData();
+      alert("Analisa berhasil di import");
+      fetchData();
 
-  } catch (err) {
-    alert(err.response?.data?.message || "Gagal import");
-  }
-};
-
-const handleImportAnalisaexel = async () => {
-  try {
-    if (!importAnalisaFile) {
-      alert("Pilih file dulu!");
-      return;
+    } catch (err) {
+      alert(err.response?.data?.message || "Gagal import");
     }
+  };
 
-    const formData = new FormData();
-    formData.append("file", importAnalisaFile);
-    formData.append("project_id", id); // 🔥 WAJIB
+  const handleImportAnalisaexel = async () => {
+    try {
+      if (!importAnalisaFile) {
+        alert("Pilih file dulu!");
+        return;
+      }
 
-    const res = await api.post("/import-analisa-multi", formData);
+      const formData = new FormData();
+      formData.append("file", importAnalisaFile);
+      formData.append("project_id", id); // 🔥 WAJIB
 
-    alert(res.data.message);
+      const res = await api.post("/import-analisa-multi", formData);
 
-    fetchData(); // refresh data
-    setImportAnalisaFile(null);
-    setErrors([]);
+      alert(res.data.message);
 
-  } catch (err) {
-    console.error(err);
+      fetchData(); // refresh data
+      setImportAnalisaFile(null);
+      setErrors([]);
 
-    if (err.response?.data?.errors) {
-      setErrors(err.response.data.errors); // 🔥 tampilkan detail error
-    } else {
-      alert(err.response?.data?.message || "Import gagal!");
+    } catch (err) {
+      console.error(err);
+
+      if (err.response?.data?.errors) {
+        setErrors(err.response.data.errors); // 🔥 tampilkan detail error
+      } else {
+        alert(err.response?.data?.message || "Import gagal!");
+      }
     }
-  }
-};
+  };
 
-const filteredMasterAnalisa = masterAnalisa.filter((master) => {
-  return !data.some(
-    (item) => item.nama.toLowerCase() === master.nama.toLowerCase()
-  );
-});
+  const filteredMasterAnalisa = masterAnalisa.filter((master) => {
+    return !data.some(
+      (item) => item.nama.toLowerCase() === master.nama.toLowerCase()
+    );
+  });
 
   return (
     <div className="p-6 bg-background min-h-screen text-text-primary">
@@ -206,67 +219,80 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
           </ul>
         </div>
       )}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="p-2.5 rounded-xl bg-white shadow-sm border border-gray-100 text-gray-600 hover:text-secondary hover:border-secondary transition-all active:scale-95 cursor-pointer"
+        >
+          <ArrowLeft size={24} />
+        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex flex-col items-end relative">
+
+            <input type="file" accept=".xlsx,.xls" hidden ref={fileInputRef} onChange={(e) => setImportAnalisaFile(e.target.files[0])} />
+
+            {importAnalisaFile && <p className="absolute -top-6 w-max whitespace-nowrap text-sm text-gray-500 text-right">{importAnalisaFile.name}</p>}
+
+            {importAnalisaFile ? (
+              <button onClick={handleImportAnalisaexel} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded font-semibold transition-all active:scale-95">
+                <CheckCircle size={18} /> Simpan Data
+              </button>
+            ) : (
+              <button onClick={handleUploadClick} className="flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded font-semibold transition-all hover:bg-white hover:text-secondary border-2 border-transparent hover:border-secondary active:scale-95">
+                <Upload size={18} /> Upload Excel
+              </button>
+            )}
+
+          </div>
+
+          {/* Import Excel */}
+
+
+
+          <button
+            onClick={() => setShowAnalisaModal(true)}
+            className="flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded font-semibold transition-all hover:bg-white hover:text-secondary border-2 border-transparent hover:border-secondary active:scale-95"
+          >
+            <Database size={18} /> Import Master
+          </button>
+
+
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(`/project/${id}`)}
-            className="p-2.5 bg-white border border-gray-200 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
           <div>
             <h1 className="text-3xl font-bold text-primary flex items-center gap-3">
-              <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-                <Calculator className="w-7 h-7 text-secondary" />
-              </div>
               AHSP Proyek
             </h1>
-            <p className="text-sm text-gray-500 mt-2 max-w-xl">
+            <p className="text-sm text-gray-500 max-w-xl">
               Kelola data standar Analisa Harga Satuan Pekerjaan khusus untuk project ini.
             </p>
           </div>
         </div>
-
-        <div className="flex gap-4">
-          <div className="">
-            <input 
-                type="file" 
-                accept=".xlsx, .xls"
-                onChange={(e) => setImportAnalisaFile(e.target.files[0])}
-                className="text-sm"
-              />
-              <button
-                onClick={handleImportAnalisaexel}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold"
-              >
-                Import Analisa
-              </button>
-          </div>
-            <button className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap" onClick={() => setShowAnalisaModal(true)}>
-          Import Analisa
-        </button>
-        <button
-          onClick={() => openFormModal()}
-          className="flex items-center gap-2 bg-secondary hover:bg-[#e64a0f] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-[#ff5511]/20 active:scale-95 whitespace-nowrap"
-        >
-          <Plus className="w-5 h-5" />
-          Tambah Analisa Project
-        </button>
-        </div>
       </div>
 
       {/* TOOLBAR */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-        <div className="relative w-full md:max-w-lg">
+      <div className="bg-white p-4 rounded-md shadow-sm border border-gray-100 flex justify-between items-center gap-4 mb-6">
+        <div className="relative w-full ">
           <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Cari berdasarkan kode atau nama pekerjaan..."
+            placeholder="Cari nama material..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 px-2.5 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all text-sm"
+            className="w-full pl-11 pr-4 px-2.5 py-3 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all text-sm"
           />
         </div>
+        <button
+          onClick={() => openFormModal()}
+          className="flex items-center gap-2 cursor-pointer bg-secondary text-white border-2 border-tranpanret hover:bg-transparent hover:text-secondary transition-all bg-border-secondary px-5 py-2.5 rounded-md font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap"
+        >
+          <Plus size={24} />
+          Tambah Material
+        </button>
+
       </div>
 
       {/* TABLE SECTION */}
@@ -304,12 +330,7 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
                   </td>
                   <td className="p-5">
                     <div className="flex justify-center items-center gap-2">
-                      <button
-                        onClick={() => openDetail(a.id)}
-                        className="flex items-center gap-1.5 text-xs font-bold bg-secondary text-white hover:bg-secondary/80 px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95"
-                      >
-                        Kelola Detail <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+
 
                       <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button
@@ -327,6 +348,12 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      <button
+                        onClick={() => openDetail(a.id)}
+                        className="flex items-center gap-1.5 text-xs font-bold bg-secondary text-white hover:bg-secondary/80 px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95"
+                      >
+                        Kelola Detail <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -351,231 +378,236 @@ const filteredMasterAnalisa = masterAnalisa.filter((master) => {
 
       {/* --- MODALS --- */}
 
-  {showAnalisaModal && (
-  <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
-    <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl">
 
-      {/* HEADER */}
-      <div className="p-5 border-b flex justify-between items-center">
-        <h2 className="text-lg font-bold text-primary">
-          Import Analisa dari Master
-        </h2>
-        <button
-          onClick={() => setShowAnalisaModal(false)}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          ✕
-        </button>
-      </div>
+      <AnimatePresence>
+        {showAnalisaModal && (
+          <m.div transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+            <m.div transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-3xl rounded-md">
 
-      {/* BODY */}
-      <div className="p-5">
+              {/* HEADER */}
+              <div className="p-5 border-b border-muted-gray flex justify-between items-center">
+                <div className="size-6"></div>
+                <h2 className="text-lg font-semibold text-primary">
+                  Import Analisa dari Master
+                </h2>
+                <button
+                  onClick={() => setShowAnalisaModal(false)}
+                  className="text-gray-400 hover:text-secondary transition-all cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
 
-        {/* TABLE HEADER */}
-        <div className="grid grid-cols-4 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600 rounded-t-xl">
-          <div></div>
-          <div>Kode</div>
-          <div>Nama Analisa</div>
-          <div>Satuan</div>
-        </div>
+              {/* BODY */}
+              <div className="p-5">
 
-        {/* TABLE DATA */}
-        <div className="max-h-64 overflow-y-auto border border-t-0 rounded-b-xl">
+                {/* TABLE HEADER */}
+                <div className="grid grid-cols-4 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600 rounded-t-md">
+                  <div></div>
+                  <div>Kode</div>
+                  <div>Nama Analisa</div>
+                  <div>Satuan</div>
+                </div>
 
-          {filteredMasterAnalisa.map((a) => {
-            const checked = selectedAnalisa.includes(a.id);
+                {/* TABLE DATA */}
+                <div className="max-h-64 overflow-y-auto border border-muted-gray border-t-0 rounded-b-md">
 
-            return (
-              <div
-                key={a.id}
-                className={`grid grid-cols-4 gap-2 p-2 border-t items-center cursor-pointer hover:bg-gray-50
+                  {filteredMasterAnalisa.map((a) => {
+                    const checked = selectedAnalisa.includes(a.id);
+
+                    return (
+                      <div
+                        key={a.id}
+                        className={`grid grid-cols-4 gap-2 p-2 border-t items-center cursor-pointer hover:bg-gray-50
                   ${checked ? "bg-orange-50" : ""}
                 `}
-                onClick={() => {
-                  if (checked) {
-                    setSelectedAnalisa(selectedAnalisa.filter(id => id !== a.id));
-                  } else {
-                    setSelectedAnalisa([...selectedAnalisa, a.id]);
-                  }
-                }}
-              >
-                {/* CHECKBOX */}
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  readOnly
-                />
+                        onClick={() => {
+                          if (checked) {
+                            setSelectedAnalisa(selectedAnalisa.filter(id => id !== a.id));
+                          } else {
+                            setSelectedAnalisa([...selectedAnalisa, a.id]);
+                          }
+                        }}
+                      >
+                        {/* CHECKBOX */}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          readOnly
+                        />
 
-                {/* KODE */}
-                <div className="font-medium">{a.kode}</div>
+                        {/* KODE */}
+                        <div className="font-medium">{a.kode}</div>
 
-                {/* NAMA */}
-                <div>{a.nama}</div>
+                        {/* NAMA */}
+                        <div>{a.nama}</div>
 
-                {/* SATUAN */}
-                <div className="text-gray-500 text-sm">{a.satuan}</div>
-              </div>
-            );
-          })}
+                        {/* SATUAN */}
+                        <div className="text-gray-500 text-sm">{a.satuan}</div>
+                      </div>
+                    );
+                  })}
 
-          {masterAnalisa.length === 0 && (
-            <p className="text-center text-gray-400 py-6">
-              Tidak ada data analisa
-            </p>
-          )}
+                  {masterAnalisa.length === 0 && (
+                    <p className="text-center text-gray-400 py-6">
+                      Tidak ada data analisa
+                    </p>
+                  )}
 
-        </div>
-
-        {/* INFO */}
-        <p className="text-sm text-gray-500 mt-3">
-          {selectedAnalisa.length} analisa dipilih
-        </p>
-
-      </div>
-
-      {/* FOOTER */}
-      <div className="p-5 border-t flex justify-end gap-3">
-        <button
-          onClick={() => setShowAnalisaModal(false)}
-          className="px-4 py-2 bg-gray-200 rounded-lg"
-        >
-          Batal
-        </button>
-
-        <button
-          onClick={() => {
-            handleImportAnalisa();
-            setShowAnalisaModal(false);
-          }}
-          className="px-4 py-2 bg-secondary text-white rounded-lg"
-        >
-          Import Analisa
-        </button>
-      </div>
-
-    </div>
-  </div>
-)}
-
-      {/* Form Master Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-primary/40 flex justify-center items-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-primary flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${isEdit ? 'bg-info/10 text-info' : 'bg-secondary/10 text-secondary'}`}>
-                  {isEdit ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                </div>
-                {isEdit ? "Edit Analisa Project" : "Tambah Analisa Project"}
-              </h2>
-              <button onClick={closeFormModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitMaster} className="p-6">
-              <div className="space-y-5">
-
-                <div className="grid grid-cols-3 gap-5">
-                  <div className="col-span-1">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Kode Analisa</label>
-                    <input
-                      type="text"
-                      name="kode"
-                      placeholder="Contoh: A.1"
-                      value={formMaster.kode}
-                      onChange={handleChangeMaster}
-                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-bold uppercase"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Satuan Analisa</label>
-                    <input
-                      type="text"
-                      name="satuan"
-                      placeholder="Contoh: M3, M2, Ls"
-                      value={formMaster.satuan}
-                      onChange={handleChangeMaster}
-                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
-                    />
-                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Nama Pekerjaan (Uraian)</label>
-                  <input
-                    type="text"
-                    name="nama"
-                    placeholder="Contoh: Galian Tanah Biasa Sedalam 1m"
-                    value={formMaster.nama}
-                    onChange={handleChangeMaster}
-                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Persentase Overhead (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    name="overhead_persen"
-                    placeholder="Contoh: 10 atau 15"
-                    value={formMaster.overhead_persen}
-                    onChange={handleChangeMaster}
-                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Masukan persentase tambahan (Overhead, Jasa, Profit, dll) yang dibebankan pada master analisa ini.</p>
-                </div>
+                {/* INFO */}
+                <p className="text-sm text-gray-500 mt-3">
+                  {selectedAnalisa.length} analisa dipilih
+                </p>
 
               </div>
 
-              <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
-                <button type="button" onClick={closeFormModal} className="px-6 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold transition-colors">
-                  Batal
-                </button>
-                <button type="submit" className="px-6 py-3 text-white bg-secondary hover:bg-[#e64a0f] rounded-xl font-bold transition-all shadow-sm active:scale-95">
-                  {isEdit ? "Simpan Perbaikan" : "Simpan Data"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirm Modal */}
-      {deleteModal.isOpen && (
-        <div className="fixed inset-0 bg-primary/60 flex justify-center items-center z-[60] p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
-                <AlertTriangle className="w-7 h-7" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Hapus Data?</h2>
-              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                Apakah Anda yakin ingin menghapus analisa<br />
-                <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
-                <br />Seluruh detail didalamnya juga kemungkinan akan terhapus.
-              </p>
-
-              <div className="flex gap-3 w-full">
+              {/* FOOTER */}
+              <div className="p-5 border-t border-muted-gray flex justify-end gap-3">
                 <button
-                  onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                  onClick={() => setShowAnalisaModal(false)}
+                  className="px-5 py-2 font-semibold cursor-pointer transition-all active:scale-95 rounded-md bg-white border border-gray-200 hover:bg-gray-100"
                 >
                   Batal
                 </button>
+
                 <button
-                  onClick={executeDelete}
-                  className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-bold rounded-xl transition-all shadow-sm shadow-red-200 active:scale-95"
+                  onClick={() => {
+                    handleImportAnalisa();
+                    setShowAnalisaModal(false);
+                  }}
+                  className="px-5 py-2 font-semibold cursor-pointer transition-all active:scale-95 rounded-md bg-secondary hover:bg-secondary/90 text-white "
                 >
-                  Ya, Hapus
+                  Import Analisa
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {/* Form Master Modal */}
+        {showModal && (
+          <m.div transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+            <m.div transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-xl rounded-md overflow-hidden ">
+              <div className="flex justify-between items-center p-6 border-b border-muted-gray">
+                <div className="size-5"></div>
+                <h2 className="text-xl font-bold text-primary flex items-center gap-3">
+                  {isEdit ? "Edit Analisa Project" : "Tambah Analisa Project"}
+                </h2>
+                <button onClick={closeFormModal} className="text-gray-400 hover:text-secondary hover:bg-gray-100 p-2 rounded-xl transition-all cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitMaster} className="p-6">
+                <div className="space-y-5">
+
+                  <div className="grid grid-cols-3 gap-5">
+                    <div className="col-span-1">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Kode Analisa</label>
+                      <input
+                        type="text"
+                        name="kode"
+                        placeholder="Contoh: A.1"
+                        value={formMaster.kode}
+                        onChange={handleChangeMaster}
+                        className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-semibold uppercase"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Satuan Analisa</label>
+                      <input
+                        type="text"
+                        name="satuan"
+                        placeholder="Contoh: M3, M2, Ls"
+                        value={formMaster.satuan}
+                        onChange={handleChangeMaster}
+                        className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Nama Pekerjaan (Uraian)</label>
+                    <input
+                      type="text"
+                      name="nama"
+                      placeholder="Contoh: Galian Tanah Biasa Sedalam 1m"
+                      value={formMaster.nama}
+                      onChange={handleChangeMaster}
+                      className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Persentase Overhead (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      name="overhead_persen"
+                      placeholder="Contoh: 10 atau 15"
+                      value={formMaster.overhead_persen}
+                      onChange={handleChangeMaster}
+                      className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">Masukan persentase tambahan (Overhead, Jasa, Profit, dll) yang dibebankan pada master analisa ini.</p>
+                  </div>
+
+                </div>
+
+                <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
+                  <button type="button" onClick={closeFormModal} className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md font-semibold transition-all shadow-sm active:scale-95 cursor-pointer">
+                    Batal
+                  </button>
+                  <button type="submit" className="px-5 py-2.5 text-white bg-secondary hover:bg-[#e64a0f] rounded-md font-semibold transition-all  active:scale-95 cursor-pointer">
+                    {isEdit ? "Simpan Perbaikan" : "Simpan Data"}
+                  </button>
+                </div>
+              </form>
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {/* --- DELETE CONFIRM MODAL --- */}
+        {deleteModal.isOpen && (
+          <m.div transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex justify-center items-center z-[60] p-4 ">
+            <m.div transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-lg rounded-md overflow-hidden ">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-danger/10 text-danger rounded-md flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
+                  <AlertTriangle className="w-7 h-7" />
+                </div>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Hapus Data?</h2>
+                <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus pekerja<br />
+                  <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
+                </p>
+
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-md transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={executeDelete}
+                    className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-semibold rounded-md transition-all shadow-sm shadow-red-200 active:scale-95 cursor-pointer"
+                  >
+                    Ya, Hapus
+                  </button>
+                </div>
+              </div>
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
