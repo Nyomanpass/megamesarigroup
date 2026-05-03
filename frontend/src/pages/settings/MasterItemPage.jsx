@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, Search, Package, X, Settings2, AlertTriangle, Blocks, Users, Wrench } from "lucide-react";
+import { Plus, Edit2, Trash2, Search, Package, X, Settings2, AlertTriangle, Blocks, Users, Wrench, Upload } from "lucide-react";
 import api from "../../api";
+import { motion } from "motion/react";
 
 const MasterItemPage = () => {
   const [data, setData] = useState([]);
@@ -217,7 +218,12 @@ const MasterItemPage = () => {
   const tabDetails = getTabDetails();
 
   return (
-    <div className="p-6 bg-background min-h-screen text-text-primary">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="p-6 bg-background min-h-screen text-text-primary"
+    >
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
@@ -274,20 +280,20 @@ const MasterItemPage = () => {
           />
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          <div className="flex flex-col gap-2">
-          <input 
-            type="file" 
-            onChange={(e) => setImportFile(e.target.files[0])}
-            className="text-sm"
-          />
-
-          <button
-            onClick={handleImportExcel}
-            className="bg-green-500 text-white px-4 py-2 rounded-xl font-bold"
-          >
-            Import Excel
-          </button>
-        </div>
+          <div className="flex items-center gap-2 bg-gray-50 border border-dashed border-gray-300 rounded-xl px-3 py-2 hover:border-green-400 transition-colors">
+            <Upload size={14} className="text-gray-400 flex-shrink-0" />
+            <input 
+              type="file" 
+              onChange={(e) => setImportFile(e.target.files[0])}
+              className="text-xs text-gray-500 w-32 file:mr-2 file:py-0.5 file:px-2 file:rounded file:text-xs file:bg-white file:border file:border-gray-200 file:font-medium cursor-pointer"
+            />
+            <button
+              onClick={handleImportExcel}
+              className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-green-600 flex-shrink-0 transition-colors"
+            >
+              Import
+            </button>
+          </div>
           <button
             onClick={() => openItemModal()}
             className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm active:scale-95 w-full md:w-auto justify-center ${tabDetails.btnColor}`}
@@ -588,7 +594,7 @@ const MasterItemPage = () => {
         </div>
       )}
 
-    </div>
+    </motion.div>
   );
 };
 

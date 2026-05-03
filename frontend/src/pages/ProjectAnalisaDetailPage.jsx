@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 import { Plus, Trash2, Edit2, ArrowLeft, AlertTriangle, X, Users, Blocks, Wrench, Calculator } from "lucide-react";
 import api from "../api";
+import { m, AnimatePresence } from 'framer-motion';
 
 const ProjectAnalisaDetailPage = () => {
-  const { id: projectId, analisaId } = useParams();
+  const { id: paramId, analisaId } = useParams();
+  const { selectedProject } = useProject();
+  const projectId = selectedProject?.id || paramId;
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -152,7 +156,7 @@ const ProjectAnalisaDetailPage = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(`/project/${projectId}/analisa`)}
+            onClick={() => navigate("/analisa")}
             className="p-2.5 bg-white border border-gray-200 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -169,17 +173,17 @@ const ProjectAnalisaDetailPage = () => {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+      <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="bg-gray-800 text-gray-100 text-xs uppercase tracking-wider">
-                <th className="p-4 font-bold border-b border-gray-700">Uraian / Nama Item</th>
-                <th className="p-4 font-bold border-b border-gray-700 text-center w-24">Satuan</th>
-                <th className="p-4 font-bold border-b border-gray-700 text-center w-32">Koefisien</th>
-                <th className="p-4 font-bold border-b border-gray-700 text-right w-40">Harga Satuan (Rp)</th>
-                <th className="p-4 font-bold border-b border-gray-700 text-right w-48">Jumlah Harga (Rp)</th>
-                <th className="p-4 font-bold border-b border-gray-700 text-center w-28">Aksi</th>
+              <tr className="border-b border-muted-gray">
+                <th className="p-4 font-semibold">Uraian / Nama Item</th>
+                <th className="p-4 font-semibold text-center w-24">Satuan</th>
+                <th className="p-4 font-semibold text-center w-32">Koefisien</th>
+                <th className="p-4 font-semibold text-right w-40">Harga Satuan (Rp)</th>
+                <th className="p-4 font-semibold text-right w-48">Jumlah Harga (Rp)</th>
+                <th className="p-4 font-semibold text-center w-28">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -326,17 +330,17 @@ const ProjectAnalisaDetailPage = () => {
 
 
               {/* ================= SUMMARY SECTION ================= */}
-              <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+              <tr className="bg-white font-bold border-t-2 border-gray-300">
                 <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Jumlah Harga Tenaga, Bahan dan Alat (A + B + C)</td>
                 <td className="p-4 text-right text-[15px] text-gray-800">{data.total?.toLocaleString('id-ID')}</td>
                 <td></td>
               </tr>
-              <tr className="bg-gray-50 font-bold border-t border-gray-200">
+              <tr className="bg-white font-bold border-t border-gray-200">
                 <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Overhead & Profit</td>
                 <td className="p-4 text-right text-[15px] text-gray-800">{data.overhead?.toLocaleString('id-ID')}</td>
                 {/* <td></td> */}
               </tr>
-              <tr className="bg-primary text-white font-bold border-t-2 border-primary">
+              <tr className="bg-secondary/70 text-white font-bold ">
                 <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">F. Harga Satuan Pekerjaan (D + E)</td>
                 <td className="p-4 text-right text-lg">{data.grandTotal?.toLocaleString('id-ID')}</td>
                 <td></td>
@@ -348,152 +352,164 @@ const ProjectAnalisaDetailPage = () => {
       </div>
 
       {/* --- ADD/EDIT MODAL --- */}
-      {showModal && (
-        <div className="fixed inset-0 bg-primary/50 flex justify-center items-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3">
-                <div className="bg-secondary/10 text-secondary p-2 rounded-lg">
-                  {isEdit ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                </div>
-                {isEdit ? `Edit ${modalType}` : `Tambah ${modalType}`}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6">
-              <div className="space-y-5">
-
-                <div className="relative">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Item Project</label>
+      <AnimatePresence>
+        {showModal && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+            <m.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white w-full max-w-lg rounded-md overflow-hidden ">
+              <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50">
+                <div className="size-6"></div>
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+                  {isEdit ? `Edit ${modalType}` : `Tambah ${modalType}`}
+                </h2>
+                <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-all">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6">
+                <div className="space-y-5">
 
                   <div className="relative">
-                    <input
-                      type="text"
-                      placeholder={`-- Ketik nama ${modalType.toLowerCase()} --`}
-                      value={searchItemQuery}
-                      onChange={(e) => {
-                        setSearchItemQuery(e.target.value);
-                        setIsDropdownOpen(true);
-                        if (form.item_id) {
-                          setForm({ ...form, item_id: "" });
-                        }
-                      }}
-                      onFocus={() => setIsDropdownOpen(true)}
-                      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
-                    />
-                    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Item Project</label>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={`-- Ketik nama ${modalType.toLowerCase()} --`}
+                        value={searchItemQuery}
+                        onChange={(e) => {
+                          setSearchItemQuery(e.target.value);
+                          setIsDropdownOpen(true);
+                          if (form.item_id) {
+                            setForm({ ...form, item_id: "" });
+                          }
+                        }}
+                        onFocus={() => setIsDropdownOpen(true)}
+                        className="w-full border border-gray-200  p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
+                      />
+                      <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
                     </div>
+
+                    {/* Dropdown List */}
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        {filteredItems.filter(i => i.nama.toLowerCase().includes(searchItemQuery.toLowerCase())).map((item) => (
+                          <div
+                            key={item.id}
+                            className="px-4 py-3 hover:bg-accent/40 cursor-pointer border-b border-gray-50 last:border-0"
+                            onMouseDown={(e) => {
+                              // Mencegah input kehilangan fokus terlalu cepat
+                              e.preventDefault();
+                              setForm({ ...form, item_id: item.id });
+                              setSearchItemQuery(item.nama);
+                              setIsDropdownOpen(false);
+                            }}
+                          >
+                            <div className="font-bold text-gray-800 text-sm">{item.nama}</div>
+                            <div className="text-xs text-gray-500 mt-1 flex gap-2">
+                              <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">Satuan: {item.satuan}</span>
+                              <span className="text-gray-400 font-medium">Rp {item.harga?.toLocaleString('id-ID')}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {filteredItems.filter(i => i.nama.toLowerCase().includes(searchItemQuery.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-5 text-sm text-gray-500 text-center flex flex-col items-center">
+                            <svg className="w-8 h-8 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Data tidak ditemukan
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {filteredItems.length === 0 && (
+                      <p className="text-xs text-danger mt-2 flex items-center gap-1.5 p-2 bg-danger/5 rounded-lg border border-danger/10">
+                        <AlertTriangle className="w-4 h-4" /> Data item {modalType.toLowerCase()} project benar-benar kosong. Silakan tambah data di Item Project.
+                      </p>
+                    )}
+
+
+                    {isDropdownOpen && (
+                      <div
+                        className="fixed inset-0 z-[5]"
+                        onClick={() => setIsDropdownOpen(false)}
+                      ></div>
+                    )}
                   </div>
 
-                  {/* Dropdown List */}
-                  {isDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                      {filteredItems.filter(i => i.nama.toLowerCase().includes(searchItemQuery.toLowerCase())).map((item) => (
-                        <div
-                          key={item.id}
-                          className="px-4 py-3 hover:bg-accent/40 cursor-pointer border-b border-gray-50 last:border-0"
-                          onMouseDown={(e) => {
-                            // Mencegah input kehilangan fokus terlalu cepat
-                            e.preventDefault();
-                            setForm({ ...form, item_id: item.id });
-                            setSearchItemQuery(item.nama);
-                            setIsDropdownOpen(false);
-                          }}
-                        >
-                          <div className="font-bold text-gray-800 text-sm">{item.nama}</div>
-                          <div className="text-xs text-gray-500 mt-1 flex gap-2">
-                            <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">Satuan: {item.satuan}</span>
-                            <span className="text-gray-400 font-medium">Rp {item.harga?.toLocaleString('id-ID')}</span>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredItems.filter(i => i.nama.toLowerCase().includes(searchItemQuery.toLowerCase())).length === 0 && (
-                        <div className="px-4 py-5 text-sm text-gray-500 text-center flex flex-col items-center">
-                          <svg className="w-8 h-8 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          Data tidak ditemukan
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Koefisien / Indeks Pekerjaan</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      name="koefisien"
+                      placeholder="Contoh: 0.15"
+                      value={form.koefisien}
+                      onChange={handleChange}
+                      className="w-full border border-gray-200  p-3.5 rounded focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all font-medium"
+                    />
+                  </div>
 
-                  {filteredItems.length === 0 && (
-                    <p className="text-xs text-danger mt-2 flex items-center gap-1.5 p-2 bg-danger/5 rounded-lg border border-danger/10">
-                      <AlertTriangle className="w-4 h-4" /> Data item {modalType.toLowerCase()} project benar-benar kosong. Silakan tambah data di Item Project.
-                    </p>
-                  )}
-
-
-                  {isDropdownOpen && (
-                    <div
-                      className="fixed inset-0 z-[5]"
-                      onClick={() => setIsDropdownOpen(false)}
-                    ></div>
-                  )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Koefisien / Indeks Pekerjaan</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    min="0"
-                    name="koefisien"
-                    placeholder="Contoh: 0.15"
-                    value={form.koefisien}
-                    onChange={handleChange}
-                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all font-medium"
-                  />
+                <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
+                  <button type="button" onClick={closeModal} className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md font-semibold transition-colors cursor-pointer">
+                    Batal
+                  </button>
+                  <button type="submit" className={`px-5 py-2.5 text-white rounded-md font-semibold transition-all shadow-sm active:scale-95 bg-secondary hover:bg-[#e64a0f]`}>
+                    {isEdit ? "Simpan Perbaikan" : `Tambah ${modalType}`}
+                  </button>
                 </div>
+              </form>
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
 
-              </div>
+      <AnimatePresence>
+        {/* --- DELETE CONFIRM MODAL --- */}
+        {deleteModal.isOpen && (
+          <m.div transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex justify-center items-center z-[60] p-4 ">
+            <m.div transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-lg rounded-md overflow-hidden ">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-danger/10 text-danger rounded-md flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
+                  <AlertTriangle className="w-7 h-7" />
+                </div>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Hapus Data?</h2>
+                <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus pekerja<br />
+                  <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
+                </p>
 
-              <div className="mt-8 flex justify-end gap-3 pt-5 border-t border-gray-100">
-                <button type="button" onClick={closeModal} className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold transition-colors">
-                  Batal
-                </button>
-                <button type="submit" className={`px-5 py-2.5 text-white rounded-xl font-bold transition-all shadow-sm active:scale-95 bg-secondary hover:bg-[#e64a0f]`}>
-                  {isEdit ? "Simpan Perbaikan" : "Tambah ke Analisa"}
-                </button>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-md transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={executeDelete}
+                    className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-semibold rounded-md transition-all shadow-sm shadow-red-200 active:scale-95 cursor-pointer"
+                  >
+                    Ya, Hapus
+                  </button>
+                </div>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- DELETE CONFIRM MODAL --- */}
-      {deleteModal.isOpen && (
-        <div className="fixed inset-0 bg-primary/60 flex justify-center items-center z-[60] p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mx-auto mb-4 border-8 border-danger/5">
-                <AlertTriangle className="w-7 h-7" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Hapus Detail?</h2>
-              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                Menghapus <span className="font-bold text-gray-800">"{deleteModal.itemName}"</span> akan merubah perhitungan total RAB / BOQ. Lanjutkan?
-              </p>
-
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={() => setDeleteModal({ isOpen: false, id: null, itemName: "" })}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={executeDelete}
-                  className="flex-1 py-3 bg-danger hover:bg-[#dc2626] text-white font-bold rounded-xl transition-all shadow-sm shadow-red-200 active:scale-95"
-                >
-                  Ya, Hapus
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

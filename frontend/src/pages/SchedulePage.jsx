@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 import api from "../api";
-import { ArrowLeft, CalendarDays, Zap, Save, AlertCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, Zap, Save, AlertCircle, FileText } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 
 export default function SchedulePage() {
-  const { id } = useParams();
+  const { id: paramId } = useParams();
+  const { selectedProject } = useProject();
+  const id = selectedProject?.id || paramId;
   const navigate = useNavigate();
   const [statusMap, setStatusMap] = useState({});
   const [boq, setBoq] = useState([]);
@@ -15,44 +18,44 @@ export default function SchedulePage() {
   const [schedule, setSchedule] = useState([]);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [realData, setRealData] = useState([]);
-  const [mode, setMode] = useState("manual"); 
+  const [mode, setMode] = useState("manual");
 
 
 
   const handleExportTimeSchedule = async () => {
-  try {
-    const response = await api.get(
-      `/export-time-schedule/${id}`,
-      {
-        responseType: "blob", // 🔥 wajib
-      }
-    );
+    try {
+      const response = await api.get(
+        `/export-time-schedule/${id}`,
+        {
+          responseType: "blob", // 🔥 wajib
+        }
+      );
 
-    // 🔥 download file
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
+      // 🔥 download file
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
 
-    link.href = url;
-    link.setAttribute("download", "time_schedule.xlsx");
+      link.href = url;
+      link.setAttribute("download", "time_schedule.xlsx");
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
 
-  } catch (error) {
-    console.log(error);
-    setError("Gagal export Time Schedule");
-  }
-};
+    } catch (error) {
+      console.log(error);
+      setError("Gagal export Time Schedule");
+    }
+  };
 
   const fetchChart = async () => {
-  try {
-    const res = await api.get(`/daily-plan/weekly-chart/${id}`);
-    setRealData(res.data);
-  } catch (err) {
-    console.error(err);
-  }
-};
+    try {
+      const res = await api.get(`/daily-plan/weekly-chart/${id}`);
+      setRealData(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     fetchAll();
@@ -92,156 +95,156 @@ export default function SchedulePage() {
 
 
   const handleBagiRata = (item) => {
-  const startMng = prompt(`Mulai minggu ke berapa? (1-${weeks.length})`, "1");
-  const endMng = prompt(`Sampai minggu ke berapa?`, weeks.length.toString());
+    const startMng = prompt(`Mulai minggu ke berapa? (1-${weeks.length})`, "1");
+    const endMng = prompt(`Sampai minggu ke berapa?`, weeks.length.toString());
 
-  if (!startMng || !endMng) return;
+    if (!startMng || !endMng) return;
 
-  const start = parseInt(startMng);
-  const end = parseInt(endMng);
-  const durasi = end - start + 1;
+    const start = parseInt(startMng);
+    const end = parseInt(endMng);
+    const durasi = end - start + 1;
 
-  if (durasi <= 0) return alert("Rentang minggu salah!");
+    if (durasi <= 0) return alert("Rentang minggu salah!");
 
-  const totalBobot = Number(item.bobot);
+    const totalBobot = Number(item.bobot);
 
-  // 🔥 STEP 1: bagi rata (round 3 angka)
-  const base = Number((totalBobot / durasi).toFixed(3));
+    // 🔥 STEP 1: bagi rata (round 3 angka)
+    const base = Number((totalBobot / durasi).toFixed(3));
 
-  let newSchedule = [...schedule.filter(s => s.boq_id !== item.id)];
+    let newSchedule = [...schedule.filter(s => s.boq_id !== item.id)];
 
-  let totalSementara = 0;
+    let totalSementara = 0;
 
-  for (let i = start; i <= end; i++) {
-    let bobot = base;
+    for (let i = start; i <= end; i++) {
+      let bobot = base;
 
-    // 🔥 minggu terakhir = sisa (biar pas 100%)
-    if (i === end) {
-      bobot = Number((totalBobot - totalSementara).toFixed(3));
+      // 🔥 minggu terakhir = sisa (biar pas 100%)
+      if (i === end) {
+        bobot = Number((totalBobot - totalSementara).toFixed(3));
+      }
+
+      totalSementara += bobot;
+
+      newSchedule.push({
+        project_id: id,
+        boq_id: item.id,
+        minggu_ke: i,
+        bobot: bobot
+      });
     }
 
-    totalSementara += bobot;
-
-    newSchedule.push({
-      project_id: id,
-      boq_id: item.id,
-      minggu_ke: i,
-      bobot: bobot
-    });
-  }
-
-  setSchedule(newSchedule);
-};
+    setSchedule(newSchedule);
+  };
 
 
-const handleSingleCellChange = (boqId, mingguKe, value) => {
-  const inputValue = value === "" ? 0 : parseFloat(value);
-  if (isNaN(inputValue) || inputValue < 0) return;
+  const handleSingleCellChange = (boqId, mingguKe, value) => {
+    const inputValue = value === "" ? 0 : parseFloat(value);
+    if (isNaN(inputValue) || inputValue < 0) return;
 
-  const totalTarget = boq.find(b => b.id === boqId)?.bobot || 0;
+    const totalTarget = boq.find(b => b.id === boqId)?.bobot || 0;
 
-  let newSchedule = [...schedule];
+    let newSchedule = [...schedule];
 
-  const index = newSchedule.findIndex(
-    s =>
-      Number(s.boq_id) === Number(boqId) &&
-      Number(s.minggu_ke) === Number(mingguKe)
-  );
+    const index = newSchedule.findIndex(
+      s =>
+        Number(s.boq_id) === Number(boqId) &&
+        Number(s.minggu_ke) === Number(mingguKe)
+    );
 
-  if (index >= 0) {
-    newSchedule[index].bobot = Number(inputValue.toFixed(3));
-  } else {
-    newSchedule.push({
-      project_id: id,
-      boq_id: boqId,
-      minggu_ke: mingguKe,
-      bobot: Number(inputValue.toFixed(3))
-    });
-  }
+    if (index >= 0) {
+      newSchedule[index].bobot = Number(inputValue.toFixed(3));
+    } else {
+      newSchedule.push({
+        project_id: id,
+        boq_id: boqId,
+        minggu_ke: mingguKe,
+        bobot: Number(inputValue.toFixed(3))
+      });
+    }
 
-  // 🔥 HAPUS kalau 0
-  newSchedule = newSchedule.filter(
-    s => !(s.boq_id === boqId && Number(s.bobot) === 0)
-  );
+    // 🔥 HAPUS kalau 0
+    newSchedule = newSchedule.filter(
+      s => !(s.boq_id === boqId && Number(s.bobot) === 0)
+    );
 
-  // =========================
-  // 🔵 MODE AUTO
-  // =========================
-  if (mode === "auto") {
-    let itemWeeks = newSchedule.filter(s => s.boq_id === boqId);
+    // =========================
+    // 🔵 MODE AUTO
+    // =========================
+    if (mode === "auto") {
+      let itemWeeks = newSchedule.filter(s => s.boq_id === boqId);
 
-    let total = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
-    let selisih = Number((total - totalTarget).toFixed(3));
+      let total = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
+      let selisih = Number((total - totalTarget).toFixed(3));
 
-    if (selisih !== 0) {
-      const others = itemWeeks.filter(s => s.minggu_ke !== mingguKe);
+      if (selisih !== 0) {
+        const others = itemWeeks.filter(s => s.minggu_ke !== mingguKe);
 
-      if (others.length > 0) {
-        const totalOthers = others.reduce((sum, s) => sum + Number(s.bobot), 0);
+        if (others.length > 0) {
+          const totalOthers = others.reduce((sum, s) => sum + Number(s.bobot), 0);
 
-        for (let w of others) {
-          if (totalOthers === 0) break;
+          for (let w of others) {
+            if (totalOthers === 0) break;
 
-          const proporsi = w.bobot / totalOthers;
-          const adjust = selisih * proporsi;
+            const proporsi = w.bobot / totalOthers;
+            const adjust = selisih * proporsi;
 
-          w.bobot = Number((w.bobot - adjust).toFixed(3));
-          if (w.bobot < 0) w.bobot = 0;
+            w.bobot = Number((w.bobot - adjust).toFixed(3));
+            if (w.bobot < 0) w.bobot = 0;
+          }
         }
+      }
+
+      // 🔥 FIX rounding akhir
+      let fixTotal = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
+      let diff = Number((fixTotal - totalTarget).toFixed(3));
+
+      if (diff !== 0 && itemWeeks.length > 0) {
+        let last = itemWeeks[itemWeeks.length - 1];
+        last.bobot = Number((last.bobot - diff).toFixed(3));
       }
     }
 
-    // 🔥 FIX rounding akhir
-    let fixTotal = itemWeeks.reduce((sum, s) => sum + Number(s.bobot), 0);
-    let diff = Number((fixTotal - totalTarget).toFixed(3));
+    // =========================
+    // 🟢 MODE MANUAL
+    // =========================
+    // tidak ada auto apapun
 
-    if (diff !== 0 && itemWeeks.length > 0) {
-      let last = itemWeeks[itemWeeks.length - 1];
-      last.bobot = Number((last.bobot - diff).toFixed(3));
-    }
-  }
+    // 🔥 HITUNG TOTAL UNTUK STATUS
+    const itemWeeksFinal = newSchedule.filter(s => s.boq_id === boqId);
 
-  // =========================
-  // 🟢 MODE MANUAL
-  // =========================
-  // tidak ada auto apapun
+    const totalFinal = itemWeeksFinal.reduce(
+      (sum, s) => sum + Number(s.bobot),
+      0
+    );
 
-  // 🔥 HITUNG TOTAL UNTUK STATUS
-const itemWeeksFinal = newSchedule.filter(s => s.boq_id === boqId);
+    const totalRounded = Number(totalFinal.toFixed(3));
 
-const totalFinal = itemWeeksFinal.reduce(
-  (sum, s) => sum + Number(s.bobot),
-  0
-);
+    const status =
+      totalRounded > totalTarget
+        ? "lebih"
+        : totalRounded < totalTarget
+          ? "kurang"
+          : "pas";
 
-const totalRounded = Number(totalFinal.toFixed(3));
+    // 🔥 SIMPAN KE STATUS MAP
+    setStatusMap(prev => ({
+      ...prev,
+      [boqId]: {
+        total: totalRounded,
+        target: totalTarget,
+        status
+      }
+    }));
 
-const status =
-  totalRounded > totalTarget
-    ? "lebih"
-    : totalRounded < totalTarget
-    ? "kurang"
-    : "pas";
-
-// 🔥 SIMPAN KE STATUS MAP
-setStatusMap(prev => ({
-  ...prev,
-  [boqId]: {
-    total: totalRounded,
-    target: totalTarget,
-    status
-  }
-}));
-
-  setSchedule([...newSchedule]);
-};
+    setSchedule([...newSchedule]);
+  };
 
 
   const handleSaveSchedule = async () => {
     try {
       if (schedule.length === 0) return alert("Jadwal masih kosong!");
-      await api.post(`/schedule/bulk-save/${id}`, { 
-        items: schedule 
+      await api.post(`/schedule/bulk-save/${id}`, {
+        items: schedule
       });
       alert("✅ Jadwal Berhasil Disimpan Permanen!");
       fetchAll();
@@ -282,131 +285,130 @@ setStatusMap(prev => ({
   return (
     <>
       <div className="p-6 max-w-[100vw] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-x-hidden">
-        
-        {/* HEADER & ACTION BUTTONS */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate(`/project/${id}`)} 
-              className="p-2.5 rounded-xl bg-white shadow flex items-center justify-center border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
-            >
-              <ArrowLeft size={24} className="text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <CalendarDays className="text-red-500"/> Schedule Proyek (Time Schedule)
-              </h1>
-              <p className="text-sm text-gray-500">Buat Kurva S Rencana dan jadwalkan bobot bobot pekerjaan</p>
-            </div>
-          </div>
-
+        <div className="flex items-center justify-between mb-4">
           <button
-                onClick={handleExportTimeSchedule}
-                className="bg-purple-600 mb-4 hover:bg-purple-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
-              >
-                📊 Export Time Schedule
+            onClick={() => navigate("/dashboard")}
+            className="p-2.5 rounded-xl bg-white shadow-sm border border-gray-100 text-gray-600 hover:text-secondary hover:border-secondary transition-all active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft size={24} />
           </button>
 
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={handleGenerateWeeks}
               disabled={loadingGenerate}
-              className={`${
-                loadingGenerate ? "bg-gray-200 text-gray-500" : "bg-white border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50"
-              } px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2 text-sm`}
+              className={`${loadingGenerate ? "bg-gray-200 text-gray-500" : "bg-white border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+                } flex items-center gap-2 px-5 py-2.5 rounded font-semibold transition-all active:scale-95 cursor-pointer text-sm`}
             >
               <Zap size={18} /> {loadingGenerate ? "Memproses..." : "Generate Kolom Minggu"}
             </button>
 
-            <button 
+            <button
               onClick={handleSaveSchedule}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition-all active:scale-95 flex items-center gap-2 text-sm"
+              className="flex items-center gap-2 bg-success hover:bg-transparent border-2 border-transparent hover:border-success hover:text-success active:scale-95 text-white px-5 py-2.5 rounded font-semibold transition-all active:scale-95 cursor-pointer text-sm"
             >
               <Save size={18} /> Simpan Jadwal Permanen
             </button>
           </div>
         </div>
 
+        {/* HEADER & ACTION BUTTONS */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+          <div className="flex items-center gap-4">
+
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                Schedule Proyek (Time Schedule)
+              </h1>
+              <p className="text-gray-500">Buat Kurva S Rencana dan jadwalkan bobot bobot pekerjaan</p>
+            </div>
+          </div>
+
+
+
+
+        </div>
+
         {/* OVERVIEW CHARTS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          
+
           <div className="lg:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-             <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">Kurva S Rencana Kumulatif (%)</h3>
-                  <p className="text-sm text-gray-500">Visualisasi bobot pekerjaan yang harus diselesaikan tiap minggu</p>
-                </div>
-                {!isComplete && akumulasi > 0 && (
-                   <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                     <AlertCircle size={14}/> Total Belum 100% ({akumulasi.toFixed(2)}%)
-                   </span>
-                )}
-                {isComplete && (
-                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                     Kurva S Lengkap (100%)
-                   </span>
-                )}
-             </div>
-             
-             <div className="w-full h-[250px]">
-               {chartData.length > 0 ? (
-                 <ResponsiveContainer width="100%" height="100%">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Kurva S Rencana Kumulatif (%)</h3>
+                <p className="text-sm text-gray-500">Visualisasi bobot pekerjaan yang harus diselesaikan tiap minggu</p>
+              </div>
+              {!isComplete && akumulasi > 0 && (
+                <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                  <AlertCircle size={14} /> Total Belum 100% ({akumulasi.toFixed(2)}%)
+                </span>
+              )}
+              {isComplete && (
+                <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                  Kurva S Lengkap (100%)
+                </span>
+              )}
+            </div>
+
+            <div className="w-full h-[250px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
                       </linearGradient>
-                       <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                      <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <RechartsTooltip 
-                      cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }} 
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                    <RechartsTooltip
+                      cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     />
-                      <Area 
-                        type="monotone" 
-                        dataKey="target" 
-                        name="Komulatif Target (%)" 
-                        stroke="#4F46E5" 
-                        strokeWidth={3} 
-                        fill="url(#colorTarget)" 
-                      />
+                    <Area
+                      type="monotone"
+                      dataKey="target"
+                      name="Komulatif Target (%)"
+                      stroke="#4F46E5"
+                      strokeWidth={3}
+                      fill="url(#colorTarget)"
+                    />
 
-                      <Area 
-                        type="monotone" 
-                        dataKey="real" 
-                        name="Komulatif Real (%)" 
-                        stroke="#10B981" 
-                        strokeWidth={3} 
-                        fill="url(#colorReal)" 
-                      />
+                    <Area
+                      type="monotone"
+                      dataKey="real"
+                      name="Komulatif Real (%)"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      fill="url(#colorReal)"
+                    />
 
                   </AreaChart>
-                 </ResponsiveContainer>
-               ) : (
-                 <div className="flex h-full items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 font-medium bg-gray-50">
-                    Klik 'Generate Kolom Minggu' lalu isi bobot di tabel
-                 </div>
-               )}
-             </div>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 font-medium bg-gray-50">
+                  Klik 'Generate Kolom Minggu' lalu isi bobot di tabel
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
             <h3 className="text-lg font-bold text-gray-800 mb-2">Review Kinerja Bobot</h3>
             <p className="text-sm text-gray-500 mb-6">Ringkasan hasil plot rancangan kurva.</p>
-            
+
             <div className="flex-1 flex flex-col justify-center space-y-6">
               <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
                 <span className="text-sm font-bold text-gray-600">Total Durasi</span>
                 <span className="text-2xl font-black text-blue-600">{weeks.length} <span className="text-sm font-bold opacity-70">Minggu</span></span>
               </div>
-              
+
               <div className={`p-4 rounded-2xl border flex items-center justify-between ${isComplete ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
                 <span className="text-sm font-bold text-gray-600">Total Komulatif</span>
                 <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{akumulasi.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
@@ -416,6 +418,13 @@ setStatusMap(prev => ({
 
         </div>
 
+        <button
+          onClick={handleExportTimeSchedule}
+          className="flex items-center gap-2 bg-secondary hover:bg-transparent border-2 border-secondary/50 hover:border-secondary hover:text-secondary text-white px-5 py-2.5 rounded font-bold transition-all active:scale-95 whitespace-nowrap mb-4 ml-auto cursor-pointer active:scale-95"
+        >
+          <FileText size={18} /> Export Time Schedule
+        </button>
+
         {/* TABLE SECTION / GANTT CHART ALIAS */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-12">
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
@@ -424,40 +433,38 @@ setStatusMap(prev => ({
           </div>
 
           <div className="overflow-x-auto custom-scrollbar">
-             <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-3">
 
-    <div className="flex gap-2">
-      <button
-        onClick={() => setMode("manual")}
-        className={`px-3 py-1 rounded ${
-          mode === "manual"
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200"
-        }`}
-      >
-        Manual
-      </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMode("manual")}
+                  className={`px-3 py-1 rounded ${mode === "manual"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200"
+                    }`}
+                >
+                  Manual
+                </button>
 
-      <button
-        onClick={() => setMode("auto")}
-        className={`px-3 py-1 rounded ${
-          mode === "auto"
-            ? "bg-green-600 text-white"
-            : "bg-gray-200"
-        }`}
-      >
-        Auto Balance
-      </button>
-    </div>
+                <button
+                  onClick={() => setMode("auto")}
+                  className={`px-3 py-1 rounded ${mode === "auto"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200"
+                    }`}
+                >
+                  Auto Balance
+                </button>
+              </div>
 
-    {/* 🔥 INFO MODE */}
-    <div className="text-xs text-gray-500">
-      Mode: {mode === "manual"
-        ? "Manual (bebas edit)"
-        : "Auto (otomatis balance)"}
-    </div>
+              {/* 🔥 INFO MODE */}
+              <div className="text-xs text-gray-500">
+                Mode: {mode === "manual"
+                  ? "Manual (bebas edit)"
+                  : "Auto (otomatis balance)"}
+              </div>
 
-  </div>
+            </div>
             <table className="w-full text-sm border-collapse min-w-[800px]">
               <thead className="bg-white text-gray-600 shadow-sm relative z-10">
                 <tr>
@@ -493,28 +500,28 @@ setStatusMap(prev => ({
                             className="shrink-0 opacity-0 group-hover:opacity-100 text-[10px] bg-blue-100 border border-transparent text-blue-700 px-2 py-1 rounded-md hover:bg-blue-600 hover:text-white transition-all font-bold"
                             title="Bagi rata bobot ke beberapa minggu"
                           >
-                             AUTO
+                            AUTO
                           </button>
                         </div>
-                          <div className="text-xs mt-1">
-                        {statusMap[item.id]?.status === "kurang" && (
-                          <span className="text-orange-500">
-                            Kurang ({statusMap[item.id].total} / {statusMap[item.id].target})
-                          </span>
-                        )}
+                        <div className="text-xs mt-1">
+                          {statusMap[item.id]?.status === "kurang" && (
+                            <span className="text-orange-500">
+                              Kurang ({statusMap[item.id].total} / {statusMap[item.id].target})
+                            </span>
+                          )}
 
-                        {statusMap[item.id]?.status === "lebih" && (
-                          <span className="text-red-500">
-                            Lebih ({statusMap[item.id].total})
-                          </span>
-                        )}
+                          {statusMap[item.id]?.status === "lebih" && (
+                            <span className="text-red-500">
+                              Lebih ({statusMap[item.id].total})
+                            </span>
+                          )}
 
-                        {statusMap[item.id]?.status === "pas" && (
-                          <span className="text-green-600">
-                            ✔ Pas
-                          </span>
-                        )}
-                      </div>
+                          {statusMap[item.id]?.status === "pas" && (
+                            <span className="text-green-600">
+                              ✔ Pas
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2 border-b border-r border-gray-100 text-center font-bold bg-amber-50/50 text-amber-700 font-mono text-[11px]">
                         {bobotResmi.toFixed(3)}
@@ -524,12 +531,12 @@ setStatusMap(prev => ({
                         const cellData = schedule.find(s => Number(s.boq_id) === Number(item.id) && Number(s.minggu_ke) === Number(w.minggu_ke));
                         const val = cellData ? cellData.bobot : "";
                         const isActive = val !== "";
-                        
+
                         return (
                           <td key={w.id} className="border-b border-r border-gray-100 p-1 relative min-w-[70px]">
                             {/* Gantt Bar Style Background */}
                             <div className={`absolute inset-1 rounded-md transition-all -z-10 ${isActive ? 'bg-blue-200 shadow-sm border border-blue-300' : 'bg-transparent'}`}></div>
-                            
+
                             <input
                               type="number" step="0.001" value={val ?? ""}
                               onChange={(e) => handleSingleCellChange(item.id, w.minggu_ke, e.target.value)}
@@ -557,7 +564,7 @@ setStatusMap(prev => ({
                 </tr>
                 <tr className="bg-indigo-600">
                   <td className="p-4 border-r border-indigo-700 text-right uppercase text-xs font-black text-white sticky left-0 bg-indigo-600">Komulatif Rencana (%)</td>
-                   <td className="border-r border-indigo-700 bg-indigo-600"></td>
+                  <td className="border-r border-indigo-700 bg-indigo-600"></td>
                   {rencanaKomulatif.map((total, idx) => (
                     <td key={idx} className={`p-3 border-r border-indigo-700 text-center font-mono font-black text-xs ${total > 100.001 ? 'text-red-300' : 'text-white'}`}>
                       {total.toFixed(3)}
@@ -570,8 +577,9 @@ setStatusMap(prev => ({
         </div>
 
       </div>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .custom-scrollbar::-webkit-scrollbar {
           height: 8px;
           width: 8px;

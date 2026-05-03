@@ -1,4 +1,5 @@
 import { Project } from "./ProjectModel.js";
+import { LoginLog } from "./auth/LoginLogModel.js";
 import { Boq } from "./BoqModel.js";
 import { Schedule } from "./ScheduleModel.js";
 import { DailyPlan } from "./DailyPlanModel.js";
@@ -241,5 +242,6 @@ export {
   ProjectItem,
   ProjectAnalisa,
   DailyProgressItem,
+  LoginLog,
   TtdTemplate
 };

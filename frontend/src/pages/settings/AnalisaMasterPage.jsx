@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Edit2, Trash2, Search, ArrowRight, X, AlertTriangle, Calculator, FileSpreadsheet } from "lucide-react";
 import api from "../../api";
 import { useNavigate } from "react-router-dom";
+import { motion } from "motion/react";
 
 const AnalisaMasterPage = () => {
   const navigate = useNavigate();
@@ -126,7 +127,12 @@ const AnalisaMasterPage = () => {
   };
 
   return (
-    <div className="p-6 bg-background min-h-screen text-text-primary">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="p-6 bg-background min-h-screen text-text-primary"
+    >
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
@@ -365,7 +371,7 @@ const AnalisaMasterPage = () => {
         </div>
       )}
 
-    </div>
+    </motion.div>
   );
 };
 
