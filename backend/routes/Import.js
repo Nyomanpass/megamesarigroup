@@ -10,6 +10,7 @@ import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { parseNumber } from "../utils/parseNumber.js";
 import { generateBobotInternal } from "../controllers/BoqController.js";
+import { hitungAnalisa } from "../controllers/BoqController.js";
 
 const router = express.Router();
 
@@ -71,84 +72,127 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
       where: { project_id: projectId }
     });
 
-    // 🔥 mapping kode → analisa_id
+    // 🔥 mapping kode → analisa_id (ANTI ERROR CASE)
     const analisaMap = {};
     analisaList.forEach(a => {
       if (a.kode) {
-        analisaMap[a.kode.trim()] = a.id;
+        analisaMap[a.kode.trim().toUpperCase()] = a.id;
       }
     });
+
+    // 🔥 cache biar cepat
+    const analisaCache = {};
 
     let currentHeaderId = null;
     let currentSubHeaderId = null;
 
-    const missingKode = [];
+    const missingKode = new Set();
 
- for (let i = 0; i < data.length; i++) {
-  const row = normalizeKey(data[i]);
+    for (let i = 0; i < data.length; i++) {
+      const row = normalizeKey(data[i]);
 
-  const no = String(row.no || "").trim(); // 🔥 struktur
-  const kodeAnalisa = String(row.kode || "").trim(); // 🔥 analisa
+      const no = String(row.no || "").trim();
+      const kodeAnalisa = String(row.kode || "").trim().toUpperCase();
 
-  const uraian = row["uraian pekerjaan"];
-  const satuan = row.sat || row["sat."] || "";
-  const volume = Number(row.vol || row["vol."] || 0);
+      const uraian = row["uraian pekerjaan"];
+      const satuan = row.sat || row["sat."] || "";
+      const volume = Number(row.vol || row["vol."] || 0);
 
-  if (!uraian) continue;
+      if (!uraian) continue;
 
-  const tipe = getTipe(no);
+      const tipe = getTipe(no);
 
-  let parent_id = null;
+      let parent_id = null;
 
-  if (tipe === "header") {
-    parent_id = null;
-  } else if (tipe === "subheader") {
-    parent_id = currentHeaderId;
-  } else {
-    parent_id = currentSubHeaderId || currentHeaderId;
-  }
+      if (tipe === "header") {
+        parent_id = null;
+      } else if (tipe === "subheader") {
+        parent_id = currentHeaderId;
+      } else {
+        parent_id = currentSubHeaderId || currentHeaderId;
+      }
 
-  // 🔥 LINK ANALISA DARI KOLOM "Kode"
-  let analisa_id = null;
+      // =========================
+      // 🔥 ANALISA
+      // =========================
+      let analisa_id = null;
+      let harga_satuan = null;
+      let jumlah = null;
+      let jumlah_ppn = null;
+      let ppn = 11;
 
-  if (kodeAnalisa && tipe === "item") {
-    if (analisaMap[kodeAnalisa]) {
-      analisa_id = analisaMap[kodeAnalisa];
-    } else {
-      missingKode.push(kodeAnalisa);
+      // 🔥 ambil analisa_id
+      if (kodeAnalisa && tipe === "item") {
+        if (analisaMap[kodeAnalisa]) {
+          analisa_id = analisaMap[kodeAnalisa];
+        } else {
+          missingKode.add(kodeAnalisa);
+        }
+      }
+
+      // 🔥 hitung analisa (PAKAI CACHE)
+      if (analisa_id && tipe === "item") {
+        try {
+          if (!analisaCache[analisa_id]) {
+            analisaCache[analisa_id] = await hitungAnalisa(analisa_id);
+          }
+
+          const analisaResult = analisaCache[analisa_id];
+
+          harga_satuan =
+            Number(analisaResult.grandTotal) || 0;
+
+          const vol = Number(volume) || 0;
+
+        jumlah =
+          Number(harga_satuan) * vol;
+
+        jumlah_ppn =
+          jumlah + (jumlah * ppn / 100);
+
+        } catch (err) {
+          console.error("Gagal hitung analisa:", err.message);
+        }
+      }
+
+      // =========================
+      // 🔥 SIMPAN BOQ
+      // =========================
+      const boq = await Boq.create({
+        project_id: projectId,
+        kode: no,
+        uraian,
+        satuan: tipe === "item" ? satuan : null,
+        volume: tipe === "item" ? volume : null,
+        tipe,
+        parent_id,
+        analisa_id,
+        harga_satuan,
+        jumlah,
+        jumlah_ppn,
+        ppn
+      });
+
+      // 🔥 update struktur
+      if (tipe === "header") {
+        currentHeaderId = boq.id;
+        currentSubHeaderId = null;
+      }
+
+      if (tipe === "subheader") {
+        currentSubHeaderId = boq.id;
+      }
     }
-  }
 
-  const boq = await Boq.create({
-    project_id: projectId,
-    kode: no, // 🔥 struktur tetap dari No
-    uraian,
-    satuan: tipe === "item" ? satuan : null,
-    volume: tipe === "item" ? volume : null,
-    tipe,
-    parent_id,
-    analisa_id
-  });
-
-  if (tipe === "header") {
-    currentHeaderId = boq.id;
-    currentSubHeaderId = null;
-  }
-
-  if (tipe === "subheader") {
-    currentSubHeaderId = boq.id;
-  }
-}
-
-    // 🔥 hitung ulang BOQ
+    // 🔥 hitung ulang bobot
     await generateBobotInternal(projectId);
 
-    // 🔥 kalau ada kode tidak ditemukan
-    if (missingKode.length > 0) {
+    // 🔥 response warning
+    if (missingKode.size > 0) {
       return res.json({
         message: "Import selesai dengan warning",
         warning: true,
-        missingKode: [...new Set(missingKode)]
+        missingKode: [...missingKode]
       });
     }
 
@@ -167,8 +211,6 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
     }
   }
 });
-
-
 
 
 router.post("/import", upload.single("file"), async (req, res) => {

@@ -15,7 +15,10 @@ export const DailyProgress = sequelize.define("DailyProgress", {
   },
 
   tanggal: { type: DataTypes.DATEONLY, allowNull: false },
-  volume: { type: DataTypes.FLOAT },
+  volume: {
+    type: DataTypes.DECIMAL(20, 7),
+    allowNull: true
+  },
   cuaca: { 
     type: DataTypes.STRING, 
     allowNull: true 

@@ -7,6 +7,15 @@ import { Boq } from "../models/BoqModel.js";
 import moment from "moment";
 import "moment/locale/id.js";
 
+const getNamaHari = (date) => {
+
+  return moment(date)
+    .locale("id")
+    .format("dddd")
+    .toLowerCase();
+
+};
+
 export const generateDailyPlan = async (req, res) => {
   try {
     const { project_id } = req.params;
@@ -23,15 +32,13 @@ export const generateDailyPlan = async (req, res) => {
       });
     }
 
-    // 🔥 SAMA PERSIS SEPERTI generateWeeks
+
     let start = new Date(project.tgl_spmk.toISOString().split("T")[0]);
     let end = new Date(project.end_date.toISOString().split("T")[0]);
 
     start.setHours(0,0,0,0);
     end.setHours(0,0,0,0);
 
-    console.log("START:", start);
-    console.log("END:", end);
 
     const schedules = await Schedule.findAll({
       where: { project_id },
@@ -48,7 +55,7 @@ export const generateDailyPlan = async (req, res) => {
     let currentDate = new Date(start);
     let hariKe = 1;
 
-    // 🔥 hitung total bobot per minggu
+
     const bobotPerMinggu = {};
 
     schedules.forEach((s) => {
@@ -60,7 +67,7 @@ export const generateDailyPlan = async (req, res) => {
 
     bobotPerMinggu[minggu] += Number(s.bobot || 0);
 
-    // 🔥 pembulatan 3 desimal
+
     bobotPerMinggu[minggu] = Number(
         bobotPerMinggu[minggu].toFixed(3)
     );
@@ -68,33 +75,102 @@ export const generateDailyPlan = async (req, res) => {
 
     console.log("BOBOT PER MINGGU:", bobotPerMinggu);
 
-    const hariPerMinggu = {};
+  const hariPerMinggu = {};
 
-    let tempDate = new Date(start);
-    let tempHariKe = 1;
+let tempDate = new Date(start);
 
-    while (tempDate <= end) {
-    let mingguKe = Math.ceil(tempHariKe / 7);
+let tempHariKe = 1;
 
-    if (!hariPerMinggu[mingguKe]) {
-        hariPerMinggu[mingguKe] = 0;
+let tempMingguKe = 1;
+
+let firstDay = true;
+
+while (tempDate <= end) {
+
+  // MODE STATIC
+  if (project.week_mode === "static") {
+
+    tempMingguKe =
+      Math.ceil(tempHariKe / 7);
+
+  }
+
+  // MODE CALENDAR
+  else {
+
+    const namaHari =
+      getNamaHari(tempDate);
+
+    if (
+      namaHari ===
+      project.week_start_day.toLowerCase()
+      &&
+      !firstDay
+    ) {
+
+      tempMingguKe++;
+
     }
 
-    hariPerMinggu[mingguKe]++;
+  }
 
-    tempDate.setDate(tempDate.getDate() + 1);
-    tempHariKe++;
-    }
+  if (!hariPerMinggu[tempMingguKe]) {
+
+    hariPerMinggu[tempMingguKe] = 0;
+
+  }
+
+  hariPerMinggu[tempMingguKe]++;
+
+  firstDay = false;
+
+  tempDate.setDate(
+    tempDate.getDate() + 1
+  );
+
+  tempHariKe++;
+
+}
 
     console.log("HARI PER MINGGU:", hariPerMinggu);
 
     let totalMinggu = 0;
     let mingguSebelumnya = null;
 
+    let mingguKe = 1;
+
+let firstGenerateDay = true;
 
     while (currentDate <= end) {
+      // MODE STATIC
+if (project.week_mode === "static") {
 
-    let mingguKe = Math.ceil(hariKe / 7);
+  mingguKe =
+    Math.ceil(hariKe / 7);
+
+}
+
+// MODE CALENDAR
+else {
+
+  const namaHari =
+    getNamaHari(currentDate);
+
+  if (
+    namaHari ===
+    project.week_start_day.toLowerCase()
+    &&
+    !firstGenerateDay
+  ) {
+
+    mingguKe++;
+
+  }
+
+}
+
+
+    
     const bobotMingguan = bobotPerMinggu[mingguKe] || 0;
     const jumlahHariMinggu = hariPerMinggu[mingguKe] || 7;
 
@@ -140,7 +216,7 @@ export const generateDailyPlan = async (req, res) => {
         bobot_mingguan: Number(bobotMingguan.toFixed(3)),
         bobot_harian: Number(nilaiHarian.toFixed(2)),
     });
-
+    firstGenerateDay = false;
     currentDate.setDate(currentDate.getDate() + 1);
     hariKe++;
     }
@@ -402,19 +478,21 @@ export const getWeeklyChart = async (req, res) => {
       // =========================
       // 🔥 PUSH
       // =========================
-      result.push({
-        minggu_ke: Number(minggu),
+    result.push({
+      minggu_ke: Number(minggu),
 
-        rencana: Number(rencana.toFixed(3)),
-        real: Number(realMingguan.toFixed(3)),
+      rencana: rencana.toFixed(3),
 
-        kum_rencana: Number(kumulatifRencana.toFixed(3)),
-        kum_real: Number(real.toFixed(3)),
-      });
+      real: realMingguan.toFixed(3),
+
+      kum_rencana: kumulatifRencana.toFixed(3),
+
+      kum_real: real.toFixed(3),
+    });
     }
 
     res.json(result);
-
+    
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });

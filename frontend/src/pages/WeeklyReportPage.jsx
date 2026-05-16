@@ -140,7 +140,7 @@ export default function WeeklyReportPage() {
         onClick={handleExportWeeklyExcel}
         className="bg-green-600 mb-4 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
       >
-        📊 Export Excel
+        Export Excel
       </button>
 
         {/* CONTENT */}
@@ -326,9 +326,23 @@ export default function WeeklyReportPage() {
                           <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{item.total}</td>
                           <td className="p-3 text-center bg-indigo-50/10 font-bold text-indigo-600">{Number(item.bobot).toFixed(3)}</td>
 
-                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">{Number(item.sd_lalu).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">{Number(item.minggu_ini).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
+                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">
+                            {Number(item.sd_lalu) === 0
+                              ? "-"
+                              : Number(item.sd_lalu).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">
+                            {Number(item.minggu_ini) === 0
+                              ? "-"
+                              : Number(item.minggu_ini).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">
+                            {Number(item.sd_ini) === 0
+                              ? "-"
+                              : Number(item.sd_ini).toFixed(3)}
+                          </td>
 
                          <td className="p-3 text-right">
                             <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${

@@ -5,7 +5,8 @@ import {
   getProjectById,
   createProject,
   updateProject,
-  deleteProject
+  deleteProject,
+  updateProjectWeekSetting
 } from "../controllers/ProjectController.js";
 
 const router = express.Router();
@@ -40,5 +41,11 @@ router.put(
 
 // 🔥 DELETE
 router.delete("/projects/:id", deleteProject);
+
+//ettng projek dailiplan
+router.put(
+  "/project-week-setting/:project_id",
+  updateProjectWeekSetting
+);
 
 export default router;

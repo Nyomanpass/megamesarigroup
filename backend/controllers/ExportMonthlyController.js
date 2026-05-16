@@ -792,11 +792,18 @@ for (let r = startRow + 3; r < rowIndex; r++) {
 
   // 🔥 helper persen (khusus progress_item)
   const setPercent = (cell, val) => {
-    if (!val || val === 0) {
+
+    if (!val || Number(val) === 0) {
+
       cell.value = null;
+
     } else {
-      cell.value = val / 100; // 🔥 penting!
-      cell.numFmt = "0.000%";
+
+      // 🔥 langsung value asli
+      cell.value = Number(Number(val).toFixed(3));
+
+      // 🔥 format biasa
+      cell.numFmt = '#,##0.000;-#,##0.000;""';
     }
   };
 

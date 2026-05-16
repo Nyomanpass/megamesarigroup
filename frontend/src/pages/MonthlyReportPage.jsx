@@ -142,7 +142,7 @@ const handleExportMonthlyExcel = async () => {
   onClick={handleExportMonthlyExcel}
   className="bg-blue-600 mb-4 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
 >
-  📊 Export Bulanan
+  Export Bulanan
 </button>
 
         {/* CONTENT */}
@@ -286,7 +286,6 @@ const handleExportMonthlyExcel = async () => {
                     <tr className="border-b border-gray-100">
                        <th className="p-2 text-center text-orange-600 border-l border-gray-100 bg-orange-50/30">Total Vol</th>
                        <th className="p-2 text-center text-pink-600 bg-pink-50/30">Bobot</th>
-                       
                        <th className="p-2 text-center text-gray-500 border-l border-gray-100 bg-gray-50/50">s/d Lalu</th>
                        <th className="p-2 text-center text-blue-600 font-black bg-blue-50">BL INI</th>
                        <th className="p-2 text-center text-emerald-600 font-black bg-emerald-50">s/d Ini</th>
@@ -326,15 +325,33 @@ const handleExportMonthlyExcel = async () => {
                           <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{item.total}</td>
                           <td className="p-3 text-center bg-pink-50/10 font-bold text-pink-600">{Number(item.bobot).toFixed(3)}</td>
 
-                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">{Number(item.sd_lalu).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">{Number(item.bulan_ini).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
-
-                          <td className="p-3 text-right">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${item.progres_proyek > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                              {item.progres_proyek}%
-                            </span>
+                         <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">
+                            {Number(item.sd_lalu) === 0
+                              ? "-"
+                              : Number(item.sd_lalu).toFixed(3)}
                           </td>
+
+                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">
+                            {Number(item.bulan_ini) === 0
+                              ? "-"
+                              : Number(item.bulan_ini).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">
+                            {Number(item.sd_ini) === 0
+                              ? "-"
+                              : Number(item.sd_ini).toFixed(3)}
+                          </td>
+
+                        <td className="p-3 text-right">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                            item.progres_proyek > 0
+                              ? 'bg-green-100 text-green-700 border-green-200'
+                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}>
+                            {Number(item.progres_proyek).toFixed(3)}%
+                          </span>
+                        </td>
                           {/* 🔥 PROGRESS ITEM */}
                         <td className="p-3 text-right">
                           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${

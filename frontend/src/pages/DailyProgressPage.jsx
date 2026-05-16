@@ -5,6 +5,8 @@ import api from "../api";
 import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight, Calendar, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useRef } from "react";
+import { m } from "framer-motion";
+
 
 export default function DailyProgressPage() {
   const { id: paramId } = useParams();
@@ -17,6 +19,10 @@ export default function DailyProgressPage() {
   const [searchBoqQuery, setSearchBoqQuery] = useState("");
   const [isBoqDropdownOpen, setIsBoqDropdownOpen] = useState(false);
 
+  const [showPreview, setShowPreview] = useState(false);
+
+  const [expanded, setExpanded] = useState({});
+
   // --- States ---
   const [boqList, setBoqList] = useState([]);
   const [data, setData] = useState([]);
@@ -24,13 +30,18 @@ export default function DailyProgressPage() {
 
   const [previewItems, setPreviewItems] = useState([]);
 
+  const [showHariModal, setShowHariModal] = useState(false);
+  const [modeInput, setModeInput] = useState("manual");
+
   const [form, setForm] = useState({
     boq_id: "",
     hari_ke: "",
+    minggu_ke: "",
+    persentase: "",
     volume: "",
-    cuaca: "",
-    jam_mulai: "",
-    jam_selesai: ""
+    cuaca: "Cerah",
+    jam_mulai: "08:00",
+    jam_selesai: "17:00"
   });
 
   // Pagination state
@@ -46,23 +57,6 @@ export default function DailyProgressPage() {
   });
 
 
-  const getBoqFullLabel = (item) => {
-  let result = [];
-  let current = item;
-
-  while (current) {
-    result.unshift(
-      current.kode
-        ? `${current.kode} - ${current.uraian}`
-        : current.uraian
-    );
-
-    current = boqMap[current.parent_id];
-  }
-
-  return result.join(" > ");
-};
-
   // ================= FETCH DATA =================
   const fetchData = async () => {
     try {
@@ -76,7 +70,7 @@ export default function DailyProgressPage() {
 
   const fetchBoq = async () => {
     const res = await api.get(`/boq/project/${id}`);
-    setBoqList(res.data);
+    setBoqList(res.data.data);
   };
 
   const fetchDailyPlan = async () => {
@@ -163,7 +157,18 @@ export default function DailyProgressPage() {
     
     setEditId(null);
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const boq = boqList.find(b => b.id === item.boq_id);
+
+    if (boq) {
+      setSearchBoqQuery(
+        `${boq.kode ? boq.kode + " - " : ""}${boq.uraian}`
+      );
+    }
+
+    formRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
   };
 
   const handleEdit = (item) => {
@@ -173,6 +178,8 @@ export default function DailyProgressPage() {
     const plan = dailyPlan.find(
       (d) => d.tanggal === item.tanggal
     );
+
+      const boq = boqList.find(b => b.id == item.boq_id);
 
     setForm({
       boq_id: item.boq_id,
@@ -184,7 +191,17 @@ export default function DailyProgressPage() {
       jam_selesai: item.jam_selesai || ""
     });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+      if (boq) {
+      setSearchBoqQuery(
+        `${boq.kode ? boq.kode + " - " : ""}${boq.uraian}`
+      );
+    }
+
+
+   formRef.current?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
   };
 
   const handleDelete = async (id) => {
@@ -204,43 +221,93 @@ export default function DailyProgressPage() {
   // ================= SUBMIT =================
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
 
-       const payload = {
+      // WEEKLY
+      if (modeInput === "weekly") {
+
+        const payload = {
           project_id: id,
           boq_id: form.boq_id,
-          hari_ke: form.hari_ke,
-          volume: form.volume,
-
+          minggu_ke: form.minggu_ke,
+          persentase: form.persentase,
           cuaca: form.cuaca,
           jam_mulai: form.jam_mulai,
           jam_selesai: form.jam_selesai
         };
 
-      if (editId) {
-        await api.put(`/daily-progress/${editId}`, payload);
-        alert("✅ Berhasil Update!");
-        setEditId(null);
-      } else {
-        await api.post("/daily-progress", payload);
-        alert("✅ Berhasil Simpan!");
+        await api.post(
+          "/daily-progress/weekly",
+          payload
+        );
+
+        alert("✅ Generate Weekly berhasil!");
       }
 
+      // MANUAL
+      else {
+
+        const payload = {
+          project_id: id,
+          boq_id: form.boq_id,
+          hari_ke: form.hari_ke,
+          volume: form.volume,
+          cuaca: form.cuaca,
+          jam_mulai: form.jam_mulai,
+          jam_selesai: form.jam_selesai
+        };
+
+        // EDIT
+        if (editId) {
+
+          await api.put(
+            `/daily-progress/${editId}`,
+            payload
+          );
+
+          alert("✅ Berhasil Update!");
+
+          setEditId(null);
+        }
+
+        // CREATE
+        else {
+
+          await api.post(
+            "/daily-progress",
+            payload
+          );
+
+          alert("✅ Berhasil Simpan!");
+        }
+      }
+
+      // REFRESH
       fetchData();
 
+      // RESET
       setForm({
         boq_id: "",
         hari_ke: "",
+        minggu_ke: "",
+        persentase: "",
         volume: "",
-        cuaca: "",
-        jam_mulai: "",
-        jam_selesai: ""
+        cuaca: "Cerah",
+        jam_mulai: "08:00",
+        jam_selesai: "17:00"
       });
 
       setPreviewItems([]);
 
+      setSearchBoqQuery("");
+
     } catch (err) {
-      alert(err.response?.data?.message || "Terjadi kesalahan");
+
+      alert(
+        err.response?.data?.message ||
+        "Terjadi kesalahan"
+      );
     }
   };
 
@@ -292,8 +359,6 @@ export default function DailyProgressPage() {
 
   const summary = getSummary();
 
-  // ================= PAGINATION LOGIC =================
-// ================= GROUP BY HARI (FIXED) =================
 // ================= GROUP BY TANGGAL =================
 const groupedByTanggal = {};
 
@@ -329,6 +394,227 @@ const totalPages = tanggalKeys.length;
     }
   };
 
+  useEffect(() => {
+  if (isBoqDropdownOpen) {
+    const allOpen = {};
+    boqList.forEach(b => {
+      if (b.tipe !== "item") {
+        allOpen[b.id] = true;
+      }
+    });
+    setExpanded(allOpen);
+  }
+}, [isBoqDropdownOpen]);
+
+  const buildTree = (boqList) => {
+  const map = {};
+  boqList.forEach(b => {
+    map[b.id] = { ...b, children: [] };
+  });
+
+  const tree = [];
+
+  boqList.forEach(b => {
+    if (b.parent_id) {
+      map[b.parent_id]?.children.push(map[b.id]);
+    } else {
+      tree.push(map[b.id]);
+    }
+  });
+
+  return tree;
+};
+
+const filterTree = (nodes, query) => {
+  if (!query) return nodes;
+
+  return nodes
+    .map(node => {
+      const text = `${node.kode || ""} ${node.uraian || ""}`.toLowerCase();
+      const match = text.includes(query.toLowerCase());
+
+      // 🔥 cek children
+      let children = [];
+      if (node.children && node.children.length > 0) {
+        children = filterTree(node.children, query);
+      }
+
+      // 🔥 tampilkan kalau:
+      // 1. dia match
+      // 2. atau ada child yang match
+      if (match || children.length > 0) {
+        return {
+          ...node,
+          children
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+};
+
+  const boqTree = buildTree(boqList);
+
+  // 🔥 TARUH DI SINI
+  const filteredTree = filterTree(boqTree, searchBoqQuery);
+
+const renderTree = (nodes, level = 0) => {
+  return nodes.map(node => {
+    const isOpen = expanded[node.id];
+
+    // 🔷 HEADER
+    if (node.tipe === "header") {
+      return (
+        <div key={node.id}>
+          <div
+            onClick={() =>
+              setExpanded(prev => ({
+                ...prev,
+                [node.id]: !prev[node.id]
+              }))
+            }
+            className="px-4 py-2 text-white bg-slate-800 rounded-md my-1 cursor-pointer text-sm font-semibold"
+          >
+            {isOpen ? "▼" : "▶"} {node.kode} - {node.uraian}
+          </div>
+
+          {isOpen && renderTree(node.children, level + 1)}
+        </div>
+      );
+    }
+
+    // 🔹 SUBHEADER
+    if (node.tipe === "subheader") {
+      return (
+        <div key={node.id}>
+          <div
+            onClick={() =>
+              setExpanded(prev => ({
+                ...prev,
+                [node.id]: !prev[node.id]
+              }))
+            }
+            className="px-4 py-2 bg-gray-100 rounded-md my-1 cursor-pointer text-sm font-medium"
+            style={{ paddingLeft: `${level * 16 + 16}px` }}
+          >
+            {isOpen ? "▼" : "▶"} {node.kode} - {node.uraian}
+          </div>
+
+          {isOpen && renderTree(node.children, level + 1)}
+        </div>
+      );
+    }
+
+
+    return (
+      <div
+        key={node.id}
+        onClick={() => {
+          setForm({ ...form, boq_id: node.id });
+          setSearchBoqQuery(`${node.kode} - ${node.uraian}`);
+          setIsBoqDropdownOpen(false);
+        }}
+        className="px-4 py-2 rounded-md hover:bg-blue-50 cursor-pointer text-sm transition"
+        style={{ paddingLeft: `${level * 16 + 32}px` }}
+      >
+        {node.kode} - {node.uraian}
+      </div>
+    );
+  });
+};
+
+
+const groupedByWeek = {};
+
+dailyPlan.forEach((d) => {
+  // 🔥 hitung minggu (1 minggu = 7 hari)
+  const week = Math.ceil(d.hari_ke / 7);
+
+  if (!groupedByWeek[week]) {
+    groupedByWeek[week] = [];
+  }
+
+  groupedByWeek[week].push(d);
+});
+
+
+const buildRows = () => {
+  if (!currentItems.length) return [];
+
+  const map = {};
+  boqList.forEach(b => {
+    map[Number(b.id)] = b;
+  });
+
+  const rows = [];
+  let lastHeader = null;
+  let lastSub = null;
+
+  const getParent = (boq) => {
+    let header = null;
+    let sub = null;
+
+    let current = boq;
+
+    while (current) {
+      if (current.tipe === "header") header = current;
+      if (current.tipe === "subheader") sub = current;
+
+      current = map[Number(current.parent_id)];
+    }
+
+    return { header, sub };
+  };
+
+  // 🔥 PAKAI currentItems (bukan data)
+  const sortedData = [...currentItems].sort((a, b) => {
+    const aKode = map[a.boq_id]?.kode || "";
+    const bKode = map[b.boq_id]?.kode || "";
+
+    return aKode.localeCompare(bKode);
+  });
+
+  sortedData.forEach(item => {
+    const boq = map[Number(item.boq_id)];
+
+    if (!boq) {
+      rows.push({
+        type: "item",
+        data: item
+      });
+      return;
+    }
+
+    const { header, sub } = getParent(boq);
+
+    if (header && header.id !== lastHeader) {
+      rows.push({
+        type: "header",
+        label: header.uraian
+      });
+      lastHeader = header.id;
+      lastSub = null;
+    }
+
+    if (sub && sub.id !== lastSub) {
+      rows.push({
+        type: "subheader",
+        label: sub.uraian
+      });
+      lastSub = sub.id;
+    }
+
+    rows.push({
+      type: "item",
+      data: item
+    });
+  });
+
+  return rows;
+};
+
+
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -359,168 +645,334 @@ const totalPages = tanggalKeys.length;
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
 
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 relative z-10"><Edit size={20} className="text-blue-500" /> Entri Data Progres Fisik</h2>
+          <div className="flex gap-2 mb-6">
+            <button
+              type="button"
+              onClick={() =>
+                setModeInput("manual")
+              }
+              className={`
+                px-4 py-2 rounded-xl text-sm font-bold
+                ${
+                  modeInput === "manual"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100"
+                }
+              `}
+            >
+              Manual
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setModeInput("weekly")
+              }
+              className={`
+                px-4 py-2 rounded-xl text-sm font-bold
+                ${
+                  modeInput === "weekly"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100"
+                }
+              `}
+            >
+              Generate Mingguan
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-            <div className="relative">
-  <label className="block text-sm font-bold text-gray-700 mb-2">
-    Pekerjaan BOQ
-  </label>
 
-  {/* INPUT SEARCH */}
-  <div className="relative">
-    <input
-      type="text"
-      placeholder="-- Ketik pekerjaan BOQ --"
-      value={searchBoqQuery}
-      onChange={(e) => {
-        setSearchBoqQuery(e.target.value);
-        setIsBoqDropdownOpen(true);
-
-        if (form.boq_id) {
-          setForm({ ...form, boq_id: "" });
-        }
-      }}
-      onFocus={() => setIsBoqDropdownOpen(true)}
-      className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl 
-        focus:ring-2 focus:ring-blue-300 focus:border-blue-500 
-        focus:bg-white outline-none transition-all text-sm font-medium"
-    />
-
-    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-      ▼
-    </div>
-  </div>
-
-  {/* DROPDOWN */}
-  {isBoqDropdownOpen && (
-    <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-
-      {filteredBoq
-        .filter(b =>
-          `${b.kode || ""} ${b.uraian}`
-            .toLowerCase()
-            .includes(searchBoqQuery.toLowerCase())
-        )
-        .map((b) => (
-          <div
-            key={b.id}
-            className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
-            onMouseDown={(e) => {
-              e.preventDefault();
-
-              setForm({ ...form, boq_id: b.id });
-              setSearchBoqQuery(
-                `${b.kode ? b.kode + " - " : ""}${b.uraian}`
-              );
-              setIsBoqDropdownOpen(false);
-            }}
-          >
-              <div className="text-[11px] text-gray-400">
-                {getBoqFullLabel(boqMap[b.parent_id] || null)}
-              </div>
-
-            <div className="font-bold text-gray-800 text-sm">
-              {b.kode ? `${b.kode} - ` : ""}{b.uraian}
-            </div>
-
-            <div className="text-xs text-gray-500 mt-1 flex gap-2">
-              <span className="bg-gray-100 px-2 py-0.5 rounded">
-                Bobot: {Number(b.bobot || 0).toFixed(3)}
-              </span>
-            </div>
-          </div>
-        ))}
-
-      {/* EMPTY */}
-      {filteredBoq.filter(b =>
-        `${b.kode || ""} ${b.uraian}`
-          .toLowerCase()
-          .includes(searchBoqQuery.toLowerCase())
-      ).length === 0 && (
-        <div className="px-4 py-5 text-sm text-gray-500 text-center">
-          Data BOQ tidak ditemukan
-        </div>
-      )}
-    </div>
-  )}
-
-  {/* OVERLAY */}
-  {isBoqDropdownOpen && (
-    <div
-      className="fixed inset-0 z-[5]"
-      onClick={() => setIsBoqDropdownOpen(false)}
-    ></div>
-  )}
-</div>
-            
-
-            <select
-              value={form.hari_ke}
-              onChange={(e) => setForm({ ...form, hari_ke: e.target.value })}
-              required
+            {/* =========================
+                BOQ
+            ========================= */}
+            <button
+              type="button"
+              onClick={() => setIsBoqDropdownOpen(true)}
+              className="w-full text-left border border-gray-200 bg-gray-50 p-3.5 rounded-xl"
             >
-              <option value="">-- Pilih Hari --</option>
+              {form.boq_id
+                ? searchBoqQuery
+                : "Pilih Pekerjaan BOQ"}
+            </button>
 
-              {dailyPlan.map((d) => (
-                <option key={d.hari_ke} value={d.hari_ke}>
-                  Hari ke-{d.hari_ke} ({new Date(d.tanggal).toLocaleDateString("id-ID")})
-                </option>
-              ))}
-            </select>
+            {/* =========================
+                MODE MANUAL
+            ========================= */}
+            {modeInput === "manual" && (
+              <>
+                {/* HARI */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Pilih Hari
+                  </label>
 
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Volume Dikerjakan (Output)</label>
-              <div className="relative">
-                <input
-                  type="number" step="any"
-                  placeholder="0.00"
-                  value={form.volume}
-                  onChange={(e) => setForm({ ...form, volume: e.target.value })}
-                  className="w-full border-2 border-green-200 rounded-xl p-3 pl-4 pr-16 bg-green-50/30 focus:bg-white focus:border-green-500 font-bold text-green-700 outline-none transition-all"
-                  required
-                />
-                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-green-600 font-bold text-sm">
-                  {summary ? summary.satuan : 'Vol'}
+                  <div
+                    onClick={() => setShowHariModal(true)}
+                    className="border border-gray-200 bg-gray-50 p-3 rounded-xl cursor-pointer hover:bg-white transition"
+                  >
+                    {form.hari_ke ? (
+                      <span>
+                        Hari ke-{form.hari_ke}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">
+                        -- Pilih Hari --
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
-            {/* CUACA */}
+
+                {/* VOLUME */}
+                <div className="flex flex-col">
+
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">
+                    Volume Dikerjakan (Output)
+                  </label>
+
+                  <div className="relative">
+
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+
+                      value={form.volume}
+
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          volume: e.target.value
+                        })
+                      }
+
+                      className="
+                        w-full
+                        border-2
+                        border-green-200
+                        rounded-xl
+                        p-3
+                        pl-4
+                        pr-16
+                        bg-green-50/30
+                        focus:bg-white
+                        focus:border-green-500
+                        font-bold
+                        text-green-700
+                        outline-none
+                        transition-all
+                      "
+
+                      required
+                    />
+
+                    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-green-600 font-bold text-sm">
+                      {summary
+                        ? summary.satuan
+                        : "Vol"}
+                    </div>
+
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* =========================
+                MODE WEEKLY
+            ========================= */}
+            {modeInput === "weekly" && (
+              <>
+                {/* MINGGU */}
+                <div>
+
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Pilih Minggu
+                  </label>
+
+                  <select
+
+                    value={form.minggu_ke}
+
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        minggu_ke:
+                          e.target.value
+                      })
+                    }
+
+                    className="
+                      w-full
+                      border-2
+                      border-blue-200
+                      rounded-xl
+                      p-3
+                    "
+                  >
+
+                    <option value="">
+                      -- Pilih Minggu --
+                    </option>
+
+                    {Object.keys(groupedByWeek).map((w) => (
+                      <option key={w} value={w}>
+                        Minggu ke-{w}
+                      </option>
+                    ))}
+
+                  </select>
+                </div>
+
+                {/* PERSENTASE */}
+                <div>
+
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Persentase Progress
+                  </label>
+
+                  <div className="relative">
+
+                    <input
+                      type="number"
+                      step="any"
+
+                      placeholder="50"
+
+                      value={form.persentase}
+
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          persentase:
+                            e.target.value
+                        })
+                      }
+
+                      className="
+                        w-full
+                        border-2
+                        border-blue-200
+                        rounded-xl
+                        p-3
+                        pr-10
+                      "
+                    />
+
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 font-bold">
+                      %
+                    </div>
+
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* =========================
+                CUACA
+            ========================= */}
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 mb-2">Cuaca</label>
+
+              <label className="text-xs font-bold text-gray-500 mb-2">
+                Cuaca
+              </label>
+
               <select
+
                 value={form.cuaca}
-                onChange={(e) => setForm({ ...form, cuaca: e.target.value })}
-                className="border-2 border-gray-200 rounded-xl p-3"
+
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    cuaca:
+                      e.target.value
+                  })
+                }
+
+                className="
+                  border-2
+                  border-gray-200
+                  rounded-xl
+                  p-3
+                "
               >
-                <option value="">-- Pilih Cuaca --</option>
-                <option value="Cerah">Cerah</option>
-                <option value="Mendung">Mendung</option>
-                <option value="Hujan">Hujan</option>
+
+                <option value="">
+                  -- Pilih Cuaca --
+                </option>
+
+                <option value="Cerah">
+                  Cerah
+                </option>
+
+                <option value="Mendung">
+                  Mendung
+                </option>
+
+                <option value="Hujan">
+                  Hujan
+                </option>
+
               </select>
             </div>
 
-            {/* JAM KERJA */}
+            {/* JAM MULAI */}
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 mb-2">Jam Mulai</label>
+
+              <label className="text-xs font-bold text-gray-500 mb-2">
+                Jam Mulai
+              </label>
+
               <input
                 type="time"
+
                 value={form.jam_mulai}
-                onChange={(e) => setForm({ ...form, jam_mulai: e.target.value })}
-                className="border-2 border-gray-200 rounded-xl p-3"
+
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    jam_mulai:
+                      e.target.value
+                  })
+                }
+
+                className="
+                  border-2
+                  border-gray-200
+                  rounded-xl
+                  p-3
+                "
               />
             </div>
 
+            {/* JAM SELESAI */}
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-gray-500 mb-2">Jam Selesai</label>
+
+              <label className="text-xs font-bold text-gray-500 mb-2">
+                Jam Selesai
+              </label>
+
               <input
                 type="time"
+
                 value={form.jam_selesai}
-                onChange={(e) => setForm({ ...form, jam_selesai: e.target.value })}
-                className="border-2 border-gray-200 rounded-xl p-3"
+
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    jam_selesai:
+                      e.target.value
+                  })
+                }
+
+                className="
+                  border-2
+                  border-gray-200
+                  rounded-xl
+                  p-3
+                "
               />
             </div>
 
-            
           </div>
 
           {/* ================= SUMMARY CARD ================= */}
@@ -574,7 +1026,134 @@ const totalPages = tanggalKeys.length;
             </div>
           )}
 
-          {previewItems.length > 0 && (
+         <AnimatePresence>
+          {isBoqDropdownOpen && (
+            <m.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4"
+            >
+
+              <m.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="bg-white w-full max-w-3xl h-[80vh] rounded-xl overflow-hidden flex flex-col shadow-xl"
+              >
+
+                {/* HEADER */}
+                <div className="flex justify-between items-center p-5 border-b border-gray-100">
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Pilih Pekerjaan BOQ
+                  </h2>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBoqDropdownOpen(false)}
+                    className="text-gray-400 hover:text-red-500 hover:bg-gray-100 p-2 rounded-lg transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* SEARCH */}
+                <div className="p-4 border-b border-gray-100">
+                  <input
+                    type="text"
+                    placeholder="Cari pekerjaan..."
+                    value={searchBoqQuery}
+                    onChange={(e) => setSearchBoqQuery(e.target.value)}
+                    className="w-full border border-gray-200 bg-gray-50 p-3 rounded-lg 
+                      focus:ring-2 focus:ring-blue-300 focus:border-blue-400 
+                      outline-none text-sm"
+                  />
+                </div>
+
+                {/* TREE */}
+                <div className="flex-1 overflow-y-auto px-2 py-2">
+                  {renderTree(filteredTree)}
+                </div>
+
+              </m.div>
+            </m.div>
+          )}
+        </AnimatePresence>
+
+          {showHariModal && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
+
+              <div className="bg-white w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-xl flex flex-col overflow-hidden">
+
+                {/* HEADER */}
+                <div className="p-4 border-b flex justify-between items-center">
+                  <h2 className="font-bold text-gray-800">Pilih Hari</h2>
+                  <button onClick={() => setShowHariModal(false)}>✖</button>
+                </div>
+
+                {/* LIST */}
+                <div className="overflow-y-auto p-4 space-y-4">
+
+                  {Object.keys(groupedByWeek).map((week) => (
+                    <div key={week}>
+
+                      {/* HEADER MINGGU */}
+                      <div className="font-bold text-sm text-blue-600 mb-2">
+                        Minggu ke-{week}
+                      </div>
+
+                      {/* LIST HARI */}
+                      <div className="grid grid-cols-2 gap-2">
+
+                        {groupedByWeek[week].map((d) => (
+                          <div
+                            key={d.hari_ke}
+                            onClick={() => {
+                              setForm({ ...form, hari_ke: d.hari_ke });
+                              setShowHariModal(false);
+                            }}
+                            className="p-3 border rounded-xl cursor-pointer hover:bg-blue-50 transition"
+                          >
+                            <div className="text-sm font-semibold">
+                              Hari ke-{d.hari_ke}
+                            </div>
+
+                            <div className="text-xs text-gray-400">
+                              {new Date(d.tanggal).toLocaleDateString("id-ID")}
+                            </div>
+                          </div>
+                        ))}
+
+                      </div>
+
+                    </div>
+                  ))}
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ================= DETAIL SECTION (RESOURCE USAGE) ================= */}
+           <div className="flex justify-between items-center mt-6">
+            <h3 className="text-sm font-semibold text-gray-600">
+              Preview Analisa
+            </h3>
+
+            <button
+              type="button"
+              onClick={() => setShowPreview(prev => !prev)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white transition"
+            >
+              {showPreview ? "Sembunyikan" : "Lihat Preview"}
+            </button>
+          </div>
+
+
+          {showPreview && previewItems.length > 0 && (
             <div className="mt-8 bg-white border border-blue-100 rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
 
               {/* HEADER PREVIEW */}
@@ -648,8 +1227,6 @@ const totalPages = tanggalKeys.length;
             </div>
           )}
 
-          {/* ================= DETAIL SECTION (RESOURCE USAGE) ================= */}
-
           {/* ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 relative z-10">
             {editId && (
@@ -670,29 +1247,32 @@ const totalPages = tanggalKeys.length;
           </div>
         </form>
 
+       
+
         {/* ================= TABLE LIST ================= */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-12">
           <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">📋 Riwayat Pelaporan Daily Progress</h2>
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">Riwayat Pelaporan Daily Progress</h2>
             <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full">{data.length} Entri</span>
           </div>
+
           <div className="overflow-x-auto custom-scrollbar">
-            <div className="p-4 bg-blue-50 border-b text-sm font-bold text-blue-700">
-            
-                📅 {currentTanggal
-                  ? new Date(currentTanggal).toLocaleDateString("id-ID", {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric"
-                    })
-                  : "Tidak ada data"}
-           
-            {currentItems[0]?.tanggal && (
-              <span className="ml-2 text-gray-500 font-normal">
-                ({new Date(currentItems[0].tanggal).toLocaleDateString("id-ID")})
-              </span>
-            )}
-          </div>
+                <div className="p-4 bg-blue-50 border-b text-sm font-bold text-blue-700">
+                
+                    {currentTanggal
+                      ? new Date(currentTanggal).toLocaleDateString("id-ID", {
+                          day: "2-digit",
+                          month: "long",
+                          year: "numeric"
+                        })
+                      : "Tidak ada data"}
+              
+                {currentItems[0]?.tanggal && (
+                  <span className="ml-2 text-gray-500 font-normal">
+                    ({new Date(currentItems[0].tanggal).toLocaleDateString("id-ID")})
+                  </span>
+                )}
+              </div>
             <table className="w-full text-left text-sm">
               <thead className="bg-white">
                 <tr className="text-xs uppercase tracking-wider text-gray-500 border-b border-gray-100">
@@ -703,49 +1283,102 @@ const totalPages = tanggalKeys.length;
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {currentItems.map((item, i) => (
-                  <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="p-4 pl-6 text-gray-700 font-medium">
-                      {new Date(item.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-                    </td>
-                    <td className="p-4 text-gray-800 font-bold max-w-[300px] truncate" title={item.boq?.uraian}>
-                      <span className="text-blue-500 mr-2 opacity-50">•</span>{item.boq?.uraian}
-                    </td>
+                {buildRows().map((row, i) => {
 
-                    <td className="p-4 text-right">
-                      <span className="bg-green-50 text-green-700 font-mono font-bold px-2.5 py-1 rounded-lg border border-green-100">{Number(item.volume).toFixed(3)}</span>
-                    </td>
-                    <td className="p-4 text-center pr-6">
-                      <div className="flex justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleCopy(item)}
-                          className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition"
-                          title="copy data"
-                        >
-                          <PlusCircle size={18} />
-                        </button>
-                        {/* EDIT */}
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
-                          title="edit"
-                        >
-                          <Edit size={18} />
-                        </button>
+  // ================= HEADER =================
+  if (row.type === "header") {
+    return (
+      <tr key={i}>
+        <td colSpan="4" className="px-6 pt-6 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
 
-                        {/* DELETE */}
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition"
-                          title="hapus"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+              {row.label}
+            </h3>
+          </div>
 
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+          <div className="mt-2 h-[2px] bg-gradient-to-r from-blue-300 to-transparent"></div>
+        </td>
+      </tr>
+    );
+  }
+
+  // ================= SUBHEADER =================
+  if (row.type === "subheader") {
+    return (
+      <tr key={i}>
+        <td colSpan="4" className="px-10 py-2">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+
+            <span className="text-xs font-semibold text-gray-600 uppercase">
+              {row.label}
+            </span>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  // ================= ITEM =================
+  const item = row.data;
+
+  return (
+    <tr key={i} className="group hover:bg-blue-50/30 transition">
+
+      {/* TANGGAL */}
+      <td className="p-4 pl-6 text-gray-600 text-sm">
+        {new Date(item.tanggal).toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        })}
+      </td>
+
+      {/* PEKERJAAN */}
+      <td className="p-4 pl-12 text-gray-800 font-semibold">
+        {item.boq?.uraian}
+      </td>
+
+      {/* VOLUME */}
+      <td className="p-4 text-right">
+        <span className="bg-green-50 text-green-700 font-mono font-bold px-3 py-1 rounded-lg">
+          {Number(item.volume).toFixed(3)}
+        </span>
+      </td>
+
+      {/* AKSI */}
+      <td className="p-4 text-center pr-6">
+        <div className="flex justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+
+          <button
+            onClick={() => handleCopy(item)}
+            className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600"
+          >
+            <PlusCircle size={18} />
+          </button>
+
+          <button
+            onClick={() => handleEdit(item)}
+            className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600"
+          >
+            <Edit size={18} />
+          </button>
+
+          <button
+            onClick={() => handleDelete(item.id)}
+            className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600"
+          >
+            <Trash2 size={18} />
+          </button>
+
+        </div>
+      </td>
+
+    </tr>
+  );
+})}
                 {data.length === 0 && (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">Belum ada riwayat progres. Coba input data progres yang pertama!</td>

@@ -39,7 +39,7 @@ export const Boq = sequelize.define("Boq", {
   },
 
   volume: {
-    type: DataTypes.DECIMAL(15, 4),
+    type: DataTypes.DECIMAL(20, 7),
     allowNull: true
   },
 
@@ -51,7 +51,7 @@ export const Boq = sequelize.define("Boq", {
 
   // 🔥 volume × harga_satuan
   jumlah: {
-    type: DataTypes.DECIMAL(20, 2),
+    type: DataTypes.DECIMAL(20, 6),
     allowNull: true
   },
 
@@ -61,12 +61,12 @@ export const Boq = sequelize.define("Boq", {
   },
 
   jumlah_ppn: {
-    type: DataTypes.DECIMAL(20, 2),
+    type: DataTypes.DECIMAL(20, 6),
     allowNull: true
   },
 
   bobot: {
-    type: DataTypes.DECIMAL(10, 4),
+    type: DataTypes.DECIMAL(18, 8),
     allowNull: true
   },
 

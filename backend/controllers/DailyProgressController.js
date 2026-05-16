@@ -115,6 +115,238 @@ export const createDailyProgress = async (req, res) => {
   }
 };
 
+export const createDailyProgressWeekly =
+  async (req, res) => {
+
+  const t =
+    await sequelize.transaction();
+
+  try {
+
+    const {
+
+      project_id,
+      boq_id,
+
+      minggu_ke,
+
+      persentase,
+
+      cuaca,
+      jam_mulai,
+      jam_selesai
+
+    } = req.body;
+
+    // =========================
+    // VALIDASI
+    // =========================
+    if (!boq_id) {
+      throw new Error(
+        "BOQ wajib dipilih"
+      );
+    }
+
+    if (
+      !persentase ||
+      persentase <= 0
+    ) {
+      throw new Error(
+        "Persentase wajib > 0"
+      );
+    }
+
+    // =========================
+    // AMBIL BOQ
+    // =========================
+    const boq =
+      await Boq.findByPk(
+        boq_id
+      );
+
+    if (!boq) {
+      throw new Error(
+        "BOQ tidak ditemukan"
+      );
+    }
+
+    // =========================
+    // AMBIL DAILY PLAN
+    // =========================
+    const plans =
+      await DailyPlan.findAll({
+
+        where: {
+          project_id,
+          minggu_ke
+        },
+
+        order: [
+          ["tanggal", "ASC"]
+        ]
+
+      });
+
+    if (!plans.length) {
+      throw new Error(
+        "Daily Plan minggu tidak ditemukan"
+      );
+    }
+
+    // =========================
+    // HITUNG TARGET
+    // =========================
+    const totalVolume =
+      Number(
+        boq.volume || 0
+      );
+
+    const targetVolume =
+      (
+        totalVolume *
+        Number(persentase)
+      ) / 100;
+
+    // =========================
+    // BAGI HARI
+    // =========================
+    const volumePerHari =
+      Number(
+        (
+          targetVolume /
+          plans.length
+        ).toFixed(7)
+      );
+
+    // =========================
+    // AMBIL ANALISA
+    // =========================
+    const analisaDetails =
+      await ProjectAnalisaDetail.findAll({
+
+        where: {
+          project_analisa_id:
+            boq.analisa_id
+        },
+
+        include: {
+          model: ProjectItem,
+          as: "item"
+        }
+
+      });
+
+    // =========================
+    // LOOP HARI
+    // =========================
+    for (const plan of plans) {
+
+      // =========================
+      // CREATE HEADER
+      // =========================
+      const progress =
+        await DailyProgress.create({
+
+          project_id,
+          boq_id,
+
+          tanggal:
+            plan.tanggal,
+
+          volume:
+            volumePerHari,
+
+          cuaca,
+          jam_mulai,
+          jam_selesai
+
+        }, {
+          transaction: t
+        });
+
+      // =========================
+      // GENERATE ITEMS
+      // =========================
+      const items = [];
+
+      for (const d of analisaDetails) {
+
+        if (!d.item) continue;
+
+        const koef =
+          Number(
+            d.koefisien || 0
+          );
+
+        const hasil =
+          Number(
+            (
+              koef *
+              volumePerHari
+            ).toFixed(7)
+          );
+
+        items.push({
+
+          daily_progress_id:
+            progress.id,
+
+          item_id:
+            d.item.id,
+
+          nama:
+            d.item.nama,
+
+          tipe:
+            d.item.tipe,
+
+          satuan:
+            d.item.satuan,
+
+          koef,
+
+          volume:
+            volumePerHari,
+
+          hasil
+
+        });
+      }
+
+      await DailyProgressItem.bulkCreate(
+        items,
+        {
+          transaction: t
+        }
+      );
+    }
+
+    await t.commit();
+
+    res.status(201).json({
+
+      message:
+        "✅ Generate Weekly Progress berhasil",
+
+      total_hari:
+        plans.length,
+
+      volume_per_hari:
+        volumePerHari
+
+    });
+
+  } catch (error) {
+
+    await t.rollback();
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
+
 export const updateDailyProgress = async (req, res) => {
   const t = await sequelize.transaction();
 

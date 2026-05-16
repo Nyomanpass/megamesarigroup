@@ -49,11 +49,11 @@ export default function Sidebar() {
               <NavLink to="/boq" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary font-bold" : " hover:text-secondary"}`}>
                 <ClipboardList size={16} /> <span>BOQ</span>
               </NavLink>
-              <NavLink to="/schedule" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary font-bold" : " hover:text-secondary"}`}>
-                <Calendar size={16} /> <span>Schedule</span>
-              </NavLink>
               <NavLink to="/daily-plan" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary font-bold" : " hover:text-secondary"}`}>
                 <Clock size={16} /> <span>Daily Plan</span>
+              </NavLink>
+              <NavLink to="/schedule" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary font-bold" : " hover:text-secondary"}`}>
+                <Calendar size={16} /> <span>Schedule</span>
               </NavLink>
               <NavLink to="/material" className={({ isActive }) => `flex items-center gap-3 tracking-wide ${isActive ? "text-secondary font-bold" : " hover:text-secondary"}`}>
                 <Cuboid size={16} /> <span>Material</span>

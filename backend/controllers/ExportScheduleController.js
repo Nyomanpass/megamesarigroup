@@ -4,6 +4,10 @@ import { Boq } from "../models/BoqModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
 import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+import axios from "axios";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+import { PythonShell } from "python-shell";
 
 export const exportTimeSchedule = async (req, res) => {
   try {
@@ -456,58 +460,92 @@ boq.forEach((item) => {
 
   else if (item.tipe === "item") {
 
-    if (lastTipe !== "item") nomorItem = 0;
+   if (lastTipe !== "item") nomorItem = 0;
 
-    nomorItem++;
+      nomorItem++;
 
-    let c = 2;
+      let c = 2;
 
-    sheet.getCell(row, c++).value = nomorItem;
-    sheet.getCell(`C${row}`).value = item.uraian || "";
+      sheet.getCell(row, c++).value =
+        nomorItem;
 
-    c = 7;
+      sheet.getCell(`C${row}`).value =
+        item.uraian || "";
 
-    sheet.getCell(row, c++).value = item.satuan || "";
-    sheet.getCell(row, c++).value = Number(item.volume || 0);
-    const hargaCell = sheet.getCell(row, c++);
-    hargaCell.value = Number(item.harga_satuan || 0);
-    hargaCell.numFmt = '"Rp" * #,##0.00';
+      c = 7;
 
-    const jumlahCell = sheet.getCell(row, c++);
-    jumlahCell.value = Number(item.jumlah || 0);
-    jumlahCell.numFmt = '"Rp" * #,##0.00';
-    sheet.getCell(row, c++).value = Number(item.bobot || 0);
+      sheet.getCell(row, c++).value =
+        item.satuan || "";
 
-    c++;
+      const volumeCell =
+        sheet.getCell(row, c++);
 
-    weeks.forEach((w) => {
-      const found = schedules.find(
-        (s) =>
-          Number(s.boq_id) === Number(item.id) &&
-          Number(s.minggu_ke) === Number(w.minggu_ke)
-      );
+      volumeCell.value =
+        Number(item.volume || 0);
 
-      const val = found ? Number(found.bobot) : null;
+      volumeCell.numFmt =
+        '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
 
-      const cell = sheet.getCell(row, c++);
-      cell.value = val;
+      const hargaCell =
+        sheet.getCell(row, c++);
 
-      if (val > 0) {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "00FF00" }
-        };
-      }
-    });
+      hargaCell.value =
+        Number(item.harga_satuan || 0);
 
-    c++;
-    sheet.getCell(row, c++).value = null;
+      hargaCell.numFmt =
+        '"Rp" * #,##0.00';
 
-    mergeCF(row);
 
-    row++;
-  }
+      const jumlahCell =
+        sheet.getCell(row, c++);
+
+      jumlahCell.value =
+        Number(item.jumlah || 0);
+
+      jumlahCell.numFmt =
+        '"Rp" * #,##0.00';
+
+      const bobotCell =
+        sheet.getCell(row, c++);
+
+      bobotCell.value =
+        Number(item.bobot || 0);
+
+      bobotCell.numFmt =
+        '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
+
+      c++;
+
+      weeks.forEach((w) => {
+        const found = schedules.find(
+          (s) =>
+            Number(s.boq_id) === Number(item.id) &&
+            Number(s.minggu_ke) === Number(w.minggu_ke)
+        );
+
+        const val = found ? Number(found.bobot) : null;
+
+        const cell = sheet.getCell(row, c++);
+        cell.value = val;
+        cell.numFmt =
+          '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
+
+        if (val > 0) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "00FF00" }
+          };
+        }
+      });
+
+      c++;
+      sheet.getCell(row, c++).value = null;
+
+      mergeCF(row);
+
+      row++;
+    }
 
   lastTipe = item.tipe;
 });
@@ -1193,24 +1231,139 @@ for (let col = startCol; col <= endCol; col++) {
 }
 
 
+// =========================
+// 🔥 AMBIL REALISASI DARI API
+// =========================
+const chartResponse = await axios.get(
+  `http://localhost:3000/api/daily-plan/weekly-chart/${project_id}`
+);
+
+const realData = chartResponse.data;
+
+// =========================
+// 🔥 RENCANA KOMULATIF
+// =========================
+const rencanaKomulatifChart = [];
+
+let totalRencana = 0;
+
+for (let c = weekStartCol; c <= weekEndCol; c++) {
+
+  const colLetter = sheet.getColumn(c).letter;
+
+  let total = 0;
+
+  for (let r = startDataRow; r <= endDataRow; r++) {
+
+    const val = sheet.getCell(`${colLetter}${r}`).value;
+
+    total += Number(val || 0);
+  }
+
+  totalRencana += total;
+
+  rencanaKomulatifChart.push(
+    Number(totalRencana.toFixed(3))
+  );
+}
+
+// =========================
+// 🔥 REAL KOMULATIF
+// =========================
+const realKomulatif = weeks.map((w) => {
+
+  const real = realData.find(
+    r => Number(r.minggu_ke) === Number(w.minggu_ke)
+  );
+
+  return Number(real?.kum_real || 0);
+});
+
+// =========================
+// 🔥 LABEL WEEK
+// =========================
+const labels = weeks.map(w => `M${w.minggu_ke}`);
+
+// =========================
+// 🔥 DATA CHART UNTUK PYTHON
+// =========================// =========================
+// 🔥 SHEET KHUSUS CHART
+// =========================
+const chartSheet = workbook.addWorksheet("CHART_DATA");
+
+// hidden
+chartSheet.state = "hidden";
+
+chartSheet.getCell("F1").value = weekStartCol;
+
+chartSheet.getCell("F2").value = weekEndCol;
+
+chartSheet.getCell("F3").value = startDataRow;
+
+chartSheet.getCell("F4").value = endDataRow;
+
+// HEADER
+chartSheet.getCell("A1").value = "Minggu";
+
+chartSheet.getCell("B1").value = "Rencana";
+
+chartSheet.getCell("C1").value = "Realisasi";
+
+// DATA
+weeks.forEach((w, idx) => {
+
+  const r = idx + 2;
+
+  // minggu
+  chartSheet.getCell(`A${r}`).value =
+    `M${w.minggu_ke}`;
+
+// rencana
+chartSheet.getCell(`B${r}`).value =
+  parseFloat(rencanaKomulatifChart[idx] || 0);
+
+chartSheet.getCell(`B${r}`).numFmt =
+  "0.000";
+
+// realisasi
+chartSheet.getCell(`C${r}`).value =
+  parseFloat(realKomulatif[idx] || 0);
+
+chartSheet.getCell(`C${r}`).numFmt =
+  "0.000";
+
+});
+
+
     // =========================
     // 🔥 EXPORT
     // =========================
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=Time_Schedule.xlsx"
+
+    await workbook.xlsx.writeFile("temp_schedule.xlsx");
+
+    // =========================
+    // 🔥 JALANKAN PYTHON
+    // =========================
+    await PythonShell.run("./python/generate_chart.py");
+
+    // =========================
+    // 🔥 DOWNLOAD FINAL FILE
+    // =========================
+    return res.download(
+      "final_schedule.xlsx",
+      "Time_Schedule.xlsx"
     );
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-
-    await workbook.xlsx.write(res);
-    res.end();
-
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
-  }
+
+  console.log("=================================");
+  console.log("EXPORT ERROR");
+  console.log("MESSAGE:", error.message);
+  console.log("STACK:", error.stack);
+  console.log("FULL ERROR:", error);
+  console.log("=================================");
+
+  res.status(500).json({
+    message: error.message
+  });
+}
 };

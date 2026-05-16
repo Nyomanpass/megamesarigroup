@@ -155,21 +155,33 @@ const buildFlatTree = (data, parentId = null, level = 0) => {
 // 🔥 TANPA req/res
 export const generateBobotInternal = async (project_id) => {
   try {
+
     const data = await Boq.findAll({
       where: { project_id }
     });
 
     let totalSemua = 0;
+
     const temp = [];
 
-    // 🔥 hitung jumlah semua item
-    for (let boq of data) {
-      if (boq.tipe === "item" && boq.analisa_id) {
-        const analisaResult = await hitungAnalisa(boq.analisa_id);
-        const harga_satuan = analisaResult.grandTotal;
+    // =========================
+    // HITUNG TOTAL
+    // =========================
+    for (const boq of data) {
 
-        const volume = Number(boq.volume) || 0;
-        const jumlah = harga_satuan * volume;
+      if (boq.tipe === "item" && boq.analisa_id) {
+
+        const analisaResult =
+          await hitungAnalisa(boq.analisa_id);
+
+        const harga_satuan =
+          Number(analisaResult.grandTotal || 0);
+
+        const volume =
+          Number(boq.volume || 0);
+
+        const jumlah =
+          harga_satuan * volume;
 
         temp.push({
           id: boq.id,
@@ -182,40 +194,44 @@ export const generateBobotInternal = async (project_id) => {
 
     if (totalSemua === 0) return;
 
-    let runningTotalBobot = 0;
+    // =========================
+    // GENERATE BOBOT
+    // =========================
+    const updates = temp.map((item) => {
 
-   const updates = temp.map((item, index) => {
-    let bobotFinal;
+      // FULL PRECISION
+      const bobot =
+        (item.jumlah / totalSemua) * 100;
 
-    if (index === temp.length - 1) {
-      // Item terakhir menanggung sisa selisih pembulatan
-      // Gunakan .toFixed(3) lagi agar hasilnya konsisten 3 desimal
-      bobotFinal = (100 - runningTotalBobot).toFixed(3);
-    } else {
-      // Hitung bobot normal
-      const hitungBobot = (item.jumlah / totalSemua) * 100;
-      bobotFinal = hitungBobot.toFixed(3);
-      runningTotalBobot += Number(bobotFinal);
-    }
-
-    return Boq.update(
-      { bobot: Number(bobotFinal) },
-      { where: { id: item.id } }
-    );
-  });
+      return Boq.update(
+        {
+          bobot: Number(
+            bobot.toFixed(8)
+          )
+        },
+        {
+          where: {
+            id: item.id
+          }
+        }
+      );
+    });
 
     await Promise.all(updates);
 
   } catch (error) {
-    console.error("ERROR generate:", error);
+
+    console.error(
+      "ERROR generate:",
+      error
+    );
   }
 };
-
 
 const round2 = (num) => Math.round(num * 100) / 100;
 
 
-const hitungAnalisa = async (analisa_id) => {
+export const hitungAnalisa = async (analisa_id) => {
   const analisa = await ProjectAnalisa.findByPk(analisa_id);
 
   const details = await ProjectAnalisaDetail.findAll({
@@ -252,6 +268,7 @@ const hitungAnalisa = async (analisa_id) => {
   };
 };
 
+
 export const createBulkBoq = async (req, res) => {
   try {
     const { project_id, parent_id, items } = req.body;
@@ -283,8 +300,15 @@ export const createBulkBoq = async (req, res) => {
       const vol = Number(volume) || 0;
       const persenPPN = Number(ppn) || 11;
 
-      const jumlah = harga_satuan * vol;
-      const jumlah_ppn = jumlah + (jumlah * persenPPN / 100);
+      const jumlah = Number(
+        (harga_satuan * vol).toFixed(2)
+      );
+
+      const jumlah_ppn = Number(
+        (
+          jumlah + (jumlah * persenPPN / 100)
+        ).toFixed(2)
+      );
 
       const newItem = await Boq.create({
         project_id,
@@ -374,55 +398,207 @@ export const createBoq = async (req, res) => {
   }
 };
 
-export const getBoqByProject = async (req, res) => {
+export const getBoqByProject = async (
+  req,
+  res
+) => {
+
   try {
-    const { project_id } = req.params;
 
-    const data = await Boq.findAll({
-      where: { project_id }
-    });
+    const { project_id } =
+      req.params;
 
-    // 🔥 HITUNG DINAMIS
+    const data =
+      await Boq.findAll({
+        where: { project_id }
+      });
+
+    // =========================
+    // HITUNG DINAMIS
+    // =========================
     const calculated = await Promise.all(
+
       data.map(async (boq) => {
 
         let harga_satuan = 0;
         let jumlah = 0;
         let jumlah_ppn = 0;
 
-        if (boq.tipe === "item" && boq.analisa_id) {
-         const analisaResult = await hitungAnalisa(boq.analisa_id);
-          harga_satuan = analisaResult.grandTotal;
+        if (
+          boq.tipe === "item" &&
+          boq.analisa_id
+        ) {
 
-          const volume = Number(boq.volume) || 0;
-          jumlah = harga_satuan * volume;
+          const analisaResult =
+            await hitungAnalisa(
+              boq.analisa_id
+            );
 
-          const ppn = Number(boq.ppn) || 0;
-          jumlah_ppn = jumlah + (jumlah * ppn / 100);
+          harga_satuan = parseFloat(
+            Number(
+              analisaResult.grandTotal || 0
+            ).toFixed(6)
+          );
+
+          const volume =
+            Number(boq.volume) || 0;
+
+          jumlah = parseFloat(
+            (
+              harga_satuan * volume
+            ).toFixed(6)
+          );
+
+          const ppn =
+            Number(boq.ppn) || 0;
+
+          jumlah_ppn = parseFloat(
+            (
+              jumlah +
+              (jumlah * ppn / 100)
+            ).toFixed(6)
+          );
         }
 
         return {
+
           ...boq.toJSON(),
 
           harga_satuan,
           jumlah,
           jumlah_ppn,
 
-          harga_satuan_rp: formatRupiah(harga_satuan),
-          jumlah_rp: formatRupiah(jumlah),
-          jumlah_ppn_rp: formatRupiah(jumlah_ppn)
+          harga_satuan_rp:
+            formatRupiah(
+              harga_satuan
+            ),
+
+          jumlah_rp:
+            formatRupiah(
+              jumlah
+            ),
+
+          jumlah_ppn_rp:
+            formatRupiah(
+              jumlah_ppn
+            )
         };
       })
     );
 
-    // 🔥 INI KUNCINYA
-    const result = buildFlatTree(calculated);
+    // =========================
+    // ITEM ONLY
+    // =========================
+    const itemOnly =
+      calculated.filter(
+        item =>
+          item.tipe === "item"
+      );
 
-    res.json(result);
+    // =========================
+    // TOTAL
+    // =========================
+    const totalHargaSatuan =
+      parseFloat(
+        (
+          itemOnly.reduce(
+            (acc, curr) =>
+              acc +
+              Number(
+                curr.harga_satuan || 0
+              ),
+            0
+          )
+        ).toFixed(2)
+      );
+
+    // 🔥 AMBIL DARI DATABASE
+    const totalJumlah =
+      parseFloat(
+        (
+          data.reduce(
+            (acc, curr) =>
+              acc +
+              Number(
+                curr.jumlah || 0
+              ),
+            0
+          )
+        ).toFixed(2)
+      );
+
+   const totalGrandTotal =
+  parseFloat(
+    (
+      itemOnly.reduce(
+        (acc, curr) =>
+          acc +
+          Number(
+            curr.jumlah_ppn || 0
+          ),
+        0
+      )
+    ).toFixed(3)
+  );
+
+const totalBobot =
+  itemOnly.reduce(
+    (sum, item) =>
+      sum +
+      Number(item.bobot || 0),
+    0
+  ).toFixed(3);
+
+  
+
+    // =========================
+    // TREE
+    // =========================
+    const result =
+      buildFlatTree(
+        calculated
+      );
+
+    // =========================
+    // RESPONSE
+    // =========================
+    res.json({
+
+      totalHargaSatuan,
+      totalJumlah,
+      totalGrandTotal,
+      totalBobot,
+
+      totalHargaSatuan_rp:
+        formatRupiah(
+          totalHargaSatuan
+        ),
+
+      totalJumlah_rp:
+        formatRupiah(
+          totalJumlah
+        ),
+
+      totalGrandTotal_rp:
+        formatRupiah(
+          totalGrandTotal
+        ),
+
+      data: result
+
+    });
 
   } catch (error) {
-    console.error("ERROR:", error);
-    res.status(500).json({ message: error.message });
+
+    console.error(
+      "ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      message:
+        error.message
+    });
   }
 };
 

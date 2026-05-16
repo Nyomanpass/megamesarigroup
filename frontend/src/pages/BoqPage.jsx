@@ -29,6 +29,17 @@ export default function BoqPage() {
   const [importFile, setImportFile] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
+  const [analytics, setAnalytics] =
+  useState({
+    totalHargaSatuan: 0,
+    totalJumlah: 0,
+    totalGrandTotal: 0,
+    totalBobot: 0,
+
+    totalHargaSatuan_rp: "",
+    totalJumlah_rp: "",
+    totalGrandTotal_rp: ""
+  });
   const [form, setForm] = useState({
     parent_id: "",
     kode: "",
@@ -326,7 +337,29 @@ export default function BoqPage() {
 
   const fetchBoq = async () => {
     const res = await api.get(`/boq/project/${id}`);
-    setBoq(res.data);
+    setBoq(res.data.data);
+    setAnalytics({
+      totalHargaSatuan:
+        res.data.totalHargaSatuan,
+
+      totalJumlah:
+        res.data.totalJumlah,
+
+      totalGrandTotal:
+        res.data.totalGrandTotal,
+
+      totalBobot:
+        res.data.totalBobot,
+
+      totalHargaSatuan_rp:
+        res.data.totalHargaSatuan_rp,
+
+      totalJumlah_rp:
+        res.data.totalJumlah_rp,
+
+      totalGrandTotal_rp:
+        res.data.totalGrandTotal_rp
+    });
   };
 
   const handleSelectAnalisa = async (index, analisa_id) => {
@@ -351,7 +384,14 @@ export default function BoqPage() {
   // Header Analytics Data
   const itemOnly = boq.filter(item => item.tipe === "item");
   const totalHargaSatuan = itemOnly.reduce((acc, curr) => acc + Number(curr.harga_satuan || 0), 0);
-  const totalJumlah = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0);
+  const totalJumlah = Number(
+    (
+      itemOnly.reduce(
+        (acc, curr) => acc + Number(curr.jumlah || 0),
+        0
+      )
+    ).toFixed(6)
+  );
   const totalGrandTotal = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0);
   const totalBobot = itemOnly.reduce((sum, item) => sum + Number(item.bobot || 0), 0);
 
@@ -638,11 +678,16 @@ export default function BoqPage() {
                       </td>
 
                       {/* JUMLAH */}
-                      <td className="p-3 text-right text-gray-600">
-                        {item.jumlah
-                          ? Number(item.jumlah).toLocaleString("id-ID")
-                          : "-"}
-                      </td>
+                    <td className="p-3 text-right text-gray-600">
+                      {item.jumlah
+                        ? Number(
+                            Number(item.jumlah).toFixed(2)
+                          ).toLocaleString("id-ID", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })
+                        : "-"}
+                    </td>
 
                       {/* PPN */}
                       <td className="p-3 text-center">
@@ -709,21 +754,21 @@ export default function BoqPage() {
                   </td>
 
                   <td className="p-4 text-right">
-                    {totalHargaSatuan.toLocaleString("id-ID")}
+                     {analytics.totalHargaSatuan.toLocaleString("id-ID")}
                   </td>
 
-                  <td className="p-4 text-right text-green-600">
-                    {totalJumlah.toLocaleString("id-ID")}
+                    <td className="p-4 text-right text-green-600">
+                    {analytics.totalJumlah.toLocaleString("id-ID")}
                   </td>
 
                   <td className="p-4 text-center">-</td>
 
                   <td className="p-4 text-right text-blue-600">
-                    {totalGrandTotal.toLocaleString("id-ID")}
+                     {analytics.totalGrandTotal.toLocaleString("id-ID")}
                   </td>
 
                   <td className="p-4 text-right text-amber-600">
-                    {totalBobot.toFixed(2)}%
+                    {analytics.totalBobot.toLocaleString("id-ID")}%
                   </td>
 
                   <td></td>
@@ -887,7 +932,9 @@ export default function BoqPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.7, y: 20 }}
                 transition={{ duration: 0.2, type: spring }}
-                className="bg-white rounded-md w-full max-w-2xl shadow flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                className="bg-white rounded-md w-full max-w-2xl shadow flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()} 
+                >
 
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
                   <div></div>

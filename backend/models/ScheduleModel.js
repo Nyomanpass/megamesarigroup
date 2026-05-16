@@ -28,7 +28,7 @@ export const Schedule = sequelize.define("Schedule", {
   },
 
   bobot: {
-    type: DataTypes.DECIMAL(10, 4),
+    type: DataTypes.DECIMAL(18, 8),
     allowNull: true
   }
 
