@@ -17,6 +17,7 @@ export default function DailyReportPage() {
   const [totalMaterial, setTotalMaterial] = useState([]);
   const [totalPekerja, setTotalPekerja] = useState([]);
   const [totalPeralatan, setTotalPeralatan] = useState([]);
+  const [boqList, setBoqList] = useState([]);
   
 
   // ambil daily plan (buat dropdown hari)
@@ -47,6 +48,7 @@ export default function DailyReportPage() {
       const res = await api.get(url);
       
       setData(res.data.data);
+      setBoqList(res.data.boq || []); 
       setTotalBobot(res.data.total_bobot_harian || 0);
       setTotalMaterial(res.data.total_material || []);
       setTotalPekerja(res.data.total_pekerja || []);
@@ -95,6 +97,95 @@ const handleExportExcel = async () => {
   useEffect(() => {
     fetchPlans();
   }, [id]);
+
+  const boqMap = {};
+  boqList.forEach(b => {
+    boqMap[b.id] = b;
+  });
+
+  const getBoqHierarchy = (boqId) => {
+  let result = [];
+  let current = boqMap[boqId];
+
+  while (current) {
+    result.unshift({
+      tipe: current.tipe,
+      label: `${current.kode ? current.kode + " - " : ""}${current.uraian}`
+    });
+
+    current = boqMap[current.parent_id];
+  }
+
+  return result;
+};
+
+const buildRows = () => {
+  if (!data.length) return [];
+
+  const map = {};
+  boqList.forEach(b => {
+    map[Number(b.id)] = b;
+  });
+
+  const rows = [];
+  let lastHeader = null;
+  let lastSub = null;
+
+  const getParent = (boq) => {
+    let header = null;
+    let sub = null;
+
+    let current = boq;
+
+    while (current) {
+      if (current.tipe === "header") header = current;
+      if (current.tipe === "subheader") sub = current;
+
+      current = map[Number(current.parent_id)];
+    }
+
+    return { header, sub };
+  };
+
+  data.forEach(item => {
+    const boq = map[Number(item.boq_id)];
+
+    // 🔥 kalau BOQ tidak ketemu → tetap tampil
+    if (!boq) {
+      rows.push({
+        type: "item",
+        data: item
+      });
+      return;
+    }
+
+    const { header, sub } = getParent(boq);
+
+    if (header && header.id !== lastHeader) {
+      rows.push({
+        type: "header",
+        label: header.uraian
+      });
+      lastHeader = header.id;
+      lastSub = null;
+    }
+
+    if (sub && sub.id !== lastSub) {
+      rows.push({
+        type: "subheader",
+        label: sub.uraian
+      });
+      lastSub = sub.id;
+    }
+
+    rows.push({
+      type: "item",
+      data: item
+    });
+  });
+
+  return rows;
+};
 
   return (
     <>
@@ -161,9 +252,9 @@ const handleExportExcel = async () => {
 
           <button
             onClick={handleExportExcel}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
+            className="bg-green-600 hover:bg-green-700 text-white px-6 mb-4 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
           >
-            📊 Export Excel
+            Export Excel
           </button>
 
           <div className="mb-6">
@@ -181,152 +272,165 @@ const handleExportExcel = async () => {
             </div>
           </div>
 
-        {/* REPORT CONTENT */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-6">
 
-  {/* ================= LEFT (TABLE) ================= */}
-  <div className="lg:col-span-2 space-y-6">
+  {/* ================= HEADER ================= */}
+  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl p-6 shadow-lg">
+    <h2 className="text-xl font-bold">Progress Fisik Harian</h2>
+    <p className="text-sm opacity-80 mt-1">
+      Monitoring aktivitas pekerjaan proyek
+    </p>
 
-    {/* HEADER CARD */}
-    <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+    <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
 
-      <div className="p-5 border-b flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-bold text-gray-800">
-            Progress Fisik Harian
-          </h2>
-          <p className="text-xs text-gray-400 mt-1">
-            Monitoring aktivitas pekerjaan harian proyek
-          </p>
-        </div>
-
-        <div className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">
-          {data.length} Item
-        </div>
+      <div>
+        <p className="text-xs opacity-70">Total Item</p>
+        <p className="text-lg font-bold">{data.length}</p>
       </div>
 
-      {/* INFO */}
-      <div className="p-5 border-b">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          <div className="bg-gray-50 border rounded-xl p-4">
-            <p className="text-xs text-gray-500">Cuaca</p>
-            <p className="text-lg font-bold text-gray-800">
-              {data[0]?.cuaca || "-"}
-            </p>
-          </div>
-
-          <div className="bg-gray-50 border rounded-xl p-4">
-            <p className="text-xs text-gray-500">Jam Kerja</p>
-            <p className="text-lg font-bold text-gray-800">
-              {data[0]?.jam_mulai && data[0]?.jam_selesai
-                ? `${data[0].jam_mulai} - ${data[0].jam_selesai}`
-                : "-"}
-            </p>
-          </div>
-        </div>
+      <div>
+        <p className="text-xs opacity-70">Cuaca</p>
+        <p className="text-lg font-bold">
+          {data[0]?.cuaca || "-"}
+        </p>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-
-          <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
-            <tr>
-              <th className="p-4 text-left">Tanggal</th>
-              <th className="p-4 text-left">Pekerjaan</th>
-              <th className="p-4 text-center">Sat</th>
-              <th className="p-4 text-right">Output</th>       
-            </tr>
-          </thead>
-
-          <tbody className="divide-y">
-
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="text-center p-10 text-gray-400">
-                  Tidak ada data hari ini
-                </td>
-              </tr>
-            ) : (
-              data.map((item, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-
-                  <td className="p-4 text-gray-500">
-                    {new Date(item.tanggal).toLocaleDateString("id-ID")}
-                  </td>
-
-                  <td className="p-4 font-semibold text-gray-800">
-                    {item.uraian}
-                  </td>
-
-                  <td className="p-4 text-center text-gray-400">
-                    {item.satuan}
-                  </td>
-
-                  <td className="p-4 text-right">
-                    <span className="bg-gray-100 px-2 py-1 rounded font-mono">
-                      {Number(item.volume).toFixed(3)}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-
-          </tbody>
-        </table>
+      <div>
+        <p className="text-xs opacity-70">Jam Kerja</p>
+        <p className="text-lg font-bold">
+          {data[0]?.jam_mulai && data[0]?.jam_selesai
+            ? `${data[0].jam_mulai} - ${data[0].jam_selesai}`
+            : "-"}
+        </p>
       </div>
 
     </div>
-
-    {/* RESOURCE */}
-    <div className="bg-white rounded-3xl border shadow-sm p-6">
-      <h2 className="font-bold text-gray-800 mb-4">
-        Rincian Sumber Daya
-      </h2>
-
-      <div className="grid md:grid-cols-3 gap-6">
-
-        {[
-          { title: "Material", data: data.flatMap(d => d.materials || []), color: "emerald" },
-          { title: "Pekerja", data: data.flatMap(d => d.pekerja || []), color: "blue" },
-          { title: "Peralatan", data: data.flatMap(d => d.peralatan || []), color: "orange" }
-        ].map((section, idx) => (
-          <div key={idx}>
-            <h3 className="text-sm font-bold mb-3 text-gray-700">
-              {section.title}
-            </h3>
-
-            {section.data.length > 0 ? (
-              <div className="space-y-2">
-                {section.data.map((x, i) => (
-                  <div key={i} className="bg-gray-50 p-3 rounded-xl flex justify-between">
-                    <span>{x.nama}</span>
-                    <span className="font-mono text-sm">
-                      {Number(x.hasil).toFixed(2)} {x.satuan}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-gray-400 italic">Kosong</div>
-            )}
-          </div>
-        ))}
-
-      </div>
-    </div>
-
   </div>
 
-  {/* ================= RIGHT (SUMMARY) ================= */}
-  <div>
+  {/* ================= DETAIL PEKERJAAN ================= */}
+  <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
 
-    <div className="bg-white rounded-3xl border shadow-sm p-6 space-y-6">
+    <div className="p-5 border-b flex justify-between items-center">
+      <h3 className="font-bold text-gray-800">Detail Pekerjaan</h3>
+      <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">
+        {data.length} item
+      </span>
+    </div>
 
-      <h2 className="font-bold text-gray-800">
-        Rekap Harian
-      </h2>
+    <div className="w-full">
+      <table className="w-full text-sm">
+
+        <tbody>
+          {data.length === 0 ? (
+            <tr>
+              <td colSpan="4" className="text-center p-12 text-gray-400">
+                Tidak ada data hari ini
+              </td>
+            </tr>
+          ) : (
+            buildRows().map((row, i) => {
+
+  // ================= HEADER =================
+  if (row.type === "header") {
+    return (
+      <tr key={i}>
+        <td colSpan="4" className="px-5 pt-8 pb-3">
+
+          <div className="flex items-center gap-3">
+
+            <div className="w-3 h-3 bg-blue-600 rounded-full shadow"></div>
+
+            <h2 className="text-base font-bold text-slate-900 tracking-wide uppercase">
+              {row.label}
+            </h2>
+
+          </div>
+
+          {/* garis tegas */}
+          <div className="mt-3 h-[2px] bg-gradient-to-r from-blue-400 via-blue-200 to-transparent rounded-full"></div>
+
+        </td>
+      </tr>
+    );
+  }
+
+  // ================= SUBHEADER =================
+  if (row.type === "subheader") {
+    return (
+      <tr key={i}>
+        <td colSpan="4" className="px-8 py-2">
+
+          <div className="flex items-center gap-2">
+
+            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+
+            <span className="text-xs font-semibold text-gray-600 tracking-wide uppercase">
+              {row.label}
+            </span>
+
+          </div>
+
+        </td>
+      </tr>
+    );
+  }
+
+  // ================= ITEM =================
+  const item = row.data;
+
+  return (
+    <tr key={i}>
+      <td colSpan="4" className="px-10 py-2">
+
+        <div className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm hover:shadow-md hover:border-blue-200 transition-all">
+
+          {/* LEFT */}
+          <div className="flex flex-col">
+
+            <span className="text-[11px] text-gray-400">
+              {new Date(item.tanggal).toLocaleDateString("id-ID")}
+            </span>
+
+            <span className="text-sm font-semibold text-gray-800">
+               {item.uraian}
+            </span>
+
+          </div>
+
+          {/* RIGHT */}
+          <div className="flex items-center gap-4">
+
+            <span className="text-[11px] bg-gray-100 px-2 py-1 rounded text-gray-600">
+              {item.satuan}
+            </span>
+
+            <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-mono font-bold">
+              {Number(item.volume).toFixed(3)}
+            </span>
+
+          </div>
+
+        </div>
+
+      </td>
+    </tr>
+  );
+})
+          )}
+        </tbody>
+            
+
+      </table>
+    </div>
+  </div>
+
+  {/* ================= REKAP ================= */}
+  <div className="bg-white rounded-3xl border shadow-sm p-6">
+    <h2 className="font-bold text-gray-800 mb-4">
+      Rekap Harian
+    </h2>
+
+    <div className="grid md:grid-cols-3 gap-6">
 
       {[ 
         { title: "Material", data: totalMaterial },
@@ -334,15 +438,19 @@ const handleExportExcel = async () => {
         { title: "Peralatan", data: totalPeralatan }
       ].map((section, i) => (
         <div key={i}>
+
           <h3 className="text-xs uppercase text-gray-400 mb-2">
             {section.title}
           </h3>
 
           {section.data.length > 0 ? (
             section.data.map((x, idx) => (
-              <div key={idx} className="flex justify-between bg-gray-50 p-2 rounded-lg mb-2">
-                <span>{x.nama}</span>
-                <span className="font-bold text-sm">
+              <div
+                key={idx}
+                className="flex justify-between items-center bg-gray-50 p-3 rounded-xl mb-2 hover:bg-gray-100 transition"
+              >
+                <span className="text-sm">{x.nama}</span>
+                <span className="font-bold text-sm text-gray-700">
                   {Number(x.total).toFixed(2)}
                 </span>
               </div>
@@ -357,9 +465,121 @@ const handleExportExcel = async () => {
       ))}
 
     </div>
-
   </div>
 
+  {/* ================= SUMBER DAYA ================= */}
+  <div className="bg-white rounded-3xl border shadow-sm p-6">
+  <h2 className="font-bold text-gray-800 text-lg mb-6">
+    Rincian Sumber Daya
+  </h2>
+
+  <div className="space-y-5">
+
+    {data.map((item, idx) => {
+
+      const materials = item.materials || [];
+      const pekerja = item.pekerja || [];
+      const peralatan = item.peralatan || [];
+
+      return (
+        <div key={idx} className="bg-white border rounded-2xl shadow-sm">
+
+          {/* HEADER */}
+          <div className="px-5 py-4 border-b">
+
+            <div className="text-xs text-gray-400 mb-1">
+              {new Date(item.tanggal).toLocaleDateString("id-ID")}
+            </div>
+
+            <h3 className="text-base font-bold text-gray-800">
+              {item.uraian}
+            </h3>
+
+          </div>
+
+          {/* CONTENT */}
+          <div className="p-4 grid md:grid-cols-3 gap-4">
+
+            {/* MATERIAL */}
+            <div className="bg-amber-50 rounded-xl p-4">
+
+              <h4 className="text-sm font-bold text-amber-700 mb-3 uppercase">
+                Material
+              </h4>
+
+              {materials.length > 0 ? (
+                <div className="space-y-2">
+                  {materials.map((m, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>{m.nama}</span>
+                      <span className="font-semibold text-amber-800">
+                        {Number(m.hasil).toFixed(2)} {m.satuan}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 italic">-</div>
+              )}
+
+            </div>
+
+            {/* PEKERJA */}
+            <div className="bg-blue-50 rounded-xl p-4">
+
+              <h4 className="text-sm font-bold text-blue-700 mb-3 uppercase">
+                Pekerja
+              </h4>
+
+              {pekerja.length > 0 ? (
+                <div className="space-y-2">
+                  {pekerja.map((p, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>{p.nama}</span>
+                      <span className="font-semibold text-blue-800">
+                        {Number(p.hasil).toFixed(2)} {p.satuan}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 italic">-</div>
+              )}
+
+            </div>
+
+            {/* PERALATAN */}
+            <div className="bg-emerald-50 rounded-xl p-4">
+
+              <h4 className="text-sm font-bold text-emerald-700 mb-3 uppercase">
+                Peralatan
+              </h4>
+
+              {peralatan.length > 0 ? (
+                <div className="space-y-2">
+                  {peralatan.map((p, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>{p.nama}</span>
+                      <span className="font-semibold text-emerald-800">
+                        {Number(p.hasil).toFixed(2)} {p.satuan}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 italic">-</div>
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+      );
+    })}
+
+  </div>
+</div>
 </div>
       </div>
     </>

@@ -13,12 +13,19 @@ export default function DailyPlanPage() {
   const { selectedProject } = useProject();
   const id = selectedProject?.id || paramId;
   const projectId = id;
+  
   const navigate = useNavigate();
 
   const [data, setData] = useState([]);
   const [weekly, setWeekly] = useState([]);
   const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [weekSetting, setWeekSetting] = useState({
+    week_mode: "static",
+    week_start_day: "Senin"
+  });
+
+  const [showWeekModal, setShowWeekModal] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [periods, setPeriods] = useState([]);
@@ -55,8 +62,11 @@ export default function DailyPlanPage() {
   };
 
   useEffect(() => {
+
     fetchAll();
     fetchPeriods();
+    fetchProjectSetting();
+
   }, [projectId]);
 
 
@@ -133,6 +143,54 @@ export default function DailyPlanPage() {
     Kumulatif: Number(w.kumulatif).toFixed(2)
   }));
 
+  const fetchProjectSetting = async () => {
+    try {
+
+      const res = await api.get(`/projects/${projectId}`);
+
+      setWeekSetting({
+        week_mode: res.data.week_mode || "static",
+        week_start_day:
+          res.data.week_start_day || "Senin"
+      });
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleWeekSettingChange = (e) => {
+
+    const { name, value } = e.target;
+
+    setWeekSetting((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+
+  };
+
+  const saveWeekSetting = async () => {
+
+  try {
+
+    await api.put(
+      `/project-week-setting/${projectId}`,
+      weekSetting
+    );
+
+    alert("✅ Setting minggu berhasil disimpan");
+
+    setShowWeekModal(false);
+
+  } catch (err) {
+
+    alert("Gagal menyimpan setting");
+
+  }
+
+};
+
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -144,6 +202,16 @@ export default function DailyPlanPage() {
             <ArrowLeft size={24} />
           </button>
           <div className="flex flex-wrap gap-3">
+
+            <button
+              onClick={() => setShowWeekModal(true)}
+               className={`
+                flex items-center gap-2 px-5 py-2.5 rounded font-semibold bg-transparent border border-blue-500 text-blue-500 hover:bg-blue-500/10 transition-all active:scale-95 cursor-pointer`
+               }
+            >
+              <CalendarDays size={18} />
+              Setting Minggu
+            </button>
 
             {/* Periode Termin */}
             <button
@@ -507,6 +575,146 @@ export default function DailyPlanPage() {
             </m.div>
           </m.div>
         )}
+
+      </AnimatePresence>
+
+      <AnimatePresence>
+
+        {showWeekModal && (
+
+          <m.div
+            transition={{ duration: 0.1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="
+              fixed inset-0 bg-black/40
+              flex items-center justify-center
+              z-50
+            "
+          >
+
+            <m.div
+              transition={{ duration: 0.3 }}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="
+                bg-white w-full max-w-lg
+                rounded-md p-6
+                shadow-xl
+              "
+            >
+
+              <div className="flex justify-between items-center mb-6">
+
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">
+                    Setting Minggu Project
+                  </h2>
+
+                  <p className="text-sm text-gray-500">
+                    Pengaturan pembagian minggu daily plan
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowWeekModal(false)}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
+
+              </div>
+
+              {/* MODE */}
+              <div className="mb-4">
+
+                <label className="text-sm text-gray-600">
+                  Mode Minggu
+                </label>
+
+                <select
+                  name="week_mode"
+                  value={weekSetting.week_mode}
+                  onChange={handleWeekSettingChange}
+                  className="
+                    w-full border border-gray-200
+                    p-2 rounded-xl mt-1
+                  "
+                >
+
+                  <option value="static">
+                    Static 7 Hari
+                  </option>
+
+                  <option value="calendar">
+                    Calendar Week
+                  </option>
+
+                </select>
+
+              </div>
+
+              {/* START DAY */}
+              {
+                weekSetting.week_mode === "calendar" && (
+
+                  <div className="mb-5">
+
+                    <label className="text-sm text-gray-600">
+                      Awal Minggu
+                    </label>
+
+                    <select
+                      name="week_start_day"
+                      value={weekSetting.week_start_day}
+                      onChange={handleWeekSettingChange}
+                      className="
+                        w-full border border-gray-200
+                        p-2 rounded-xl mt-1
+                      "
+                    >
+                      <option value="Senin">Senin</option>
+                      <option value="Selasa">Selasa</option>
+                      <option value="Rabu">Rabu</option>
+                      <option value="Kamis">Kamis</option>
+                      <option value="Jumat">Jumat</option>
+                      <option value="Sabtu">Sabtu</option>
+                      <option value="Minggu">Minggu</option>
+
+                    </select>
+
+                  </div>
+
+                )
+              }
+
+              {/* BUTTON */}
+              <div className="flex justify-end">
+
+                <button
+                  onClick={saveWeekSetting}
+                  className="
+                    px-5 py-2.5
+                    rounded
+                    bg-blue-500
+                    hover:bg-blue-500/90
+                    text-white
+                    font-semibold
+                  "
+                >
+                  Simpan Setting
+                </button>
+
+              </div>
+
+            </m.div>
+
+          </m.div>
+
+        )}
+
       </AnimatePresence>
 
       <style dangerouslySetInnerHTML={{

@@ -779,23 +779,38 @@ for (let r = startRow + 3; r < rowIndex; r++) {
 
   // 🔥 helper angka biasa
   const setNumber = (cell, val) => {
+
     if (!val || val === 0) {
+
       cell.value = null;
+
     } else {
-      cell.value = val;
-      cell.numFmt = "0.000"; // 🔥 3 angka belakang
+
+      // 🔥 VALUE ASLI FULL
+      cell.value = Number(val);
+
+      // 🔥 HANYA FORMAT TAMPILAN
+      cell.numFmt =
+      '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
     }
   };
 
   // 🔥 helper persen (khusus progress_item)
   const setPercent = (cell, val) => {
-    if (!val || val === 0) {
-      cell.value = null;
-    } else {
-      cell.value = val / 100; // 🔥 penting!
-      cell.numFmt = "0.000%";
-    }
-  };
+
+  if (!val || Number(val) === 0) {
+
+    cell.value = null;
+
+  } else {
+
+    // 🔥 bulatkan 3 digit
+    cell.value = Number(Number(val).toFixed(3));
+
+    // 🔥 format tampil
+    cell.numFmt = '0.000';
+  }
+};
 
   // =========================
   // 🔥 APPLY FORMAT
@@ -837,7 +852,8 @@ totalCell.value = {
 };
 
 totalCell.font = { bold: true };
-totalCell.numFmt = "0.000";
+totalCell.numFmt =
+'_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
 totalCell.alignment = {
   horizontal: "center",
   vertical: "middle"

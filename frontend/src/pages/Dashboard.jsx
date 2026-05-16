@@ -129,6 +129,34 @@ export default function Dashboard() {
       setShowModal(true);
    };
 
+   const handleDeleteProject = async () => {
+   if (!selectedProject) return;
+
+   const confirmDelete = window.confirm(
+      `Yakin ingin menghapus project "${selectedProject.kegiatan}" ?`
+   );
+
+   if (!confirmDelete) return;
+
+   try {
+
+      await api.delete(`/projects/${selectedProject.id}`);
+
+      // refresh project list
+      await fetchProjects();
+
+      // reset selected project
+      setSelectedProject(null);
+      setProjectData(null);
+
+      alert("Project berhasil dihapus");
+
+   } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus project");
+   }
+};
+
    const resetForm = () => {
       setForm({
          kegiatan: '',
@@ -165,7 +193,8 @@ export default function Dashboard() {
          const start = new Date(currentForm.tgl_spmk);
          const end = new Date(currentForm.end_date);
          const diffTime = Math.abs(end - start);
-         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+         const diffDays =
+         Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
          setForm({ ...currentForm, waktu_pelaksanaan: diffDays });
       }
    };
@@ -271,6 +300,7 @@ export default function Dashboard() {
                   <span className="hidden md:inline">TAMBAH PROYEK</span>
                </m.button>
                {selectedProject && (
+                  <>
                   <button
                      onClick={handleEditProject}
                      className="bg-primary text-white px-4 py-3 hover:bg-transparent hover:text-primary hover:border-primary border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
@@ -278,6 +308,14 @@ export default function Dashboard() {
                      <Edit size={24} />
                      <span className="hidden md:inline">Edit Proyek</span>
                   </button>
+                   <button
+                        onClick={handleDeleteProject}
+                        className="bg-red-500 text-white px-4 py-3 hover:bg-transparent hover:text-red-500 hover:border-red-500 border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
+                     >
+                        <X size={24} />
+                        <span className="hidden md:inline">HAPUS</span>
+                     </button>
+                  </>
                )}
             </div>
          </div>

@@ -118,21 +118,25 @@ export const getWeeklyReport = async (req, res) => {
           progressItem = total ? (sdIni / total) * 100 : 0;
         }
 
-        laporan.push({
+       laporan.push({
           uraian: boq.uraian,
           level: boq.level,
-          bobot: Number(bobot.toFixed(3)),
+
+          // 🔥 FULL DB
+          bobot: parseFloat(boq.bobot),
+
           satuan: boq.satuan,
-          total: Number(total.toFixed(3)),
+
+          total: parseFloat(total),
 
           tipe: boq.tipe,
 
-          minggu_ini: Number(mingguIni.toFixed(3)),
-          sd_lalu: Number(sdLalu.toFixed(3)),
-          sd_ini: Number(sdIni.toFixed(3)),
+          minggu_ini: parseFloat(mingguIni),
+          sd_lalu: parseFloat(sdLalu),
+          sd_ini: parseFloat(sdIni),
 
-          progress_item: Number(progressItem.toFixed(3)),
-          progres_proyek: Number(progresProyek.toFixed(3)),
+          progress_item: parseFloat(progressItem),
+          progres_proyek: parseFloat(progresProyek),
         });
       }
 
@@ -287,21 +291,25 @@ export const getMonthlyReport = async (req, res) => {
           totalKumulatif += progresProyek;
         }
 
-        laporan.push({
+       laporan.push({
           uraian: boq.uraian,
           level: boq.level,
-          bobot: Number(bobot.toFixed(3)),
+
+          // 🔥 FULL DATABASE
+          bobot: parseFloat(boq.bobot),
+
           satuan: boq.satuan,
-          total: Number(total.toFixed(3)),
+
+          total: parseFloat(total),
 
           tipe: boq.tipe,
 
-          bulan_ini: Number(bulanIni.toFixed(3)),
-          sd_lalu: Number(sdLalu.toFixed(3)),
-          sd_ini: Number(sdIni.toFixed(3)),
+          bulan_ini: parseFloat(bulanIni),
+          sd_lalu: parseFloat(sdLalu),
+          sd_ini: parseFloat(sdIni),
 
-          progress_item: Number(progressItem.toFixed(2)),
-          progres_proyek: Number(progresProyek.toFixed(3)),
+          progress_item: parseFloat(progressItem),
+          progres_proyek: parseFloat(progresProyek),
         });
       }
 
@@ -537,11 +545,17 @@ export const getDailyReport = async (req, res) => {
 
     });
 
+    const boqList = await Boq.findAll({
+      where: { project_id },
+      attributes: ["id", "parent_id", "tipe", "uraian", "kode"]
+    });
+
     // =========================
     // 🔥 FINAL RESPONSE
     // =========================
     res.json({
       data: result,
+      boq: boqList, // 🔥 INI YANG KURANG
       total_bobot_harian: Number(total_bobot_harian.toFixed(3)),
 
       total_material: Object.values(total_material),

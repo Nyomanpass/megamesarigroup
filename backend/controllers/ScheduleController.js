@@ -1,6 +1,17 @@
 import { Project } from "../models/ProjectModel.js";
 import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
+import moment from "moment";
+import "moment/locale/id.js";
+
+const getNamaHari = (date) => {
+
+  return moment(date)
+    .locale("id")
+    .format("dddd")
+    .toLowerCase();
+
+};
 
 export const generateWeeks = async (req, res) => {
   try {
@@ -26,27 +37,108 @@ export const generateWeeks = async (req, res) => {
     start.setHours(0,0,0,0);
     end.setHours(0,0,0,0);
     
-    let mingguKe = 1;
+
 
     await ProjectWeek.destroy({ where: { project_id } });
 
-    while (start <= end) {
-      let startWeek = new Date(start);
-      let endWeek = new Date(start);
-      endWeek.setDate(endWeek.getDate() + 6);
+   let currentDate = new Date(start);
 
-      if (endWeek > end) endWeek = new Date(end);
+    let mingguKe = 1;
 
-       await ProjectWeek.create({
+    let startWeek = new Date(currentDate);
+
+    let firstDay = true;
+
+    while (currentDate <= end) {
+
+      // MODE STATIC
+      if (
+        !project.week_mode ||
+        project.week_mode === "static"
+      ) {
+
+        let endWeek = new Date(startWeek);
+
+        endWeek.setDate(
+          endWeek.getDate() + 6
+        );
+
+        if (endWeek > end) {
+          endWeek = new Date(end);
+        }
+
+        await ProjectWeek.create({
+          project_id,
+          minggu_ke: mingguKe,
+          start_date: startWeek,
+          end_date: endWeek
+        });
+
+        startWeek.setDate(
+          startWeek.getDate() + 7
+        );
+
+        currentDate = new Date(startWeek);
+
+        mingguKe++;
+
+      }
+
+      // MODE CALENDAR
+      else {
+
+        const namaHari =
+          getNamaHari(currentDate);
+
+        const isNextWeek =
+          namaHari ===
+          project.week_start_day.toLowerCase()
+          &&
+          !firstDay;
+
+        // saat masuk minggu baru
+        if (isNextWeek) {
+
+          let endWeek = new Date(currentDate);
+
+          endWeek.setDate(
+            endWeek.getDate() - 1
+          );
+
+          await ProjectWeek.create({
+            project_id,
+            minggu_ke: mingguKe,
+            start_date: startWeek,
+            end_date: endWeek
+          });
+
+          mingguKe++;
+
+          startWeek =
+            new Date(currentDate);
+
+        }
+
+        firstDay = false;
+
+        currentDate.setDate(
+          currentDate.getDate() + 1
+        );
+
+      }
+
+    }
+
+    if (
+      project.week_mode === "calendar"
+    ) {
+
+      await ProjectWeek.create({
         project_id,
         minggu_ke: mingguKe,
         start_date: startWeek,
-        end_date: endWeek
+        end_date: end
       });
-
-
-      start.setDate(start.getDate() + 7);
-      mingguKe++;
     }
 
     res.json({ message: "Minggu berhasil dibuat" });

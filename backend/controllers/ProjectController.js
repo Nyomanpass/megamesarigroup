@@ -160,3 +160,43 @@ export const deleteProject = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+export const updateProjectWeekSetting = async (req, res) => {
+  try {
+
+    const { project_id } = req.params;
+
+    const {
+      week_mode,
+      week_start_day
+    } = req.body;
+
+    const project = await Project.findByPk(project_id);
+
+    if (!project) {
+      return res.status(404).json({
+        message: "Project tidak ditemukan"
+      });
+    }
+
+    await project.update({
+      week_mode,
+      week_start_day:
+        week_mode === "calendar"
+          ? week_start_day
+          : null
+    });
+
+    res.json({
+      message: "Setting minggu project berhasil diupdate ✅",
+      data: project
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};

@@ -305,6 +305,7 @@ const ProjectAnalisaPage = () => {
                 <th className="p-5 font-bold">Nama Pekerjaan</th>
                 <th className="p-5 font-bold w-32">Satuan</th>
                 <th className="p-5 font-bold w-32 text-center">Overhead (%)</th>
+                <th className="p-5 font-bold w-32 text-center">Grantotal</th>
                 <th className="p-5 font-bold text-center w-64">Aksi</th>
               </tr>
             </thead>
@@ -326,6 +327,11 @@ const ProjectAnalisaPage = () => {
                   <td className="p-5 text-center text-gray-600 font-medium">
                     <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
                       {a.overhead_persen}%
+                    </span>
+                  </td>
+                   <td className="p-5 text-center text-gray-600 font-medium">
+                    <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
+                      {a.grandTotal_rp}
                     </span>
                   </td>
                   <td className="p-5">
