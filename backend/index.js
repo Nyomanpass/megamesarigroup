@@ -7,6 +7,7 @@ import { sequelize } from "./config/Database.js";
 import authRoutes from "./routes/AuthRoutes.js";
 import BoqRoutes from "./routes/BoqRoutes.js";
 import ProjectRoutes from "./routes/ProjectRoutes.js";
+import path from "path";
 
 import { LoginLog } from "./models/auth/LoginLogModel.js";
 import "./models/auth/OtpModel.js";
@@ -48,6 +49,7 @@ import ExportWeeklyRoutes from "./routes/ExportWeeklyRoutes.js";
 import importRoutes from "./routes/Import.js";
 import TtdRoutes from "./routes/TtdRoutes.js";
 import exportMounthlyRoutes from "./routes/ExportMonthlyRoutes.js";
+import DailyProgressPhotoRoutes from "./routes/DailyProgressPhotoRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
@@ -78,7 +80,7 @@ app.get("/", (req, res) => {
    res.send("Mega Mesari API Running 🚀");
 });
 
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // routes
 app.use("/api", authRoutes);
@@ -104,6 +106,7 @@ app.use("/api", ExportWeeklyRoutes);
 app.use("/api", importRoutes);
 app.use("/api", TtdRoutes);
 app.use("/api", exportMounthlyRoutes);
+app.use("/api", DailyProgressPhotoRoutes);
 
 // koneksi database
 const startServer = async () => {

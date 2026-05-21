@@ -606,12 +606,25 @@ const handleSingleCellChange = (
 
   // Chart Data Preparation
   const chartData = weeks.map((w, idx) => {
-    const real = realData.find(r => r.minggu_ke === w.minggu_ke);
+
+    const real =
+      realData.find(
+        r => r.minggu_ke === w.minggu_ke
+      );
 
     return {
+
       name: `M${w.minggu_ke}`,
-      target: rencanaKomulatif[idx] || 0,
-      real: real?.kum_real || 0 // 🔥 ini realisasi
+
+      // 🔥 FIX TARGET
+      target: Number(
+        rencanaKomulatif[idx] || 0
+      ),
+
+      // 🔥 FIX REAL
+      real: Number(
+        real?.kum_real || 0
+      )
     };
   });
 
@@ -924,11 +937,43 @@ const handleSingleCellChange = (
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <RechartsTooltip
-                      cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fontSize: 12,
+                        fill: '#64748b'
+                      }}
+
+                      tickFormatter={(value) =>
+                        Number(value).toFixed(3)
+                      }
                     />
+
+                    <RechartsTooltip
+
+                      cursor={{
+                        stroke: '#94A3B8',
+                        strokeWidth: 1,
+                        strokeDasharray: '4 4'
+                      }}
+
+                      contentStyle={{
+                        borderRadius: '12px',
+                        border: '1px solid #E2E8F0',
+                        boxShadow:
+                          '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                      }}
+
+                      formatter={(value) => [
+
+                        Number(value).toFixed(3),
+
+                        ""
+
+                      ]}
+                    />
+  
                     <Area
                       type="monotone"
                       dataKey="target"
@@ -957,22 +1002,22 @@ const handleSingleCellChange = (
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Review Kinerja Bobot</h3>
-            <p className="text-sm text-gray-500 mb-6">Ringkasan hasil plot rancangan kurva.</p>
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Review Kinerja Bobot</h3>
+              <p className="text-sm text-gray-500 mb-6">Ringkasan hasil plot rancangan kurva.</p>
 
-            <div className="flex-1 flex flex-col justify-center space-y-6">
-              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
-                <span className="text-sm font-bold text-gray-600">Total Durasi</span>
-                <span className="text-2xl font-black text-blue-600">{weeks.length} <span className="text-sm font-bold opacity-70">Minggu</span></span>
-              </div>
+              <div className="flex-1 flex flex-col justify-center space-y-6">
+                <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-600">Total Durasi</span>
+                  <span className="text-2xl font-black text-blue-600">{weeks.length} <span className="text-sm font-bold opacity-70">Minggu</span></span>
+                </div>
 
-              <div className={`p-4 rounded-2xl border flex items-center justify-between ${isComplete ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                <span className="text-sm font-bold text-gray-600">Total Komulatif</span>
-                <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{akumulasi.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
+                <div className={`p-4 rounded-2xl border flex items-center justify-between ${isComplete ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                  <span className="text-sm font-bold text-gray-600">Total Komulatif</span>
+                  <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{akumulasi.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
+                </div>
               </div>
             </div>
-          </div>
 
         </div>
 

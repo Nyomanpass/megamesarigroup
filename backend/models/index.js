@@ -25,6 +25,8 @@ import { DailyProgressItem } from "./DailyProgresItem.js";
 
 import { TtdTemplate } from "./TtdTemplate.js";
 
+import { DailyProgressPhoto } from "./DailyProgressPhotos.js";
+
 
 // PARENT → CHILD
 DailyProgress.hasMany(DailyProgressItem, {
@@ -38,6 +40,23 @@ DailyProgressItem.belongsTo(DailyProgress, {
   as: "progress"
 });
 
+
+DailyProgress.hasMany(
+  DailyProgressPhoto,
+  {
+    foreignKey: "daily_progress_id",
+    as: "photos",
+    onDelete: "CASCADE"
+  }
+);
+
+DailyProgressPhoto.belongsTo(
+  DailyProgress,
+  {
+    foreignKey: "daily_progress_id",
+    as: "daily_progress"
+  }
+);
 
 // CHILD → MASTER ITEM
 DailyProgressItem.belongsTo(ProjectItem, {
@@ -243,5 +262,6 @@ export {
   ProjectAnalisa,
   DailyProgressItem,
   LoginLog,
-  TtdTemplate
+  TtdTemplate,
+  DailyProgressPhoto
 };

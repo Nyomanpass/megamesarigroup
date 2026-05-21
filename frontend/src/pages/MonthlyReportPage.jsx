@@ -101,6 +101,52 @@ const handleExportMonthlyExcel = async () => {
   }
 };
 
+
+const handleExportMonthlyPDF = async () => {
+
+  try {
+
+    const response = await api.get(
+
+      `/monthly-report-pdf/${id}?bulan=${selectedMonth}`,
+
+      {
+        responseType: "blob"
+      }
+
+    );
+
+    const url =
+      window.URL.createObjectURL(
+        new Blob([response.data])
+      );
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.setAttribute(
+      "download",
+      `Laporan_Bulanan_${selectedMonth}.pdf`
+    );
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+  } catch (err) {
+
+    console.log(err);
+
+    alert("Gagal export PDF");
+
+  }
+
+};
+
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -138,12 +184,23 @@ const handleExportMonthlyExcel = async () => {
           </div>
         </div>
 
-        <button
-  onClick={handleExportMonthlyExcel}
-  className="bg-blue-600 mb-4 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
->
-  Export Bulanan
-</button>
+        <div className="flex items-center gap-3 mb-4">
+
+          <button
+            onClick={handleExportMonthlyExcel}
+            className="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export Excel
+          </button>
+
+          <button
+            onClick={handleExportMonthlyPDF}
+            className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export PDF
+          </button>
+
+        </div>
 
         {/* CONTENT */}
         {bulan ? (

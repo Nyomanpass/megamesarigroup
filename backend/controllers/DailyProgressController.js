@@ -8,6 +8,7 @@ import { Project } from "../models/ProjectModel.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { ProjectItem } from "../models/ProjekItem.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
+import { DailyProgressPhoto } from "../models/DailyProgressPhotos.js";
 
 export const createDailyProgress = async (req, res) => {
   const t = await sequelize.transaction();
@@ -511,12 +512,13 @@ export const getDailyProgress = async (req, res) => {
     const data = await DailyProgress.findAll({
       include: [
         { model: Boq, as: "boq" },
-        { model: Project, as: "project" }
+        { model: Project, as: "project" },
+        { model: DailyProgressPhoto, as: "photos" }
       ],
       order: [
-        ["tanggal", "DESC"], // terbaru dulu
-        ["id", "ASC"]        // id kecil dulu dalam tanggal
-      ] 
+        ["tanggal", "DESC"],
+        ["id", "ASC"]
+      ]
     });
 
     res.json(data);

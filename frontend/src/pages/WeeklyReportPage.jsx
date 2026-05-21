@@ -67,6 +67,50 @@ export default function WeeklyReportPage() {
   }
 };
 
+const handleExportWeeklyPDF = async () => {
+  try {
+
+    if (!selectedWeek) {
+      setError("Pilih minggu dulu sebelum export!");
+      return;
+    }
+
+    const response = await api.get(
+      `/weekly-report-pdf/${id}?minggu=${selectedWeek}`,
+      {
+        responseType: "blob",
+      }
+    );
+
+    // 🔥 download file
+    const url = window.URL.createObjectURL(
+      new Blob([response.data])
+    );
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.setAttribute(
+      "download",
+      `laporan_mingguan_minggu_${selectedWeek}.pdf`
+    );
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+  } catch (error) {
+
+    console.log(error);
+
+    setError("Gagal export PDF");
+
+  }
+};
+
   const minggu = data.find((m) => m.minggu_ke === selectedWeek);
 
   // Formatting helpers
@@ -136,12 +180,23 @@ export default function WeeklyReportPage() {
         </div>
 
 
-        <button
-        onClick={handleExportWeeklyExcel}
-        className="bg-green-600 mb-4 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
-      >
-        Export Excel
-      </button>
+        <div className="flex items-center gap-3 mb-4">
+
+          <button
+            onClick={handleExportWeeklyExcel}
+            className="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export Excel
+          </button>
+
+          <button
+            onClick={handleExportWeeklyPDF}
+            className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export PDF
+          </button>
+
+        </div>
 
         {/* CONTENT */}
         {minggu ? (
