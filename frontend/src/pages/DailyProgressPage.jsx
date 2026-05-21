@@ -6,6 +6,11 @@ import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, 
 import { motion, AnimatePresence } from "motion/react";
 import { useRef } from "react";
 import { m } from "framer-motion";
+import {
+  Upload,
+  Pencil,
+  ImagePlus
+} from "lucide-react";
 
 
 export default function DailyProgressPage() {
@@ -22,6 +27,14 @@ export default function DailyProgressPage() {
   const [showPreview, setShowPreview] = useState(false);
 
   const [expanded, setExpanded] = useState({});
+
+  //upload foto
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedProgress, setSelectedProgress] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [uploadFiles, setUploadFiles] = useState([]);
+  const [editPhotoId, setEditPhotoId] = useState(null);
+
 
   // --- States ---
   const [boqList, setBoqList] = useState([]);
@@ -538,81 +551,351 @@ dailyPlan.forEach((d) => {
   groupedByWeek[week].push(d);
 });
 
-
 const buildRows = () => {
+
+  // 🔥 PAKAI currentItems
   if (!currentItems.length) return [];
 
   const map = {};
-  boqList.forEach(b => {
+
+  boqList.forEach((b) => {
     map[Number(b.id)] = b;
   });
 
-  const rows = [];
-  let lastHeader = null;
-  let lastSub = null;
-
   const getParent = (boq) => {
+
     let header = null;
     let sub = null;
 
     let current = boq;
 
     while (current) {
-      if (current.tipe === "header") header = current;
-      if (current.tipe === "subheader") sub = current;
 
-      current = map[Number(current.parent_id)];
+      if (current.tipe === "header") {
+        header = current;
+      }
+
+      if (current.tipe === "subheader") {
+        sub = current;
+      }
+
+      current =
+        map[Number(current.parent_id)];
+
     }
 
-    return { header, sub };
+    return {
+      header,
+      sub
+    };
+
   };
 
-  // 🔥 PAKAI currentItems (bukan data)
+  // 🔥 currentItems
   const sortedData = [...currentItems].sort((a, b) => {
-    const aKode = map[a.boq_id]?.kode || "";
-    const bKode = map[b.boq_id]?.kode || "";
 
-    return aKode.localeCompare(bKode);
+    const aKode =
+      map[Number(a.boq_id)]?.kode || "";
+
+    const bKode =
+      map[Number(b.boq_id)]?.kode || "";
+
+    return aKode.localeCompare(
+      bKode,
+      undefined,
+      {
+        numeric: true,
+        sensitivity: "base"
+      }
+    );
+
   });
 
-  sortedData.forEach(item => {
-    const boq = map[Number(item.boq_id)];
+  const grouped = {};
 
-    if (!boq) {
-      rows.push({
-        type: "item",
-        data: item
-      });
-      return;
+  sortedData.forEach((item) => {
+
+    const boq =
+      map[Number(item.boq_id)];
+
+    if (!boq) return;
+
+    const {
+      header,
+      sub
+    } = getParent(boq);
+
+    const headerKey =
+      header?.id || "no-header";
+
+    const subKey =
+      sub?.id || "no-sub";
+
+    // HEADER
+    if (!grouped[headerKey]) {
+
+      grouped[headerKey] = {
+        header,
+        subs: {}
+      };
+
     }
 
-    const { header, sub } = getParent(boq);
+    // SUBHEADER
+    if (
+      !grouped[headerKey]
+        .subs[subKey]
+    ) {
 
-    if (header && header.id !== lastHeader) {
+      grouped[headerKey]
+        .subs[subKey] = {
+          sub,
+          items: []
+        };
+
+    }
+
+    // ITEM
+    grouped[headerKey]
+      .subs[subKey]
+      .items
+      .push(item);
+
+  });
+
+  const rows = [];
+
+  Object.values(grouped)
+    .forEach((headerGroup) => {
+
+    // HEADER
+    if (headerGroup.header) {
+
       rows.push({
         type: "header",
-        label: header.uraian
+        label: headerGroup.header.uraian,
+        kode: headerGroup.header.kode
       });
-      lastHeader = header.id;
-      lastSub = null;
+
     }
 
-    if (sub && sub.id !== lastSub) {
-      rows.push({
-        type: "subheader",
-        label: sub.uraian
-      });
-      lastSub = sub.id;
-    }
+    // SUBHEADER
+    Object.values(headerGroup.subs)
+      .forEach((subGroup) => {
 
-    rows.push({
-      type: "item",
-      data: item
+      if (subGroup.sub) {
+
+        rows.push({
+          type: "subheader",
+          label: subGroup.sub.uraian,
+          kode: subGroup.sub.kode
+        });
+
+      }
+
+      // ITEMS
+      subGroup.items.forEach((item) => {
+
+        rows.push({
+          type: "item",
+          data: item
+        });
+
+      });
+
     });
+
   });
 
   return rows;
+
 };
+
+
+  const handleOpenPhotos =
+  async (item) => {
+
+    try {
+
+      setSelectedProgress(item);
+
+      const res =
+        await api.get(
+          `/daily-progress/photos/${item.id}`
+        );
+
+      setPhotos(res.data);
+
+      setShowPhotoModal(true);
+
+    } catch (err) {
+
+      console.log(err);
+    }
+  };
+
+
+  const handleUploadPhotos =
+  async () => {
+
+    try {
+
+      const formData =
+        new FormData();
+
+            // 🔥 WAJIB
+      formData.append(
+        "type",
+        "project_photo"
+      );
+
+      formData.append(
+        "daily_progress_id",
+        selectedProgress.id
+      );
+
+      formData.append(
+        "project_id",
+        selectedProgress.project_id
+      );
+
+      formData.append(
+        "boq_id",
+        selectedProgress.boq_id
+      );
+
+      formData.append(
+        "tanggal",
+        selectedProgress.tanggal
+      );
+
+      uploadFiles.forEach(file => {
+
+        formData.append(
+          "photos",
+          file
+        );
+
+      });
+
+      await api.post(
+
+        "/daily-progress/photos",
+
+        formData,
+
+        {
+          headers: {
+            "Content-Type":
+            "multipart/form-data"
+          }
+        }
+      );
+
+      alert("Upload berhasil");
+
+      handleOpenPhotos(
+        selectedProgress
+      );
+
+      setUploadFiles([]);
+
+    } catch (err) {
+
+      console.log(err);
+    }
+  };
+
+  const handleDeletePhoto =
+  async (id) => {
+
+    const confirm =
+      window.confirm(
+        "Hapus foto?"
+      );
+
+    if (!confirm) return;
+
+    try {
+
+      await api.delete(
+        `/daily-progress/photos/${id}`
+      );
+
+      setPhotos(prev =>
+        prev.filter(
+          p => p.id !== id
+        )
+      );
+
+    } catch (err) {
+
+      console.log(err);
+    }
+  };
+
+  const handleEditPhoto =
+  async (photoId, file) => {
+
+    try {
+
+      const formData =
+        new FormData();
+
+      // 🔥 WAJIB
+      formData.append(
+        "type",
+        "project_photo"
+      );
+
+      formData.append(
+        "project_id",
+        selectedProgress.project_id
+      );
+
+      formData.append(
+        "boq_id",
+        selectedProgress.boq_id
+      );
+
+      formData.append(
+        "tanggal",
+        selectedProgress.tanggal
+      );
+
+      formData.append(
+        "photo",
+        file
+      );
+
+      await api.put(
+
+        `/daily-progress/photos/${photoId}`,
+
+        formData,
+
+        {
+          headers: {
+            "Content-Type":
+            "multipart/form-data"
+          }
+        }
+      );
+
+      handleOpenPhotos(
+        selectedProgress
+      );
+
+      alert(
+        "Foto berhasil diupdate"
+      );
+
+    } catch (err) {
+
+      console.log(err);
+    }
+  };
+
 
 
   return (
@@ -1160,7 +1443,7 @@ const buildRows = () => {
               <div className="bg-blue-50/50 px-5 py-3 border-b border-blue-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <h3 className="font-bold text-slate-700 tracking-tight">🔍 Preview Analisa Kebutuhan</h3>
+                  <h3 className="font-bold text-slate-700 tracking-tight">Preview Analisa Kebutuhan</h3>
                 </div>
                 <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase">
                   Auto Calculation
@@ -1278,107 +1561,148 @@ const buildRows = () => {
                 <tr className="text-xs uppercase tracking-wider text-gray-500 border-b border-gray-100">
                   <th className="p-4 pl-6">Tanggal</th>
                   <th className="p-4">Item Pekerjaan BOQ</th>
-                  <th className="p-4 text-right">Volume</th>
+                  <th className="p-4">Volume</th>
+                  <th className="p-4">Foto</th>
                   <th className="p-4 text-center pr-6">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+             <tbody className="divide-y divide-gray-50">
                 {buildRows().map((row, i) => {
 
-  // ================= HEADER =================
-  if (row.type === "header") {
-    return (
-      <tr key={i}>
-        <td colSpan="4" className="px-6 pt-6 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
+                    // ================= HEADER =================
+                    if (row.type === "header") {
+                      return (
+                        <tr key={i}>
+                          <td colSpan="4" className="px-6 pt-6 pb-2">
+                          <div className="flex items-center gap-3">
 
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              {row.label}
-            </h3>
-          </div>
+                              {/* KODE */}
+                              <div className="bg-blue-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow">
+                                {row.kode || "A"}
+                              </div>
 
-          <div className="mt-2 h-[2px] bg-gradient-to-r from-blue-300 to-transparent"></div>
-        </td>
-      </tr>
-    );
-  }
+                              {/* JUDUL */}
+                              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                                {row.label}
+                              </h3>
 
-  // ================= SUBHEADER =================
-  if (row.type === "subheader") {
-    return (
-      <tr key={i}>
-        <td colSpan="4" className="px-10 py-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                            </div>
 
-            <span className="text-xs font-semibold text-gray-600 uppercase">
-              {row.label}
-            </span>
-          </div>
-        </td>
-      </tr>
-    );
-  }
+                            <div className="mt-2 h-[2px] bg-gradient-to-r from-blue-300 to-transparent"></div>
+                          </td>
+                        </tr>
+                      );
+                    }
 
-  // ================= ITEM =================
-  const item = row.data;
+                    // ================= SUBHEADER =================
+                    if (row.type === "subheader") {
+                      return (
+                        <tr key={i}>
+                          <td colSpan="4" className="px-10 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
 
-  return (
-    <tr key={i} className="group hover:bg-blue-50/30 transition">
+                              <span className="text-xs font-semibold text-gray-600 uppercase">
+                                {row.label}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
 
-      {/* TANGGAL */}
-      <td className="p-4 pl-6 text-gray-600 text-sm">
-        {new Date(item.tanggal).toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric"
-        })}
-      </td>
+                    // ================= ITEM =================
+                    const item = row.data;
 
-      {/* PEKERJAAN */}
-      <td className="p-4 pl-12 text-gray-800 font-semibold">
-        {item.boq?.uraian}
-      </td>
+                    return (
+                      <tr key={i} className="group hover:bg-blue-50/30 transition">
 
-      {/* VOLUME */}
-      <td className="p-4 text-right">
-        <span className="bg-green-50 text-green-700 font-mono font-bold px-3 py-1 rounded-lg">
-          {Number(item.volume).toFixed(3)}
-        </span>
-      </td>
+                        {/* TANGGAL */}
+                        <td className="p-4 pl-6 text-gray-600 text-sm">
+                          {new Date(item.tanggal).toLocaleDateString("id-ID", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                          })}
+                        </td>
 
-      {/* AKSI */}
-      <td className="p-4 text-center pr-6">
-        <div className="flex justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+                        {/* PEKERJAAN */}
+                        <td className="p-4 pl-12 text-gray-800 font-semibold">
+                          {item.boq?.uraian}
+                        </td>
 
-          <button
-            onClick={() => handleCopy(item)}
-            className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600"
-          >
-            <PlusCircle size={18} />
-          </button>
+                        {/* VOLUME */}
+                        <td className="p-4 text-right">
+                          <span className="bg-green-50 text-green-700 font-mono font-bold px-3 py-1 rounded-lg">
+                            {Number(item.volume).toFixed(3)}
+                          </span>
+                        </td>
 
-          <button
-            onClick={() => handleEdit(item)}
-            className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600"
-          >
-            <Edit size={18} />
-          </button>
+                        {/* FOTO */}
+                        <td className="p-4">
+                          <div
+                            onClick={() => handleOpenPhotos(item)}
+                            className="cursor-pointer group/photo"
+                          >
+                            {item.photos && item.photos.length > 0 ? (
+                              <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                                
+                                <img
+                                  src={`http://localhost:3000/${item.photos[0].photo_url}`}
+                                  className="w-full h-full object-cover group-hover/photo:scale-110 transition"
+                                />
 
-          <button
-            onClick={() => handleDelete(item.id)}
-            className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600"
-          >
-            <Trash2 size={18} />
-          </button>
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/photo:opacity-100 transition flex items-center justify-center text-white text-xs font-bold">
+                                  {item.photos.length} Foto
+                                </div>
 
-        </div>
-      </td>
+                              </div>
+                            ) : (
+                              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-blue-300 hover:text-blue-500 transition">
+                                
+                                <ImagePlus size={24} />
 
-    </tr>
-  );
-})}
+                                <div className="text-[10px] font-bold">
+                                  Upload
+                                </div>
+
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* AKSI */}
+                        <td className="p-4 text-center pr-6">
+                          <div className="flex justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+
+                            <button
+                              onClick={() => handleCopy(item)}
+                              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600"
+                            >
+                              <PlusCircle size={18} />
+                            </button>
+
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600"
+                            >
+                              <Edit size={18} />
+                            </button>
+
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+
+
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })}
                 {data.length === 0 && (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">Belum ada riwayat progres. Coba input data progres yang pertama!</td>
@@ -1488,6 +1812,120 @@ const buildRows = () => {
           background: #94a3b8; 
         }
       `}} />
+
+      {showPhotoModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4">
+          
+          <div className="bg-white w-full max-w-6xl rounded-3xl overflow-hidden shadow-2xl">
+
+            {/* HEADER */}
+            <div className="p-5 border-b flex justify-between items-center">
+              
+              <div>
+                <h2 className="text-xl font-bold">
+                  Gallery Progress
+                </h2>
+
+                <p className="text-sm text-gray-500">
+                  Upload dokumentasi proyek
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowPhotoModal(false)}
+                className="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+
+            {/* UPLOAD */}
+            <div className="p-5 border-b flex flex-col gap-4">
+
+              <input
+                type="file"
+                multiple
+                onChange={(e) =>
+                  setUploadFiles(
+                    Array.from(e.target.files)
+                  )
+                }
+              />
+
+              <button
+                onClick={handleUploadPhotos}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <Upload size={18} />
+                Upload Foto
+              </button>
+
+            </div>
+
+
+            {/* GALLERY */}
+            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-5 max-h-[70vh] overflow-y-auto">
+
+              {photos.map(photo => (
+
+                <div
+                  key={photo.id}
+                  className="border rounded-2xl overflow-hidden bg-white shadow-sm"
+                >
+
+                  <img
+                    src={`http://localhost:3000/${photo.photo_url}`}
+                    className="w-full h-52 object-cover"
+                  />
+
+                  <div className="p-3 flex gap-2">
+
+                    {/* EDIT */}
+                    <label className="flex-1 text-center bg-blue-50 text-blue-600 py-2 rounded-lg cursor-pointer text-sm font-bold flex items-center justify-center gap-2">
+                      
+                      <Pencil size={16} />
+
+                      Edit
+
+                      <input
+                        type="file"
+                        hidden
+                        onChange={(e) =>
+                          handleEditPhoto(
+                            photo.id,
+                            e.target.files[0]
+                          )
+                        }
+                      />
+
+                    </label>
+
+
+                    {/* DELETE */}
+                    <button
+                      onClick={() =>
+                        handleDeletePhoto(photo.id)
+                      }
+                      className="flex-1 bg-red-50 text-red-600 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Hapus
+                    </button>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
     </>
   );
 }
