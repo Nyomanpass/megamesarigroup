@@ -41,17 +41,8 @@ const storage =
         }
 
         // =====================
-        // DOCUMENT
+        // CREATE FOLDER
         // =====================
-        else if (
-          req.body.type ===
-          "document"
-        ) {
-
-          dir =
-            "uploads/documents";
-        }
-
         fs.mkdirSync(
           dir,
           {
@@ -61,7 +52,6 @@ const storage =
 
         cb(null, dir);
       },
-
 
     // =====================
     // FILE NAME
@@ -107,7 +97,6 @@ const storage =
 
           cb(
             null,
-
             `${boq_id}_${tanggal}_${unique}${ext}`
           );
 

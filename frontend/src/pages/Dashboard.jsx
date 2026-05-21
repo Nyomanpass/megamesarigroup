@@ -205,26 +205,107 @@ export default function Dashboard() {
    };
 
    const handleSubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData();
-      Object.keys(form).forEach(key => {
-         if (form[key] !== null && form[key] !== '') {
-            formData.append(key, form[key]);
-         }
-      });
+   e.preventDefault();
 
-      try {
-         if (editId) {
-            await api.put(`/projects/${editId}`, formData);
-         } else {
-            await api.post('/projects', formData);
+   const formData = new FormData();
+
+   // =====================
+   // FIELD BIASA
+   // =====================
+   Object.keys(form).forEach(key => {
+
+      // skip file dulu
+      if (
+         key !== "logo_kontraktor" &&
+         key !== "logo_konsultan" &&
+         key !== "logo_client"
+      ) {
+
+         if (
+            form[key] !== null &&
+            form[key] !== ""
+         ) {
+
+            formData.append(
+               key,
+               form[key]
+            );
          }
-         fetchProjects();
-         setShowModal(false);
-      } catch (err) {
-         console.error(err);
       }
-   };
+   });
+
+   // =====================
+   // TYPE UNTUK MULTER
+   // =====================
+   formData.append(
+      "type",
+      "logo"
+   );
+
+   // =====================
+   // FILE LOGO
+   // =====================
+   if (form.logo_kontraktor) {
+
+      formData.append(
+         "logo_kontraktor",
+         form.logo_kontraktor
+      );
+   }
+
+   if (form.logo_konsultan) {
+
+      formData.append(
+         "logo_konsultan",
+         form.logo_konsultan
+      );
+   }
+
+   if (form.logo_client) {
+
+      formData.append(
+         "logo_client",
+         form.logo_client
+      );
+   }
+
+   try {
+
+      if (editId) {
+
+         await api.put(
+            `/projects/${editId}`,
+            formData,
+            {
+               headers: {
+                  "Content-Type":
+                     "multipart/form-data"
+               }
+            }
+         );
+
+      } else {
+
+         await api.post(
+            "/projects",
+            formData,
+            {
+               headers: {
+                  "Content-Type":
+                     "multipart/form-data"
+               }
+            }
+         );
+      }
+
+      fetchProjects();
+      setShowModal(false);
+
+   } catch (err) {
+
+      console.error(err);
+   }
+};
 
    // ----- Kalkulasi Statistik -----
    const totalProjects = projects.length;
@@ -453,18 +534,17 @@ export default function Dashboard() {
                      <div className="w-full grid grid-cols-3 gap-2">
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Kontraktor</p>
-                           <img src={activeProject.logo_kontraktor ? `http://localhost:3000/uploads/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
-                           <p className="text-base font-semibold text-gray-700">{activeProject.kontraktor || "TBA"}</p>
+                           <img src={activeProject.logo_kontraktor ? `http://localhost:3000/uploads/logos/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                         
                         </div>
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Konsultan</p>
-                           <img src={activeProject.logo_konsultan ? `http://localhost:3000/uploads/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
-                           <p className="text-base font-semibold text-gray-700">{activeProject.konsultan || "TBA"}</p>
+                           <img src={activeProject.logo_konsultan ? `http://localhost:3000/uploads/logos/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                        
                         </div>
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
-                           <img src={activeProject.logo_client ? `http://localhost:3000/uploads/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
-                           <p className="text-base font-semibold text-gray-700">{activeProject.client || "TBA"}</p>
+                           <img src={activeProject.logo_client ? `http://localhost:3000/uploads/logos/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
                         </div>
                      </div>
 
