@@ -29,6 +29,15 @@ export default function Dashboard() {
    const [weeklyChartData, setWeeklyChartData] = useState([]);
    const [showAccordion, setShowAccordion] = useState(false);
 
+   const [versions, setVersions] = useState([]);
+   const [showVersionModal, setShowVersionModal] = useState(false);
+   const [editingVersion, setEditingVersion] = useState(null);
+   const [versionForm, setVersionForm] = useState({
+      effective_date: "",
+      effective_week: "",
+      description: ""
+   });
+
    // Modal states
    const [showModal, setShowModal] = useState(false);
    const [editId, setEditId] = useState(null);
@@ -95,6 +104,7 @@ export default function Dashboard() {
    const handleProjectSelect = (project) => {
       setSelectedProject(project);
       fetchProjectData(project.id);
+      fetchVersions(project.id);
       setShowDropdown(false);
    };
 
@@ -271,41 +281,41 @@ export default function Dashboard() {
 
    try {
 
-      if (editId) {
+         if (editId) {
 
-         await api.put(
-            `/projects/${editId}`,
-            formData,
-            {
-               headers: {
-                  "Content-Type":
-                     "multipart/form-data"
+            await api.put(
+               `/projects/${editId}`,
+               formData,
+               {
+                  headers: {
+                     "Content-Type":
+                        "multipart/form-data"
+                  }
                }
-            }
-         );
+            );
 
-      } else {
+         } else {
 
-         await api.post(
-            "/projects",
-            formData,
-            {
-               headers: {
-                  "Content-Type":
-                     "multipart/form-data"
+            await api.post(
+               "/projects",
+               formData,
+               {
+                  headers: {
+                     "Content-Type":
+                        "multipart/form-data"
+                  }
                }
-            }
-         );
+            );
+         }
+
+         fetchProjects();
+         setShowModal(false);
+
+      } catch (err) {
+
+         console.error(err);
       }
-
-      fetchProjects();
-      setShowModal(false);
-
-   } catch (err) {
-
-      console.error(err);
-   }
-};
+   };
 
    // ----- Kalkulasi Statistik -----
    const totalProjects = projects.length;
@@ -353,6 +363,90 @@ export default function Dashboard() {
       { name: 'Minggu 3', rencana: 40, real: 35 },
       { name: 'Minggu 4', rencana: 60, real: 55 },
    ];
+
+   const fetchVersions = async (projectId) => {
+      try {
+         const res = await api.get(
+            `/project-versions/project/${projectId}`
+         );
+         setVersions(res.data.data);
+      } catch (error) {
+         console.error(error);
+      }
+   };
+
+   const saveVersion = async () => {
+   try {
+
+      if (!editingVersion) {
+
+         await api.post(
+         "/project-versions",
+         {
+            project_id: selectedProject.id,
+            ...versionForm
+         }
+         );
+
+      }
+
+      // UPDATE
+      else {
+
+         await api.put(
+         `/project-versions/${editingVersion.id}`,
+         versionForm
+         );
+
+      }
+
+      // REFRESH
+      fetchVersions(selectedProject.id);
+
+      // RESET
+      setShowVersionModal(false);
+
+      setEditingVersion(null);
+
+      setVersionForm({
+         effective_date: "",
+         effective_week: "",
+         description: ""
+      });
+
+   } catch (error) {
+
+      console.error(error);
+
+   }
+
+   };
+
+   const deleteVersion = async (id) => {
+   const confirmDelete =
+      window.confirm(
+         "Hapus addendum?"
+      );
+   if (!confirmDelete) return;
+   try {
+      await api.delete(
+         `/project-versions/${id}`
+      );
+      fetchVersions(selectedProject.id);
+   } catch (error) {
+      console.error(error);
+   }
+   };
+
+   const editVersion = (version) => {
+      setEditingVersion(version);
+      setVersionForm({
+         effective_date: version.effective_date,
+         effective_week: version.effective_week,
+         description: version.description
+      });
+      setShowVersionModal(true);
+   };
 
    return (
       <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
@@ -660,6 +754,94 @@ export default function Dashboard() {
             </div>
          </div>
 
+         {/* addendum projek crud */}
+         <div className="bg-neutral rounded-3xl shadow-sm border border-muted-gray p-8 mb-6">
+
+         {/* HEADER */}
+         <div className="flex items-center justify-between mb-5">
+
+            <div>
+
+               <h3 className="text-xl font-bold text-primary">
+               Addendum Project
+               </h3>
+
+               <p className="text-sm text-gray-500">
+               Management versi project
+               </p>
+
+            </div>
+
+            <button
+               onClick={() => {
+
+               setEditingVersion(null);
+
+               setVersionForm({
+                  effective_date: "",
+                  effective_week: "",
+                  description: ""
+               });
+
+               setShowVersionModal(true);
+
+               }}
+               className="bg-secondary text-white px-4 py-2 rounded-xl"
+            >
+               + Addendum
+            </button>
+         </div>
+
+         {/* LIST VERSION */}
+         <div className="space-y-3">
+            {versions.map((v) => (
+               <div
+               key={v.id}
+               className="border rounded-2xl p-4 flex justify-between items-center"
+               >
+               <div>
+
+                  <div className="flex items-center gap-3">
+                     <h4 className="font-bold text-lg">
+                     {v.code}
+                     </h4>
+
+                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                     Rev {v.revision}
+                     </span>
+                  </div>
+
+                  <p className="text-sm text-gray-500">
+                     Minggu Berlaku:
+                     {v.effective_week}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                     {v.description}
+                  </p>
+               </div>
+
+               <div className="flex gap-2">
+                  <button
+                     onClick={() => editVersion(v)}
+                     className="px-3 py-2 rounded-lg bg-yellow-100"
+                  >
+                     Edit
+                  </button>
+                  {v.revision !== 0 && (
+                     <button
+                     onClick={() => deleteVersion(v.id)}
+                     className="px-3 py-2 rounded-lg bg-red-100"
+                     >
+                     Hapus
+                     </button>
+                  )}
+               </div>
+               </div>
+            ))}
+         </div>
+         </div>
+
          {/* 🚀 QUICK ACTIONS */}
          <div className="bg-neutral rounded-3xl shadow-sm border border-muted-gray p-8 mb-8">
             <h3 className="text-xl font-bold text-primary mb-6 flex items-center gap-2">
@@ -729,6 +911,87 @@ export default function Dashboard() {
             </div>
          </div>
 
+         
+         {showVersionModal && (
+
+         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+
+            <div className="bg-white rounded-3xl p-6 w-full max-w-lg">
+
+               <h2 className="text-2xl font-bold mb-5">
+
+               {editingVersion
+                  ? "Edit Addendum"
+                  : "Buat Addendum"}
+
+               </h2>
+
+               <div className="space-y-4">
+
+               <input
+                  type="date"
+                  value={versionForm.effective_date}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     effective_date: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3"
+               />
+
+               <input
+                  type="number"
+                  placeholder="Minggu Berlaku"
+                  value={versionForm.effective_week}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     effective_week: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3"
+               />
+
+               <textarea
+                  placeholder="Deskripsi"
+                  value={versionForm.description}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     description: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3 h-28"
+               />
+
+               </div>
+
+               <div className="flex justify-end gap-3 mt-6">
+
+               <button
+                  onClick={() =>
+                     setShowVersionModal(false)
+                  }
+                  className="px-4 py-2 rounded-xl border"
+               >
+                  Batal
+               </button>
+
+               <button
+                  onClick={saveVersion}
+                  className="px-5 py-2 rounded-xl bg-secondary text-white"
+               >
+                  Simpan
+               </button>
+
+               </div>
+
+            </div>
+
+         </div>
+
+         )}
 
 
          {/* MODAL ADD/EDIT PROJECT */}

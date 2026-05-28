@@ -1,23 +1,14 @@
 import { LogOut, User, FolderOpen } from "lucide-react";
 import { useProject } from "../../context/ProjectContext";
-import { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode";
+import { useMemo } from "react";
+import { getCurrentUser, logoutToLogin } from "../../utils/auth";
 
 export default function Header() {
   const { selectedProject } = useProject();
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-    }
-  }, []);
+  const user = useMemo(() => getCurrentUser(), []);
 
   const handleLogout = () => {
-    localStorage.clear();
-    window.location.href = "/";
+    logoutToLogin();
   };
 
   return (

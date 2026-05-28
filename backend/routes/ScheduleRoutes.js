@@ -1,12 +1,53 @@
-// routes/scheduleRoutes.js
 import express from "express";
-import { generateWeeks, getWeeksByProject, getScheduleByProject, bulkSaveSchedule} from "../controllers/ScheduleController.js";
+
+import {
+
+  generateWeeks,
+
+  getWeeksByProject,
+
+  getScheduleByProject,
+
+  bulkSaveSchedule
+
+} from "../controllers/ScheduleController.js";
 
 const router = express.Router();
 
-router.post("/schedule/generate-weeks/:project_id", generateWeeks);
-router.get("/schedule/weeks/:project_id", getWeeksByProject);
-router.get("/schedule/:project_id", getScheduleByProject);
-router.post("/schedule/bulk-save/:project_id", bulkSaveSchedule);
+// ==========================
+// GENERATE PROJECT WEEKS
+// ==========================
+
+router.post(
+  "/schedule/generate-weeks/:project_id",
+  generateWeeks
+);
+
+// ==========================
+// GET PROJECT WEEKS
+// ==========================
+
+router.get(
+  "/schedule/weeks/:project_id",
+  getWeeksByProject
+);
+
+// ==========================
+// GET SCHEDULE BY VERSION
+// ==========================
+
+router.get(
+  "/schedule/:project_id/:version_id",
+  getScheduleByProject
+);
+
+// ==========================
+// SAVE SCHEDULE
+// ==========================
+
+router.post(
+  "/schedule/bulk-save/:project_id",
+  bulkSaveSchedule
+);
 
 export default router;

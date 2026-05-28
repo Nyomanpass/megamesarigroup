@@ -17,9 +17,6 @@ import "./models/DailyPlanModel.js";
 import "./models/DailyProgressModel.js";
 import "./models/ProjectWeekModel.js";
 import "./models/ProjectPeriodModel.js";
-import "./models/MaterialModel.js";
-import "./models/Pekerja.js";
-import "./models/PeralatanModel.js";
 import "./models/MasterItem.js";
 import "./models/AnalisaMaster.js";
 import "./models/AnalisaMasterDetail.js";
@@ -28,23 +25,19 @@ import "./models/ProjekAnalisa.js";
 import "./models/ProjekAnalisaDetail.js";
 import "./models/DailyProgresItem.js";
 
-
 import ScheduleRoutes from "./routes/ScheduleRoutes.js";
 import DailyPlanRoute from "./routes/DailyPlanRoute.js";
 import DailyProgressRoutes from "./routes/DailyProgressRoutes.js";
 import ReportRoutes from "./routes/ReportRoutes.js";
-import MaterialRoutes from "./routes/MaterialRoutes.js";
-import PekerjaRoutes from "./routes/PekerjaRoutes.js";
-import PeralatanRoutes from "./routes/PeralatanRoutes.js";
-import ProjectPeriodRoute from "./routes/ProjectPeriodRoute.js";  
+import ProjectPeriodRoute from "./routes/ProjectPeriodRoute.js";
 import MasterItemRoutes from "./routes/MasterItemRoutes.js";
 import ItemCategoryRoutes from "./routes/ItemCategoryRoutes.js";
 import AnalisaMasterRoutes from "./routes/AnalisaMasterRoutes.js";
 import AnalisaMasterDetailRoutes from "./routes/AnalisaMasterDetailRoutes.js";
-import ProjectItemRoutes from './routes/ProjectItemRoutes.js';
-import ProjekAnalisaRoutes from './routes/ProjekAnalisaRoutes.js';
-import ProjekAnalisaDetailRoutes from './routes/ProjekAnalisaDetailRoutes.js';
-import ReportExelRoutes from './routes/ReportExelRoutes.js';
+import ProjectItemRoutes from "./routes/ProjectItemRoutes.js";
+import ProjekAnalisaRoutes from "./routes/ProjekAnalisaRoutes.js";
+import ProjekAnalisaDetailRoutes from "./routes/ProjekAnalisaDetailRoutes.js";
+import ReportExelRoutes from "./routes/ReportExelRoutes.js";
 import ExportWeeklyRoutes from "./routes/ExportWeeklyRoutes.js";
 import importRoutes from "./routes/Import.js";
 import TtdRoutes from "./routes/TtdRoutes.js";
@@ -54,15 +47,43 @@ import DailyProgressPhotoRoutes from "./routes/DailyProgressPhotoRoutes.js";
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
 
-// middleware
+const allowedOrigins = [
+   "http://localhost",
+   "http://localhost:3000",
+   "http://localhost:5173",
+   "http://localhost:5174",
+   "http://localhost:80",
+   process.env.CLIENT_ORIGIN,
+].filter(Boolean);
+
+const apiRoutes = [
+   authRoutes,
+   ScheduleRoutes,
+   BoqRoutes,
+   ProjectRoutes,
+   DailyPlanRoute,
+   DailyProgressRoutes,
+   ReportRoutes,
+   ProjectPeriodRoute,
+   MasterItemRoutes,
+   ItemCategoryRoutes,
+   AnalisaMasterRoutes,
+   AnalisaMasterDetailRoutes,
+   ProjectItemRoutes,
+   ProjekAnalisaRoutes,
+   ProjekAnalisaDetailRoutes,
+   ReportExelRoutes,
+   ExportWeeklyRoutes,
+   importRoutes,
+   TtdRoutes,
+   exportMounthlyRoutes,
+   DailyProgressPhotoRoutes,
+];
+
 app.use(
    cors({
       origin: function (origin, callback) {
-         // List origins yang diizinkan
-         const allowedOrigins = ["http://localhost", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:80", process.env.CLIENT_ORIGIN];
-
-         // Jika tidak ada origin (request dari mobile app atau server-to-server), izinkan
-         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
          } else {
             callback(new Error("Not allowed by CORS"));
@@ -75,38 +96,13 @@ app.use(
 );
 app.use(express.json());
 
-// test route
 app.get("/", (req, res) => {
    res.send("Mega Mesari API Running 🚀");
 });
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// routes
-app.use("/api", authRoutes);
-app.use("/api", ScheduleRoutes);
-app.use("/api", BoqRoutes);
-app.use("/api", ProjectRoutes);
-app.use("/api", DailyPlanRoute);
-app.use("/api", DailyProgressRoutes);
-app.use("/api", ReportRoutes);
-app.use("/api", MaterialRoutes);
-app.use("/api", PekerjaRoutes);
-app.use("/api", PeralatanRoutes);
-app.use("/api", ProjectPeriodRoute);
-app.use("/api", MasterItemRoutes);
-app.use("/api", ItemCategoryRoutes);
-app.use("/api", AnalisaMasterRoutes);
-app.use("/api", AnalisaMasterDetailRoutes);
-app.use("/api", ProjectItemRoutes);
-app.use("/api", ProjekAnalisaRoutes);
-app.use("/api", ProjekAnalisaDetailRoutes);
-app.use("/api", ReportExelRoutes);
-app.use("/api", ExportWeeklyRoutes);
-app.use("/api", importRoutes);
-app.use("/api", TtdRoutes);
-app.use("/api", exportMounthlyRoutes);
-app.use("/api", DailyProgressPhotoRoutes);
+apiRoutes.forEach((route) => app.use("/api", route));
 
 // koneksi database
 const startServer = async () => {
@@ -130,6 +126,7 @@ const startServer = async () => {
                   },
                },
             });
+            console.log(`Deleted ${deleted} old login logs`);
          } catch (err) {
             console.error("❌ Gagal hapus log:", err);
          }

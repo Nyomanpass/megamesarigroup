@@ -1,32 +1,23 @@
 import { Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode";
+import { useMemo } from "react";
 import api from "../../api";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import { getCurrentUser, getRefreshToken, logoutToLogin } from "../../utils/auth";
 
 export default function Layout() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-    }
-  }, []);
+  const user = useMemo(() => getCurrentUser(), []);
 
   const handleLogout = async () => {
     try {
-      const refreshToken = localStorage.getItem("refreshToken");
+      const refreshToken = getRefreshToken();
       if (refreshToken) {
         await api.post("/auth/logout", { refreshToken });
       }
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
-      localStorage.clear();
-      window.location.href = "/";
+      logoutToLogin();
     }
   };
 

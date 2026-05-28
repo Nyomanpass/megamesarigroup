@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
@@ -15,8 +15,9 @@ export default function WeeklyReportPage() {
 
   const [data, setData] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState(null);
+  const [error, setError] = useState("");
 
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     try {
       const res = await api.get(`/weekly-report/${id}`);
       setData(res.data);
@@ -27,11 +28,12 @@ export default function WeeklyReportPage() {
     } catch (err) {
       console.log(err);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReport();
-  }, [id]);
+  }, [fetchReport]);
 
   const handleExportWeeklyExcel = async () => {
   try {
@@ -145,6 +147,17 @@ const handleExportWeeklyPDF = async () => {
   return (
     <>
       <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {error && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={18} />
+              {error}
+            </span>
+            <button onClick={() => setError("")} className="text-red-500 hover:text-red-700">
+              Tutup
+            </button>
+          </div>
+        )}
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
