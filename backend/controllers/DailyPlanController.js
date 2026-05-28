@@ -3,6 +3,8 @@ import { Schedule } from "../models/ScheduleModel.js";
 import { Project } from "../models/ProjectModel.js";
 import { ProjectPeriod } from "../models/ProjectPeriodModel.js";
 import { DailyProgress } from "../models/DailyProgressModel.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { getBoqWithBobot } from "./BoqController.js";
 import { Boq } from "../models/BoqModel.js";
 import moment from "moment";
 import "moment/locale/id.js";
@@ -386,115 +388,300 @@ export const getMonthlyReport = async (req, res) => {
 
 export const getWeeklyChart = async (req, res) => {
   try {
+
     const { project_id } = req.params;
 
     const plans = await DailyPlan.findAll({
-      where: { project_id },
-      order: [["tanggal", "ASC"]],
+      where: {
+        project_id
+      },
+      order: [["tanggal", "ASC"]]
     });
 
     const progress = await DailyProgress.findAll({
-      where: { project_id },
-      order: [["tanggal", "ASC"]],
+      where: {
+        project_id
+      },
+      order: [["tanggal", "ASC"]]
     });
 
-    const boqs = await Boq.findAll({
-      where: { project_id }
-    });
+    const versions =
+      await ProjectVersionModel.findAll({
 
-    // =========================
-    // 🔥 GROUPING MINGGU
-    // =========================
+        where: {
+          project_id
+        },
+
+        order: [
+          ["effective_week", "ASC"]
+        ]
+
+      });
+
+    // =====================
+    // GROUP MINGGU
+    // =====================
+
     const group = {};
+
     plans.forEach((p) => {
-      if (!group[p.minggu_ke]) group[p.minggu_ke] = [];
+
+      if (!group[p.minggu_ke]) {
+        group[p.minggu_ke] = [];
+      }
+
       group[p.minggu_ke].push(p);
+
     });
 
     let kumulatifRencana = 0;
+
     const result = [];
 
-    // =========================
-    // 🔥 LOOP PER MINGGU
-    // =========================
+    // =====================
+    // LOOP MINGGU
+    // =====================
+
     for (const minggu in group) {
-      const items = group[minggu];
 
-      // pastikan urut
-      items.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+      const items =
+        group[minggu];
 
-      const tglAkhir = items[items.length - 1].tanggal;
-
-      // =========================
-      // 🔥 RENCANA
-      // =========================
-      const rencana = Number(items[0].bobot_mingguan || 0);
-      kumulatifRencana += rencana;
-
-      // =========================
-      // 🔥 PROGRESS SAMPAI TGL INI
-      // =========================
-      const progressSdIni = progress.filter(
-        (p) => new Date(p.tanggal) <= new Date(tglAkhir)
+      items.sort(
+        (a,b)=>
+        new Date(a.tanggal)
+        -
+        new Date(b.tanggal)
       );
 
-      // =========================
-      // 🔥 HITUNG REAL (FIX UTAMA)
-      // =========================
-      let totalProgress = 0;
+      const tglAkhir =
+      items[
+        items.length-1
+      ].tanggal;
 
-      for (const boq of boqs) {
+      // =====================
+      // CARI VERSION AKTIF
+      // =====================
 
-        const boqProgress = progressSdIni.filter(
-          p => p.boq_id === boq.id
-        );
+      let activeVersion = null;
 
-        // ✅ FIX: SUM volume (BUKAN LAST)
-        const totalVolumeTerpasang = boqProgress.reduce(
-          (sum, p) => sum + Number(p.volume || 0),
-          0
-        );
+      for (
+        const version
+        of versions
+      ) {
 
-        const totalVolume = Number(boq.volume || 0);
-        const bobot = Number(boq.bobot || 0);
+        if (
+          Number(minggu)
+          >=
+          Number(
+            version.effective_week
+          )
+        ) {
 
-        // ✅ RUMUS BENAR
-        const progressItem = totalVolume
-          ? (totalVolumeTerpasang / totalVolume) * bobot
-          : 0;
+          activeVersion =
+            version;
 
-        totalProgress += progressItem;
+        }
+
       }
 
-      // ✅ ini kumulatif proyek
-      const real = totalProgress;
+      // =====================
+      // BOQ ADDENDUM
+      // =====================
 
-      // =========================
-      // 🔥 REAL MINGGUAN (DELTA)
-      // =========================
-      const prevKum = result.at(-1)?.kum_real || 0;
-      const realMingguan = real - prevKum;
+      const boqs =
+      (
+      await getBoqWithBobot(
 
-      // =========================
-      // 🔥 PUSH
-      // =========================
-    result.push({
-      minggu_ke: Number(minggu),
+        Number(project_id),
 
-      rencana: rencana.toFixed(3),
+        activeVersion?.id
 
-      real: realMingguan.toFixed(3),
+      )
+      )
+      .filter(
+        b=>
+        b.tipe==="item"
+      );
 
-      kum_rencana: kumulatifRencana.toFixed(3),
+      // =====================
+      // RENCANA
+      // =====================
 
-      kum_real: real.toFixed(3),
-    });
+      const rencana =
+      Number(
+        items[0]
+        ?.bobot_mingguan || 0
+      );
+
+      kumulatifRencana +=
+      rencana;
+
+      // =====================
+      // PROGRESS <= TANGGAL
+      // =====================
+
+      const progressSdIni =
+      progress.filter(
+
+        p=>
+
+        new Date(
+          p.tanggal
+        )
+
+        <=
+
+        new Date(
+          tglAkhir
+        )
+
+      );
+
+      // =====================
+      // HITUNG REAL
+      // =====================
+
+      let totalProgress=0;
+
+      for(
+      const boq
+      of boqs
+      ){
+
+        const boqId =
+        boq.boq_item_id ||
+        boq.id;
+
+        const boqProgress =
+        progressSdIni.filter(
+
+          p=>
+
+          Number(
+            p.boq_id
+          )
+
+          ===
+
+          Number(
+            boqId
+          )
+
+        );
+
+        const totalVolumeTerpasang =
+        boqProgress.reduce(
+
+          (sum,p)=>
+
+          sum +
+
+          Number(
+            p.volume ||0
+          ),
+
+          0
+
+        );
+
+        const totalVolume =
+        Number(
+          boq.volume ||0
+        );
+
+        const bobot =
+        Number(
+          boq.bobot ||0
+        );
+
+        const progressItem =
+
+        totalVolume>0
+
+        ?
+
+        Math.min(
+
+          (
+            totalVolumeTerpasang
+            /
+            totalVolume
+          )
+          *
+          bobot,
+
+          bobot
+
+        )
+
+        :
+
+        0;
+
+        totalProgress +=
+        progressItem;
+
+      }
+
+      const real =
+      Number(
+        totalProgress
+        .toFixed(3)
+      );
+
+      const prevKum =
+      result.at(-1)
+      ?.kum_real ||0;
+
+      const realMingguan =
+      Number(
+      (
+      real -
+      prevKum
+      )
+      .toFixed(3)
+      );
+
+      result.push({
+
+        minggu_ke:
+        Number(minggu),
+
+        rencana:
+        Number(
+          rencana.toFixed(3)
+        ),
+
+        real:
+        realMingguan,
+
+        kum_rencana:
+        Number(
+          kumulatifRencana
+          .toFixed(3)
+        ),
+
+        kum_real:
+        real
+
+      });
+
     }
 
     res.json(result);
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
+
+  }
+
+  catch(error){
+    console.log(
+      "ERROR CHART:",
+      error
+    );
+    res.status(500)
+    .json({
+      message:
+      error.message
+    });
   }
 };

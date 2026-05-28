@@ -243,7 +243,7 @@ const getBoxHeightPx = (sheet, startRow, endRow) => {
 // =========================
 if (project.logo_konsultan) {
   const logoKonsultan = workbook.addImage({
-    filename: path.join("uploads", project.logo_konsultan),
+    filename: path.join("uploads/logos", project.logo_konsultan),
     extension: "png"
   });
 
@@ -278,7 +278,7 @@ sheet.addImage(logoKonsultan, {
 // =========================
 if (project.logo_kontraktor) {
   const logoKontraktor = workbook.addImage({
-    filename: path.join("uploads", project.logo_kontraktor),
+    filename: path.join("uploads/logos", project.logo_kontraktor),
     extension: "png"
   });
 
@@ -1527,7 +1527,7 @@ const getBoxHeightPx = (sheet, startRow, endRow) => {
 // =========================
 if (project.logo_konsultan) {
   const logoKonsultan = workbook.addImage({
-    filename: path.join("uploads", project.logo_konsultan),
+    filename: path.join("uploads/logos", project.logo_konsultan),
     extension: "png"
   });
 
@@ -1562,7 +1562,7 @@ sheet.addImage(logoKonsultan, {
 // =========================
 if (project.logo_kontraktor) {
   const logoKontraktor = workbook.addImage({
-    filename: path.join("uploads", project.logo_kontraktor),
+    filename: path.join("uploads/logos", project.logo_kontraktor),
     extension: "png"
   });
 

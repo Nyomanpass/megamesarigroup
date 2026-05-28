@@ -104,7 +104,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     if (!logoPath) return;
 
     const imageId = workbook.addImage({
-      filename: path.join("uploads", logoPath),
+      filename: path.join("uploads/logos", logoPath),
       extension: "png"
     });
 
@@ -1275,7 +1275,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
         if (!logoPath) return;
     
         const imageId = workbook.addImage({
-          filename: path.join("uploads", logoPath),
+          filename: path.join("uploads/logos", logoPath),
           extension: "png"
         });
     

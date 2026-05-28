@@ -82,9 +82,27 @@ export default function DailyProgressPage() {
   };
 
   const fetchBoq = async () => {
-    const res = await api.get(`/boq/project/${id}`);
-    setBoqList(res.data.data);
-  };
+  try {
+
+    const versionId = 0;
+
+    const res = await api.get(
+      `/boq/project/${id}/${versionId}`
+    );
+
+    setBoqList(
+      res.data.data || []
+    );
+
+  } catch (err) {
+
+    console.log(
+      "Gagal fetch BOQ",
+      err
+    );
+
+  }
+};
 
   const fetchDailyPlan = async () => {
     try {
@@ -326,48 +344,105 @@ export default function DailyProgressPage() {
 
   // ================= SUMMARY LOGIC =================
   const getSummary = () => {
-    // 🔥 ambil boq_id dari form ATAU dari data edit
-    const boqIdFix = form.boq_id || data.find(d => d.id === editId)?.boq_id;
+
+    const boqIdFix =
+      form.boq_id ||
+      data.find(
+        d => d.id === editId
+      )?.boq_id;
 
     if (!boqIdFix) return null;
 
-    const selectedBoq = boqList.find((b) => b.id == boqIdFix);
+      const selectedBoq =
+        boqList.find(
+        b =>
+          Number(b.id) === Number(boqIdFix) ||
+          Number(b.boq_item_id) === Number(boqIdFix)
+        );
+
     if (!selectedBoq) return null;
 
-    const volumeInput = parseFloat(form.volume || 0);
+    const volumeInput =
+      parseFloat(form.volume || 0);
 
-    const currentItem = data.find(d => d.id === editId);
-    const volumeLama = parseFloat(currentItem?.volume || 0);
+    const currentItem =
+      data.find(
+        d => d.id === editId
+      );
 
-    const totalSemua = data
-      .filter((d) => d.boq_id == boqIdFix)
-      .reduce((sum, item) => sum + parseFloat(item.volume || 0), 0);
+    const volumeLama =
+      parseFloat(
+        currentItem?.volume || 0
+      );
 
+    // 🔥 total progress existing
+   const totalSemua =
+      data
+      .filter(
+      d =>
+      Number(d.boq_id) === Number(boqIdFix) ||
+      Number(d.boq?.id) === Number(boqIdFix)
+      )
+      .reduce(
+      (sum,item)=>
+      sum + Number(item.volume || 0),
+      0
+      );
+
+    // 🔥 edit atau create
     let totalAkumulasi;
 
-    if (editId) {
-      if (volumeInput === volumeLama) {
-        totalAkumulasi = totalSemua;
-      } else {
-        totalAkumulasi = totalSemua - volumeLama + volumeInput;
-      }
-    } else {
-      totalAkumulasi = totalSemua + volumeInput;
+    if(editId){
+
+      totalAkumulasi =
+        totalSemua -
+        volumeLama +
+        volumeInput;
+
+    }else{
+
+      totalAkumulasi =
+        totalSemua +
+        volumeInput;
+
     }
 
-    const target = parseFloat(selectedBoq.volume || 0);
-    const sisa = target - totalAkumulasi;
-    const persen = target > 0 ? (totalAkumulasi / target) * 100 : 0;
+    // 🔥 target dari BOQ
+    const target =
+      Number(
+        selectedBoq.volume || 0
+      );
+
+    const sisa =
+      target - totalAkumulasi;
+
+    const persen =
+      target > 0
+      ? (totalAkumulasi/target)*100
+      : 0;
 
     return {
-      uraian: selectedBoq.uraian,
-      satuan: selectedBoq.satuan,
+
+      uraian:
+        selectedBoq.uraian,
+
+      satuan:
+        selectedBoq.satuan,
+
       target,
-      lalu: totalSemua,
-      totalSekarang: totalAkumulasi,
+
+      lalu:
+        totalSemua,
+
+      totalSekarang:
+        totalAkumulasi,
+
       sisa,
+
       persen
+
     };
+
   };
 
   const summary = getSummary();

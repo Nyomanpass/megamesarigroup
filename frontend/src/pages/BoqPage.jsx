@@ -56,6 +56,99 @@ export default function BoqPage() {
   const [searchAnalisa, setSearchAnalisa] = useState("");
   const [collapsedHeaders, setCollapsedHeaders] = useState(new Set());
 
+  const [versions, setVersions] = useState([]);
+  const [selectedVersion, setSelectedVersion] = useState(null);
+  const [versionChanges, setVersionChanges] = useState([]);
+
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [editingVersionChange, setEditingVersionChange] = useState(null);
+  const [versionForm, setVersionForm] = useState({
+    boq_item_id: "",
+    volume: "",
+    harga_satuan: "",
+    action: "update",
+  });
+
+  const [isAddendumMode,setIsAddendumMode]= useState(false);
+
+  //adendum
+  const openVersionModal = (item) => {
+    // Cari apakah item ini sudah ada perubahan sebelumnya
+    const existing = versionChanges.find(v => v.boq_item_id === item.id);
+
+    if (existing) {
+      // JIKA SUDAH ADA PERUBAHAN
+      setEditingVersionChange(existing);
+      setVersionForm({
+        boq_item_id: item.id,
+        volume: existing.volume || item.volume,
+        harga_satuan: existing.harga_satuan || item.harga_satuan,
+        action: existing.action,
+      });
+    } else {
+      // JIKA BELUM ADA PERUBAHAN
+      setEditingVersionChange(null);
+      setVersionForm({
+        boq_item_id: item.id,
+        volume: item.volume,
+        harga_satuan: item.harga_satuan,
+        action: "update",
+      });
+    }
+
+    setShowVersionModal(true);
+  };
+
+  const saveVersionChange = async () => {
+    try {
+      // 1. Validasi
+      if (!selectedVersion) {
+        alert("Pilih version dulu");
+        return;
+      }
+
+      // Prepare payload data
+      const payload = {
+        volume: versionForm.volume,
+        harga_satuan: versionForm.harga_satuan,
+        action: versionForm.action,
+      };
+
+      if (!editingVersionChange) {
+        // 2. PROSES CREATE
+        await api.post("/boq-version-changes", {
+          version_id: selectedVersion.id,
+          boq_item_id: versionForm.boq_item_id,
+          ...payload,
+        });
+      } else {
+        // 3. PROSES UPDATE
+        await api.put(`/boq-version-changes/${editingVersionChange.id}`, payload);
+      }
+
+      alert("Addendum berhasil disimpan");
+      setShowVersionModal(false);
+      fetchVersionChanges(selectedVersion.id);
+
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Terjadi kesalahan saat menyimpan data");
+    }
+  };
+
+  const deleteVersionChange = async (id) => {
+    const confirmDelete = window.confirm("Hapus perubahan addendum?");
+    if (!confirmDelete) return;
+
+    try {
+      await api.delete(`/boq-version-changes/${id}`);
+      fetchVersionChanges(selectedVersion.id);
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Gagal menghapus data addendum");
+    }
+  };
+
   const fileInputRef = useRef(null);
 
   const handleUploadClick = () => {
@@ -324,21 +417,28 @@ export default function BoqPage() {
     setAnalisaList(res.data);
   };
 
-  useEffect(() => {
-    fetchProject();
-    fetchBoq();
-    fetchAnalisa();
-  }, [id]);
 
   const fetchProject = async () => {
     const res = await api.get(`/projects/${id}`);
     setProject(res.data);
   };
 
-  const fetchBoq = async () => {
-    const res = await api.get(`/boq/project/${id}`);
-    setBoq(res.data.data);
+const fetchBoq =
+  async (versionId) => {
+
+    const res =
+      await api.get(
+
+        `/boq/project/${id}/${versionId}`
+
+      );
+
+    setBoq(
+      res.data.data
+    );
+
     setAnalytics({
+
       totalHargaSatuan:
         res.data.totalHargaSatuan,
 
@@ -359,7 +459,9 @@ export default function BoqPage() {
 
       totalGrandTotal_rp:
         res.data.totalGrandTotal_rp
+
     });
+
   };
 
   const handleSelectAnalisa = async (index, analisa_id) => {
@@ -447,6 +549,74 @@ export default function BoqPage() {
   };
 
   // Jika data belum load
+
+  const fetchVersions = async () => {
+    try {
+      const res =
+        await api.get(
+          `/project-versions/project/${id}`
+        );
+      setVersions(res.data.data);
+      // 🔥 default MC0
+      if (res.data.data.length > 0) {
+        setSelectedVersion(
+          res.data.data[0]
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchVersionChanges =
+    async (versionId) => {
+    try {
+      const res =
+        await api.get(
+          `/boq-version-changes/version/${versionId}`
+        );
+      setVersionChanges(
+        res.data.data
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+
+    useEffect(() => {
+    fetchProject();
+ 
+    fetchAnalisa();
+    fetchVersions();
+  }, [id]);
+
+  useEffect(() => {
+
+  if (selectedVersion) {
+
+    fetchBoq(
+      selectedVersion.id
+    );
+
+    fetchVersionChanges(
+      selectedVersion.id
+    );
+
+  }
+
+}, [selectedVersion]);
+
+  useEffect(() => {
+
+  if (selectedVersion) {
+      fetchVersionChanges(
+        selectedVersion.id
+      );
+    }
+  }, [selectedVersion]);
+
+
   if (!project) {
     return (
       <div className="p-6 flex justify-center items-center h-[80vh]">
@@ -454,6 +624,52 @@ export default function BoqPage() {
       </div>
     );
   }
+
+const handleAddendumItem = async () => {
+    try {
+        if (!selectedVersion) {
+            alert("Pilih addendum");
+            return;
+        }
+
+        if (!form.parent_id) {
+            alert("Pilih parent");
+            return;
+        }
+        const validItems = bulkItems.filter(x => x.uraian && x.analisa_id);
+
+        if (validItems.length === 0) {
+            alert("Tidak ada item valid untuk ditambahkan");
+            return;
+        }
+
+        await Promise.all(
+            validItems.map(item => 
+                api.post("/boq/addendum/new-item", {
+                    version_id: selectedVersion.id,
+                    project_id: id,
+                    parent_id: form.parent_id,
+                    uraian: item.uraian,
+                    satuan: item.satuan,
+                    volume: Number(item.volume) || 0,
+                    analisa_id: item.analisa_id,
+                    ppn: Number(item.ppn) || 0
+                })
+            )
+        );
+        alert("Item addendum berhasil dibuat");
+        setShowModal(false);
+        
+        // SINKRONISASI DATA TERBARU
+        fetchBoq(selectedVersion.id);
+        fetchVersionChanges(selectedVersion.id);
+
+    } catch (error) {
+        console.error("Error pada handleAddendumItem:", error);
+        alert(error.response?.data?.message || "Gagal menambahkan item addendum");
+    }
+};
+
 
   return (
     <>
@@ -467,6 +683,31 @@ export default function BoqPage() {
           </button>
 
           <div className="flex items-center gap-3">
+
+          <select
+            value={selectedVersion?.id || ""}
+            onChange={(e) => {
+
+              const version =
+                versions.find(
+                  v =>
+                    v.id === Number(e.target.value)
+                );
+
+              setSelectedVersion(version);
+
+            }}
+            className="border px-4 py-2 rounded font-semibold">
+            {versions.map((v) => (
+              <option
+                key={v.id}
+                value={v.id}
+              >
+                {v.code}
+              </option>
+            ))}
+          </select>
+
             {/* Import Excel section */}
             <div className="flex flex-col items-end relative">
 
@@ -487,10 +728,24 @@ export default function BoqPage() {
             </div>
 
             <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded font-semibold transition-all hover:bg-white hover:text-secondary border-2 border-transparent hover:border-secondary active:scale-95"
+                onClick={() => {
+                    setIsAddendumMode(selectedVersion?.revision > 0);
+                    setShowModal(true);
+                }}
+                className={`
+                    flex items-center gap-2 text-white px-5 py-2.5 rounded font-semibold 
+                    border-2 active:scale-95 transition-all
+                    ${isAddendumMode 
+                        ? "bg-orange-500 hover:bg-white hover:text-orange-500 hover:border-orange-500" 
+                        : "bg-secondary hover:bg-white hover:text-secondary hover:border-secondary"
+                    }
+                `}
             >
-              <Plus size={20} strokeWidth={2} /> Tambah BOQ
+                <Plus size={20} strokeWidth={2} />
+                {selectedVersion?.revision > 0 
+                    ? `Tambah Item ${selectedVersion.code}` 
+                    : "Tambah BOQ"
+                }
             </button>
           </div>
         </div>
@@ -500,8 +755,17 @@ export default function BoqPage() {
           <div className="flex items-center gap-4">
 
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2"> Bill of Quantities (BOQ)
-              </h1>
+            <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold text-gray-800">
+                  Bill of Quantities (BOQ)
+                </h1>
+                {selectedVersion && (
+                  <span
+                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
+                    {selectedVersion.code}
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-gray-500">Detail rincian kuantitas dan harga satuan — {project?.pekerjaan}</p>
             </div>
           </div>
@@ -651,12 +915,21 @@ export default function BoqPage() {
                     <tr key={item.id} className="hover:bg-blue-50/40 transition-colors group">
 
                       {/* URAIAN */}
-                      <td
-                        className="p-3 text-gray-700 font-semibold"
-                        style={{ paddingLeft: `${item.level * 20 + 16}px` }}
-                      >
+                    <td
+                      className="p-3 text-gray-700 font-semibold"
+                      style={{ paddingLeft: `${item.level * 20 + 16}px` }}
+                    >
+                      <div className="flex items-center">
                         {item.uraian}
-                      </td>
+
+                        {/* Indikator jika ada perubahan (Addendum) */}
+                        {versionChanges.some(v => v.boq_item_id === item.id) && (
+                          <span className="ml-2 text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium tracking-wide">
+                            ADD
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
                       {/* SATUAN */}
                       <td className="p-3 text-center text-gray-400 text-xs">
@@ -724,6 +997,15 @@ export default function BoqPage() {
                           >
                             Link
                           </button>
+
+                          {selectedVersion?.revision > 0 && !versionChanges.some(v => v.boq_item_id === item.id && v.action === "new") && (
+                              <button
+                                  onClick={() => openVersionModal(item)}
+                                  className="bg-orange-100 text-orange-600 hover:bg-orange-200 px-3 py-1 rounded-lg text-xs font-semibold transition-colors"
+                              >
+                                  Addendum
+                              </button>
+                          )}
 
                           <button
                             onClick={() => handleEdit(item.id)}
@@ -938,7 +1220,12 @@ export default function BoqPage() {
 
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
                   <div></div>
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">{isEdit ? "Edit Data BOQ" : "Tambah Data BOQ"}</h2>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">{isEdit
+                    ? "Edit Data BOQ"
+                    : isAddendumMode
+                    ? "Tambah Item Addendum"
+                    : "Tambah Data BOQ"}
+                  </h2>
                   <button
                     onClick={() => {
                       setShowModal(false);
@@ -1195,11 +1482,13 @@ export default function BoqPage() {
                   </button>
                   <button
                     onClick={
-                      isEdit
-                        ? handleSubmit
-                        : form.tipe === "item"
-                          ? handleBulkSubmit
-                          : handleSubmit
+                    isEdit
+                      ? handleSubmit
+                      : isAddendumMode
+                      ? handleAddendumItem
+                      : form.tipe==="item"
+                      ? handleBulkSubmit
+                      : handleSubmit
                     }
                     className={`px-6 py-2.5 text-white font-semibold rounded flex items-center gap-2 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95 transition-all`}
                   >
@@ -1215,6 +1504,66 @@ export default function BoqPage() {
             </m.div>
           )}
         </AnimatePresence>
+
+        {showVersionModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h2 className="text-xl font-bold mb-5 text-gray-800">Addendum BOQ</h2>
+
+              <div className="space-y-4">
+                {/* INPUT: VOLUME */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-gray-700">Volume</label>
+                  <input
+                    type="number"
+                    value={versionForm.volume}
+                    onChange={(e) => setVersionForm({ ...versionForm, volume: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                    placeholder="Masukkan volume"
+                  />
+                </div>
+
+                {/* INPUT: HARGA SATUAN */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-gray-700">Harga Satuan</label>
+                  <input
+                    type="number"
+                    value={versionForm.harga_satuan}
+                    onChange={(e) => setVersionForm({ ...versionForm, harga_satuan: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                    placeholder="Masukkan harga satuan"
+                  />
+                </div>
+              </div>
+
+              {/* FOOTER ACTION BUTTONS */}
+              <div className="flex justify-end gap-3 mt-6 border-t border-gray-100 pt-4">
+                {editingVersionChange && (
+                  <button
+                    onClick={() => deleteVersionChange(editingVersionChange.id)}
+                    className="mr-auto px-4 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-colors"
+                  >
+                    Hapus
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowVersionModal(false)}
+                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Batal
+                </button>
+
+                <button
+                  onClick={saveVersionChange}
+                  className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 shadow-sm shadow-orange-500/20 transition-colors"
+                >
+                  Simpan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

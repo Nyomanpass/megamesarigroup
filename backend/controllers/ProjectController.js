@@ -1,4 +1,5 @@
 import { Project } from "../models/ProjectModel.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import fs from "fs";
 import path from "path";
 // 🔥 GET ALL PROJECT (Dashboard)
@@ -44,9 +45,34 @@ export const createProject = async (req, res) => {
 
     const project = await Project.create(data);
 
+    const version =
+      await ProjectVersionModel.create({
+
+        project_id:
+          project.id,
+
+        code: "MC0",
+
+        revision: 0,
+
+        effective_week: 1,
+
+        effective_date:
+          new Date(),
+
+        description:
+          "Baseline awal project"
+
+      });
+
+
     res.status(201).json({
-      message: "Project berhasil dibuat + upload logo",
-      project
+      message: "Project berhasil dibuat",
+      project,
+
+      baseline_version:
+        version
+
     });
 
   } catch (error) {
@@ -54,7 +80,6 @@ export const createProject = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // 🔥 UPDATE PROJECT
@@ -196,6 +221,267 @@ export const updateProjectWeekSetting = async (req, res) => {
 
     res.status(500).json({
       message: error.message
+    });
+
+  }
+};
+
+
+// project version management (addendum)
+
+export const createProjectVersion =
+  async (req, res) => {
+
+  try {
+
+    const {
+      project_id,
+      effective_date,
+      effective_week,
+      description
+    } = req.body;
+
+    // =========================
+    // CEK REVISION TERAKHIR
+    // =========================
+    const lastVersion =
+      await ProjectVersionModel.findOne({
+
+        where: {
+          project_id
+        },
+
+        order: [
+          ["revision", "DESC"]
+        ]
+
+      });
+
+    // =========================
+    // GENERATE REVISION
+    // =========================
+    const revision =
+      lastVersion
+        ? lastVersion.revision + 1
+        : 0;
+
+    const code =
+      `MC${revision}`;
+
+    // =========================
+    // CREATE VERSION
+    // =========================
+    const version =
+      await ProjectVersionModel.create({
+
+        project_id,
+
+        code,
+
+        revision,
+
+        effective_date,
+
+        effective_week,
+
+        description
+
+      });
+
+    res.status(201).json({
+
+      message:
+        "Addendum berhasil dibuat",
+
+      data: version
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+};
+
+
+export const getProjectVersions =
+  async (req, res) => {
+
+  try {
+
+    const { project_id } =
+      req.params;
+
+    const versions =
+      await ProjectVersionModel.findAll({
+
+        where: {
+          project_id
+        },
+
+        order: [
+          ["revision", "ASC"]
+        ]
+
+      });
+
+    res.json({
+      data: versions
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+};
+
+export const getProjectVersionById =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const version =
+      await ProjectVersionModel.findByPk(id);
+
+    if (!version) {
+
+      return res.status(404).json({
+        message:
+          "Version tidak ditemukan"
+      });
+
+    }
+
+    res.json({
+      data: version
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+};
+
+
+export const updateProjectVersion =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const version =
+      await ProjectVersionModel.findByPk(id);
+
+    if (!version) {
+
+      return res.status(404).json({
+        message:
+          "Version tidak ditemukan"
+      });
+
+    }
+
+    await version.update({
+
+      effective_date:
+        req.body.effective_date,
+
+      effective_week:
+        req.body.effective_week,
+
+      description:
+        req.body.description
+
+    });
+
+    res.json({
+
+      message:
+        "Version berhasil diupdate",
+
+      data: version
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+};
+
+export const deleteProjectVersion =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const version =
+      await ProjectVersionModel.findByPk(id);
+
+    if (!version) {
+
+      return res.status(404).json({
+        message:
+          "Version tidak ditemukan"
+      });
+
+    }
+
+    // 🔥 MC0 TIDAK BOLEH DIHAPUS
+    if (version.revision === 0) {
+
+      return res.status(400).json({
+        message:
+          "MC0 tidak boleh dihapus"
+      });
+
+    }
+
+    await version.destroy();
+
+    res.json({
+      message:
+        "Version berhasil dihapus"
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
     });
 
   }

@@ -1,6 +1,8 @@
 import { Project } from "../models/ProjectModel.js";
 import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
+import { Op } from "sequelize";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import moment from "moment";
 import "moment/locale/id.js";
 
@@ -166,39 +168,211 @@ export const getWeeksByProject = async (req, res) => {
 };
 
 export const getScheduleByProject = async (req, res) => {
+
   try {
 
-    const { project_id } = req.params; 
+    const {
+      project_id,
+      version_id
+    } = req.params;
 
-    const data = await Schedule.findAll({
-      where: { project_id: project_id }
+    // =========================
+    // VERSION AKTIF
+    // =========================
+    const currentVersion =
+      await ProjectVersionModel.findByPk(
+        version_id
+      );
+
+    if (!currentVersion) {
+
+      return res.status(404).json({
+        message: "Version tidak ditemukan"
+      });
+    }
+
+    // =========================
+    // JIKA REVISION 0
+    // =========================
+    if (currentVersion.revision === 0) {
+
+      const data =
+        await Schedule.findAll({
+
+          where: {
+            project_id,
+            version_id
+          },
+
+          order: [
+            ["minggu_ke", "ASC"]
+          ]
+        });
+
+      return res.json(data);
+    }
+
+    // =========================
+    // AMBIL VERSION SEBELUMNYA
+    // =========================
+    const previousVersion =
+      await ProjectVersionModel.findOne({
+
+        where: {
+
+          project_id,
+
+          revision:
+            currentVersion.revision - 1
+        }
+      });
+
+    // =========================
+    // AMBIL JADWAL LAMA
+    // HANYA < EFFECTIVE WEEK
+    // =========================
+    const oldSchedules =
+      await Schedule.findAll({
+
+        where: {
+
+          project_id,
+
+          version_id:
+            previousVersion.id,
+
+          minggu_ke: {
+            [Op.lt]:
+              currentVersion.effective_week
+          }
+        }
+      });
+
+    // =========================
+    // AMBIL JADWAL ADDENDUM
+    // =========================
+    const newSchedules =
+      await Schedule.findAll({
+
+        where: {
+
+          project_id,
+
+          version_id
+        }
+      });
+
+    // =========================
+    // GABUNGKAN
+    // =========================
+    const finalData = [
+
+      ...oldSchedules,
+
+      ...newSchedules
+    ];
+
+    // =========================
+    // SORT
+    // =========================
+    finalData.sort((a, b) => {
+
+      if (a.minggu_ke !== b.minggu_ke) {
+        return a.minggu_ke - b.minggu_ke;
+      }
+
+      return a.boq_id - b.boq_id;
     });
 
-    res.json(data || []); // Kirim array kosong jika data tidak ada
+    res.json(finalData);
 
   } catch (error) {
-    console.error("Error di getScheduleByProject:", error);
-    res.status(500).json({ message: error.message });
+
+    console.error(
+      "Error getScheduleByProject:",
+      error
+    );
+
+    res.status(500).json({
+      message: error.message
+    });
   }
 };
 
-export const bulkSaveSchedule = async (req, res) => {
+export const bulkSaveSchedule =
+async (req, res) => {
+
   const { project_id } = req.params;
-  const { items } = req.body; // Array dari frontend
+
+  const {
+
+    items,
+
+    version_id
+
+  } = req.body;
 
   try {
-    // 1. Hapus jadwal lama untuk project ini agar bersih
-    await Schedule.destroy({ where: { project_id } });
 
-    // 2. Simpan semua data baru sekaligus
-    if (items && items.length > 0) {
-      await Schedule.bulkCreate(items);
+    // ==========================
+    // HAPUS SCHEDULE
+    // VERSION INI SAJA
+    // ==========================
+
+    await Schedule.destroy({
+
+      where: {
+
+        project_id,
+
+        version_id
+      }
+    });
+
+    // ==========================
+    // INSERT BARU
+    // ==========================
+
+    if (
+      items &&
+      items.length > 0
+    ) {
+
+      const formatted =
+        items.map((item) => ({
+
+          project_id,
+
+          version_id,
+
+          boq_id:
+            item.boq_id,
+
+          minggu_ke:
+            item.minggu_ke,
+
+          bobot:
+            item.bobot
+        }));
+
+      await Schedule.bulkCreate(
+        formatted
+      );
     }
 
-    res.status(200).json({ message: "Jadwal berhasil diperbarui" });
+    res.status(200).json({
+
+      message:
+        "Jadwal berhasil diperbarui"
+    });
+
   } catch (error) {
+
     console.error(error);
-    res.status(500).json({ message: error.message });
+
+    res.status(500).json({
+      message: error.message
+    });
   }
 };
 

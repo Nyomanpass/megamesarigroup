@@ -7,16 +7,13 @@ import { DailyProgress } from "./DailyProgressModel.js";
 import { ProjectPeriod } from "./ProjectPeriodModel.js";
 import { ProjectWeek } from "./ProjectWeekModel.js";
 
-
-import { Material } from "./MaterialModel.js";
-import { Pekerja } from "./Pekerja.js";
-import { Peralatan } from "./PeralatanModel.js";
+import { BoqVersionChange } from "./BoqVersionChangeModel.js";
+import { ProjectVersionModel } from "./ProjectVersionModel.js";
 
 
 import { MasterItem } from "./MasterItem.js";
 import { AnalisaMaster } from "./AnalisaMaster.js";
 import { AnalisaMasterDetail } from "./AnalisaMasterDetail.js";
-import { ItemCategory } from "./ItemCategory.js";
 
 import { ProjectItem } from "./ProjekItem.js";
 import { ProjectAnalisa } from "./ProjekAnalisa.js";
@@ -27,6 +24,28 @@ import { TtdTemplate } from "./TtdTemplate.js";
 
 import { DailyProgressPhoto } from "./DailyProgressPhotos.js";
 
+
+Project.hasMany(ProjectVersionModel, {
+  foreignKey: "project_id",
+  as: "versions",
+  onDelete: "CASCADE",
+  hooks: true
+});
+
+ProjectVersionModel.belongsTo(Project, {
+  foreignKey: "project_id",
+  as: "project"
+});
+
+BoqVersionChange.belongsTo(Boq, {
+  foreignKey: "boq_item_id",
+  as: "boq"
+});
+
+Boq.hasMany(BoqVersionChange, {
+  foreignKey: "boq_item_id",
+  as: "version_changes"
+});
 
 // PARENT → CHILD
 DailyProgress.hasMany(DailyProgressItem, {
@@ -242,6 +261,21 @@ DailyPlan.belongsTo(Project, {
 });
 
 
+Schedule.belongsTo(
+  ProjectVersionModel,
+  {
+    foreignKey: "version_id",
+    as: "version"
+  }
+);
+
+ProjectVersionModel.hasMany(
+  Schedule,
+  {
+    foreignKey: "version_id",
+    as: "schedules"
+  }
+);
 
 export {
   Project,
@@ -251,9 +285,6 @@ export {
   DailyProgress,
   ProjectPeriod,
   ProjectWeek,
-  Material,
-  Pekerja,
-  Peralatan,
   MasterItem,
   AnalisaMaster,
   AnalisaMasterDetail,
@@ -263,5 +294,7 @@ export {
   DailyProgressItem,
   LoginLog,
   TtdTemplate,
-  DailyProgressPhoto
+  DailyProgressPhoto,
+  BoqVersionChange,
+  ProjectVersionModel
 };
