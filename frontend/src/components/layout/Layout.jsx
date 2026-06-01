@@ -32,7 +32,7 @@ export default function Layout() {
 
         <Header />
 
-        <div className="p-6 max-w-350 mx-auto">
+        <div className="p-6 mx-auto">
           <Outlet context={{ user }} />
         </div>
 

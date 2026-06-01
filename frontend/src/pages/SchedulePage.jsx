@@ -12,6 +12,20 @@ import Decimal from "decimal.js";
 
 const MotionDiv = motion.div;
 
+const isPlainNumber = value =>
+  /^-?\d+(\.\d+)?$/.test(String(value).trim());
+
+const excelColumnToNumber = column => {
+  return String(column)
+    .toUpperCase()
+    .split("")
+    .reduce(
+      (sum, char) =>
+        sum * 26 + char.charCodeAt(0) - 64,
+      0
+    );
+};
+
 export default function SchedulePage() {
   const { id: paramId } = useParams();
   const { selectedProject } = useProject();
@@ -19,8 +33,10 @@ export default function SchedulePage() {
   const navigate = useNavigate();
   const [statusMap, setStatusMap] = useState({});
   const [boq, setBoq] = useState([]);
+  const [baseBoq, setBaseBoq] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [schedule, setSchedule] = useState([]);
+  const [weeklyReport, setWeeklyReport] = useState([]);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [realData, setRealData] = useState([]);
   const [inputMap, setInputMap] = useState({});
@@ -28,6 +44,7 @@ export default function SchedulePage() {
   const [versions, setVersions] = useState([]);
   const [mode, setMode] = useState("manual");
   const [error, setError] = useState("");
+  const [showAddendumDetail, setShowAddendumDetail] = useState(false);
 
   const [showBagiRataModal, setShowBagiRataModal] = useState(false);
 
@@ -74,6 +91,9 @@ const fetchVersions = async () => {
       const response = await api.get(
         `/export-time-schedule/${id}`,
         {
+          params: {
+            version_id: selectedVersion?.id
+          },
           responseType: "blob", // 🔥 wajib
         }
       );
@@ -116,13 +136,57 @@ const fetchVersions = async () => {
 
   const fetchAll = async () => {
     try {
+      const baseBoqRes = await api.get(`/boq/project/${id}/0`);
       const boqRes = await api.get(`/boq/project/${id}/${selectedVersion?.id || 0}`);
       const weekRes = await api.get(`/schedule/weeks/${id}`);
       const schRes = await api.get(`/schedule/${id}/${selectedVersion?.id}`);
+      const weeklyReportRes = await api.get(`/weekly-report/${id}`);
+      let scheduleData =
+        schRes.data || [];
 
+      if (selectedVersion?.revision > 0) {
+        const savedKey =
+          `schedule-addendum-saved-v2:${id}:${selectedVersion.id}`;
+        const alreadySavedAfterReset =
+          window.localStorage.getItem(savedKey) === "1";
+        const selectedEffectiveWeek =
+          Number(
+            selectedVersion.effective_week || 1
+          );
+
+        if (!alreadySavedAfterReset) {
+          await api.post(
+            `/schedule/bulk-save/${id}`,
+            {
+              version_id:
+                selectedVersion.id,
+              items: []
+            }
+          );
+
+          scheduleData =
+            scheduleData.filter(
+              item =>
+                Number(item.minggu_ke) <
+                selectedEffectiveWeek
+            );
+        } else {
+          scheduleData =
+            scheduleData.filter(
+              item =>
+                Number(item.minggu_ke) <
+                  selectedEffectiveWeek ||
+                Number(item.version_id) ===
+                  Number(selectedVersion.id)
+            );
+        }
+      }
+
+      setBaseBoq(baseBoqRes.data.data || []);
       setBoq(boqRes.data.data);
       setWeeks(weekRes.data);
-      setSchedule(schRes.data);
+      setSchedule(scheduleData);
+      setWeeklyReport(weeklyReportRes.data || []);
 
     } catch (err) {
       console.error(err);
@@ -159,25 +223,13 @@ const submitBagiRata = () => {
       return;
    }
 
-   // 1. Total bobot asli BOQ
-   const totalBobotAsli = new Decimal(selectedItem.bobot || 0);
+   const addendumInfo =
+      getAddendumInfo(selectedItem);
 
-   // 2. Hitung bobot terpakai sebelum addendum (efektif revisi)
-   let bobotTerpakai = new Decimal(0);
-
-   if (selectedVersion?.revision > 0) {
-      const effectiveWeek = Number(selectedVersion?.effective_week || 1);
-
-      bobotTerpakai = schedule
-         .filter(s => 
-            Number(s.boq_id) === Number(selectedItem.id) && 
-            Number(s.minggu_ke) < effectiveWeek
-         )
-         .reduce((sum, s) => sum.plus(new Decimal(s.bobot || 0)), new Decimal(0));
-   }
-
-   // 3. Hitung sisa bobot yang bisa didistribusikan
-   const totalBobot = totalBobotAsli.minus(bobotTerpakai);
+   const totalBobot =
+      selectedVersion?.revision > 0
+        ? addendumInfo.remaining
+        : new Decimal(selectedItem.bobot || 0);
 
    if (totalBobot.lte(0)) {
       alert("Sisa bobot sudah habis");
@@ -245,12 +297,224 @@ const handleBagiRata = (item) => {
     setShowBagiRataModal(true);
 };
 
+const getScheduleBobotByWeek = (boqId, mingguKe) => {
+  const data =
+    schedule.find(
+      s =>
+        Number(s.boq_id) === Number(boqId) &&
+        Number(s.minggu_ke) === Number(mingguKe)
+    );
+
+  return new Decimal(data?.bobot || 0);
+};
+
+const calculateFormulaValue = (formula, boqId, sisa) => {
+  const totalTarget = new Decimal(
+    boq.find(b => b.id === boqId)?.bobot || 0
+  );
+
+  let expression = String(formula)
+    .trim()
+    .replace(/^=/, "")
+    .replace(/minggu\s*ke\s*[-–]?\s*(\d+)/gi, 'M$1')
+    .replace(/mingguke\s*[-–]?\s*(\d+)/gi, 'M$1')
+    .replace(/minggu\s*(\d+)/gi, 'M$1')
+    .replace(/\s+/g, "");
+
+  if (!expression) return null;
+
+  const tokens =
+    expression.match(/sum|average|avg|min|max|bobot|target|M\d+|W\d+|[SBT]|\d+(?:\.\d+)?|[()+\-*/,:]/gi);
+
+  if (!tokens || tokens.join("").toLowerCase() !== expression.toLowerCase()) {
+    return null;
+  }
+
+  let position = 0;
+
+  const readToken = () => tokens[position];
+  const nextToken = () => tokens[position++];
+
+  const parseFunction = (funcName) => {
+    if (nextToken() !== "(") return null;
+
+    const args = [];
+
+    const isWeekRange = () => {
+      const t1 = tokens[position];
+      const t2 = tokens[position + 1];
+      const t3 = tokens[position + 2];
+      return t1 && t2 === ":" && t3 && /^[mw]\d+$/i.test(t1) && /^[mw]\d+$/i.test(t3);
+    };
+
+    while (readToken() && readToken() !== ")") {
+      if (isWeekRange()) {
+        const startToken = nextToken();
+        nextToken(); // consume ":"
+        const endToken = nextToken();
+
+        const startNum = Number(startToken.replace(/^[mw]/i, ""));
+        const endNum = Number(endToken.replace(/^[mw]/i, ""));
+
+        const minWeek = Math.min(startNum, endNum);
+        const maxWeek = Math.max(startNum, endNum);
+
+        for (let w = minWeek; w <= maxWeek; w++) {
+          args.push(getScheduleBobotByWeek(boqId, w));
+        }
+      } else {
+        const exprValue = parseExpression();
+        if (exprValue === null) return null;
+        args.push(exprValue);
+      }
+
+      if (readToken() === ",") {
+        nextToken(); // consume ","
+      } else if (readToken() !== ")") {
+        return null;
+      }
+    }
+
+    if (nextToken() !== ")") return null;
+
+    if (funcName === "sum") {
+      return args.reduce((s, val) => s.plus(val), new Decimal(0));
+    }
+    if (funcName === "average" || funcName === "avg") {
+      if (args.length === 0) return new Decimal(0);
+      const sum = args.reduce((s, val) => s.plus(val), new Decimal(0));
+      return sum.dividedBy(args.length);
+    }
+    if (funcName === "min") {
+      if (args.length === 0) return new Decimal(0);
+      return Decimal.min(...args);
+    }
+    if (funcName === "max") {
+      if (args.length === 0) return new Decimal(0);
+      return Decimal.max(...args);
+    }
+
+    return null;
+  };
+
+  const parseFactor = () => {
+    const token = nextToken();
+
+    if (!token) return null;
+
+    if (token === "-") {
+      const value = parseFactor();
+      return value ? value.negated() : null;
+    }
+
+    if (token === "+") {
+      return parseFactor();
+    }
+
+    if (token === "(") {
+      const value = parseExpression();
+
+      if (nextToken() !== ")") return null;
+
+      return value;
+    }
+
+    const lowerToken = token.toLowerCase();
+    if (["sum", "average", "avg", "min", "max"].includes(lowerToken)) {
+      return parseFunction(lowerToken);
+    }
+
+    if (["bobot", "target", "b", "t"].includes(lowerToken)) {
+      return totalTarget;
+    }
+
+    if (lowerToken === "s") {
+      return sisa;
+    }
+
+    if (/^[mw]\d+$/i.test(token)) {
+      return getScheduleBobotByWeek(
+        boqId,
+        Number(token.replace(/^[mw]/i, ""))
+      );
+    }
+
+    if (isPlainNumber(token)) {
+      return new Decimal(token);
+    }
+
+    return null;
+  };
+
+  const parseTerm = () => {
+    let value = parseFactor();
+
+    if (!value) return null;
+
+    while (readToken() === "*" || readToken() === "/") {
+      const operator = nextToken();
+      const right = parseFactor();
+
+      if (!right) return null;
+      if (operator === "/" && right.isZero()) return null;
+
+      value =
+        operator === "*"
+          ? value.times(right)
+          : value.dividedBy(right);
+    }
+
+    return value;
+  };
+
+  function parseExpression() {
+    let value = parseTerm();
+
+    if (!value) return null;
+
+    while (readToken() === "+" || readToken() === "-") {
+      const operator = nextToken();
+      const right = parseTerm();
+
+      if (!right) return null;
+
+      value =
+        operator === "+"
+          ? value.plus(right)
+          : value.minus(right);
+    }
+
+    return value;
+  }
+
+  const result = parseExpression();
+
+  if (!result || position !== tokens.length || !result.isFinite()) {
+    return null;
+  }
+
+  return result.toDecimalPlaces(8).toNumber();
+};
+
 
 const handleSingleCellChange = (
   boqId,
   mingguKe,
   value
 ) => {
+  const isAddendumSchedule =
+    selectedVersion?.revision > 0;
+  const selectedEffectiveWeek =
+    Number(
+      selectedVersion?.effective_week || 1
+    );
+
+  if (
+    isAddendumSchedule &&
+    Number(mingguKe) < selectedEffectiveWeek
+  ) {
+    return null;
+  }
 
   // =========================
   // TARGET
@@ -262,6 +526,27 @@ const handleSingleCellChange = (
       )?.bobot || 0
     );
 
+  const selectedBoqItem =
+    boq.find(
+      b =>
+        Number(b.id) === Number(boqId)
+    );
+
+  const scheduleTarget =
+    isAddendumSchedule && selectedBoqItem
+      ? getAddendumInfo(selectedBoqItem)
+          .remaining
+      : totalTarget;
+
+  const isEditableScheduleWeek = item =>
+    !isAddendumSchedule ||
+    (
+      Number(item.minggu_ke) >=
+        selectedEffectiveWeek &&
+      Number(item.version_id) ===
+        Number(selectedVersion?.id)
+    );
+
   // =========================
   // TOTAL EXISTING
   // =========================
@@ -270,7 +555,8 @@ const handleSingleCellChange = (
       .filter(
         s =>
           Number(s.boq_id) === Number(boqId) &&
-          Number(s.minggu_ke) !== Number(mingguKe)
+          Number(s.minggu_ke) !== Number(mingguKe) &&
+          isEditableScheduleWeek(s)
       )
       .reduce(
 
@@ -290,7 +576,7 @@ const handleSingleCellChange = (
   // SISA
   // =========================
   const sisa =
-    totalTarget.minus(
+    scheduleTarget.minus(
       totalExisting
     );
 
@@ -332,35 +618,58 @@ const handleSingleCellChange = (
 
   // =========================
   // SUPPORT =1 =2 =3
-  // COPY DARI MINGGU
+  // COPY DARI MINGGU / RUMUS
   // =========================
   if (
     typeof value === "string" &&
     value.startsWith("=")
   ) {
 
-    const mingguSource =
-      Number(
-        value.replace("=", "")
-      );
+    const formulaBody =
+      value.replace("=", "").trim();
 
-    if (!isNaN(mingguSource)) {
+    if (isPlainNumber(formulaBody)) {
 
-      const sourceData =
-        schedule.find(
-          s =>
-            Number(s.boq_id) === Number(boqId) &&
-            Number(s.minggu_ke) === Number(mingguSource)
+      const mingguSource =
+        Number(formulaBody);
+
+      if (!isNaN(mingguSource)) {
+
+        const sourceData =
+          schedule.find(
+            s =>
+              Number(s.boq_id) === Number(boqId) &&
+              Number(s.minggu_ke) === Number(mingguSource) &&
+              (
+                !isAddendumSchedule ||
+                Number(mingguSource) < selectedEffectiveWeek ||
+                Number(s.version_id) ===
+                  Number(selectedVersion?.id)
+              )
+          );
+
+        if (sourceData) {
+
+          value =
+            Number(
+              Number(
+                sourceData.bobot || 0
+              ).toFixed(8)
+            );
+        }
+      }
+
+    } else {
+
+      const result =
+        calculateFormulaValue(
+          value,
+          boqId,
+          sisa
         );
 
-      if (sourceData) {
-
-        value =
-          Number(
-            Number(
-              sourceData.bobot || 0
-            ).toFixed(8)
-          );
+      if (result !== null) {
+        value = result;
       }
     }
   }
@@ -385,7 +694,7 @@ const handleSingleCellChange = (
     ) {
 
     value =
-    totalTarget
+    sisa
       .dividedBy(pembagi)
       .toDecimalPlaces(8)
       .toNumber();
@@ -401,7 +710,7 @@ const handleSingleCellChange = (
   if (
     isNaN(inputValue) ||
     inputValue < 0
-  ) return;
+  ) return null;
 
   let newSchedule = [...schedule];
 
@@ -421,12 +730,17 @@ const handleSingleCellChange = (
       Number(
         inputValue.toFixed(8)
       );
+    newSchedule[index].version_id =
+      selectedVersion?.id;
 
   } else {
 
     newSchedule.push({
 
       project_id: id,
+
+      version_id:
+        selectedVersion?.id,
 
       boq_id: boqId,
 
@@ -456,7 +770,9 @@ const handleSingleCellChange = (
 
     let itemWeeks =
       newSchedule.filter(
-        s => s.boq_id === boqId
+        s =>
+          s.boq_id === boqId &&
+          isEditableScheduleWeek(s)
       );
 
     let total =
@@ -469,7 +785,7 @@ const handleSingleCellChange = (
     let selisih =
       Number(
         (
-          total - totalTarget
+          total - scheduleTarget
         ).toFixed(8)
       );
 
@@ -526,7 +842,7 @@ const handleSingleCellChange = (
     let diff =
       Number(
         (
-          fixTotal - totalTarget
+          fixTotal - scheduleTarget
         ).toFixed(8)
       );
 
@@ -553,7 +869,9 @@ const handleSingleCellChange = (
   // =========================
   const itemWeeksFinal =
     newSchedule.filter(
-      s => s.boq_id === boqId
+      s =>
+        s.boq_id === boqId &&
+        isEditableScheduleWeek(s)
     );
 
   const totalFinal =
@@ -581,13 +899,13 @@ const handleSingleCellChange = (
 
     const diff =
       totalFinal
-        .minus(totalTarget)
+        .minus(scheduleTarget)
         .abs();
 
     const status =
       diff.lte(tolerance)
         ? "pas"
-        : totalFinal.gt(totalTarget)
+        : totalFinal.gt(scheduleTarget)
           ? "lebih"
           : "kurang";
 
@@ -602,32 +920,101 @@ const handleSingleCellChange = (
 
       total: totalRounded,
 
-      target: totalTarget,
+      target: scheduleTarget,
 
       status
     }
   }));
 
   setSchedule([...newSchedule]);
+
+  return inputValue;
 };
 
 
-  const handleSaveSchedule = async () => {
+ const handleSaveSchedule = async () => {
+  try {
+    if (schedule.length === 0) {
+      return alert("Jadwal masih kosong!");
+    }
+
+    const effectiveWeek =
+      Number(selectedVersion?.effective_week || 1);
+
+    const itemsToSave =
+      selectedVersion?.revision > 0
+        ? schedule.filter(item =>
+            Number(item.version_id) === Number(selectedVersion.id) &&
+            Number(item.minggu_ke) >= effectiveWeek
+          )
+        : schedule;
+
+    await api.post(
+      `/schedule/bulk-save/${id}`,
+      {
+        version_id: selectedVersion?.id,
+        items: itemsToSave
+      }
+    );
+
+    if (selectedVersion?.revision > 0) {
+      window.localStorage.setItem(
+        `schedule-addendum-saved-v2:${id}:${selectedVersion.id}`,
+        "1"
+      );
+    }
+
+    alert("✅ Jadwal Berhasil Disimpan Permanen!");
+    fetchAll();
+
+  } catch (err) {
+    console.error(err);
+    alert("Gagal simpan ke database: " + err.message);
+  }
+};
+
+  const handleResetAddendumSchedule = async () => {
+    if (!(selectedVersion?.revision > 0)) {
+      return;
+    }
+
+    const confirmReset =
+      window.confirm(
+        `Kosongkan semua jadwal ${selectedVersionLabel} mulai minggu ${selectedVersion.effective_week}?`
+      );
+
+    if (!confirmReset) {
+      return;
+    }
+
     try {
-      if (schedule.length === 0) return alert("Jadwal masih kosong!");
       await api.post(
         `/schedule/bulk-save/${id}`,
         {
           version_id:
-            selectedVersion?.id,
-          items: schedule
+            selectedVersion.id,
+          items: []
         }
       );
-      alert("✅ Jadwal Berhasil Disimpan Permanen!");
+
+      window.localStorage.removeItem(
+        `schedule-addendum-saved-v2:${id}:${selectedVersion.id}`
+      );
+
+      setSchedule(prev =>
+        prev.filter(
+          item =>
+            Number(item.version_id) !==
+            Number(selectedVersion.id)
+        )
+      );
+
+      setStatusMap({});
+      alert(`✅ Jadwal ${selectedVersionLabel} sudah dikosongkan.`);
       fetchAll();
     } catch (err) {
       console.error(err);
-      alert("Gagal simpan ke database: " + err.message);
+      alert("Gagal kosongkan jadwal addendum: " + err.message);
     }
   };
 
@@ -656,14 +1043,10 @@ const handleSingleCellChange = (
   });
 
   let akumulasi = new Decimal(0);
-  const rencanaKomulatif =
-    rencanaPerMinggu.map(nilai => {
-
-      akumulasi =
-        akumulasi.plus(nilai);
-
-      return akumulasi.toNumber();
-    });
+  rencanaPerMinggu.forEach(nilai => {
+    akumulasi =
+      akumulasi.plus(nilai);
+  });
 
 // =========================
 // REALISASI FISIK
@@ -690,64 +1073,204 @@ weeks.map((w)=>{
 
 });
 
-
 // =========================
 // KOMULATIF REAL
 // =========================
 
-let akumulasiReal =
-new Decimal(0);
-
 const realKomulatif =
-realPerMinggu.map(
-   nilai=>{
+weeks.map((w)=>{
 
-      akumulasiReal =
-      akumulasiReal.plus(
-         nilai
-      );
+   const real =
+   realData.find(
 
-      return (
-         akumulasiReal
-         .toDecimalPlaces(3)
-         .toNumber()
-      );
-
-   }
-);
-
-
-
-  // Chart Data Preparation
-  const chartData = weeks.map((w, idx) => {
-
-    const real =
-      realData.find(
-        r => r.minggu_ke === w.minggu_ke
-      );
-
-    return {
-
-      name: `M${w.minggu_ke}`,
-
-      // 🔥 FIX TARGET
-      target: Number(
-        rencanaKomulatif[idx] || 0
-      ),
-
-      // 🔥 FIX REAL
-      real: Number(
-        real?.kum_real || 0
+      r=>
+      Number(
+         r.minggu_ke
+      ) === Number(
+         w.minggu_ke
       )
-    };
-  });
 
-  const isComplete = akumulasi > 99.9 && akumulasi < 100.1;
+   );
+
+   return Number(
+      real?.kum_real || 0
+   );
+
+});
+
+
+
+  let scheduleTotal =
+    akumulasi;
+  let isComplete =
+    scheduleTotal > 99.9 &&
+    scheduleTotal < 100.1;
 
   const boqMap = {};
   boq.forEach(item => {
     boqMap[item.id] = { ...item, children: [] };
   });
+
+  const baseBoqMap = {};
+  baseBoq.forEach(item => {
+    baseBoqMap[item.id] = item;
+  });
+
+  const getBeforeEffectiveProgress = (item) => {
+    if (!(selectedVersion?.revision > 0)) {
+      return new Decimal(0);
+    }
+
+    const previousWeek =
+      effectiveWeek - 1;
+
+    if (previousWeek <= 0) {
+      return new Decimal(0);
+    }
+
+    const report =
+      weeklyReport.find(
+        item =>
+          Number(item.minggu_ke) === Number(previousWeek)
+      );
+
+    const progressItem =
+      report?.data?.find(
+        progress =>
+          Number(progress.boq_id) ===
+          Number(item.boq_item_id || item.id)
+      );
+
+    const progressVolume =
+      new Decimal(
+        progressItem?.sd_ini || 0
+      );
+    const mcVolume =
+      new Decimal(item.volume || 0);
+    const mcBobot =
+      new Decimal(item.bobot || 0);
+
+    if (
+      mcVolume.lte(0) ||
+      progressVolume.lte(0)
+    ) {
+      return new Decimal(0);
+    }
+
+    const progressRatio =
+      Decimal.min(
+        progressVolume.dividedBy(mcVolume),
+        new Decimal(1)
+      );
+
+    return progressRatio
+      .times(mcBobot)
+      .toDecimalPlaces(8);
+  };
+
+  const getRawAddendumRemaining = (item) => {
+    const mcBobot =
+      new Decimal(item.bobot || 0);
+    const beforeProgress =
+      getBeforeEffectiveProgress(item);
+
+    return Decimal.max(
+      mcBobot.minus(beforeProgress),
+      new Decimal(0)
+    );
+  };
+
+  const getAddendumSeed = () => {
+    if (!(selectedVersion?.revision > 0)) {
+      return new Decimal(0);
+    }
+
+    const previousWeek =
+      effectiveWeek - 1;
+
+    if (previousWeek <= 0) {
+      return new Decimal(0);
+    }
+
+    const report =
+      weeklyReport.find(
+        item =>
+          Number(item.minggu_ke) ===
+          Number(previousWeek)
+      );
+
+    return new Decimal(
+      report?.real_kumulatif || 0
+    );
+  };
+
+  const getAddendumRemainingFactor = () => {
+    if (!(selectedVersion?.revision > 0)) {
+      return new Decimal(1);
+    }
+
+    const rawRemainingTotal =
+      boq
+        .filter(item => item.tipe === "item")
+        .reduce(
+          (sum, item) =>
+            sum.plus(
+              getRawAddendumRemaining(item)
+            ),
+          new Decimal(0)
+        );
+
+    if (rawRemainingTotal.lte(0)) {
+      return new Decimal(1);
+    }
+
+    const targetRemaining =
+      Decimal.max(
+        new Decimal(100).minus(
+          getAddendumSeed()
+        ),
+        new Decimal(0)
+      );
+
+    return targetRemaining
+      .dividedBy(rawRemainingTotal);
+  };
+
+  const getAddendumInfo = (item) => {
+    const baseItem =
+      baseBoqMap[item.id] || {};
+
+    const mc0Volume =
+      Number(baseItem.volume || 0);
+
+    const mc0Bobot =
+      new Decimal(baseItem.bobot || 0);
+
+    const mcVolume =
+      Number(item.volume || 0);
+
+    const mcBobot =
+      new Decimal(item.bobot || 0);
+
+    const beforeProgress =
+      getBeforeEffectiveProgress(item);
+
+    const rawRemaining =
+      getRawAddendumRemaining(item);
+
+    const remaining =
+      rawRemaining.toDecimalPlaces(8);
+
+    return {
+      mc0Volume,
+      mc0Bobot,
+      mcVolume,
+      mcBobot,
+      beforeProgress,
+      rawRemaining,
+      remaining
+    };
+  };
 
   const tree = [];
 
@@ -761,26 +1284,61 @@ realPerMinggu.map(
 
   const effectiveWeek = Number(selectedVersion?.effective_week || 1);
 
+  const activeVersionChain =
+    versions
+      .filter(
+        v =>
+          selectedVersion &&
+          Number(v.revision || 0) <=
+            Number(selectedVersion.revision || 0)
+      )
+      .sort(
+        (a, b) =>
+          Number(a.revision || 0) -
+          Number(b.revision || 0)
+      );
+
+  const activeAddendumVersions =
+    activeVersionChain.filter(
+      v => Number(v.revision || 0) > 0
+    );
+
+  const firstAddendumWeek =
+    activeAddendumVersions.length > 0
+      ? Number(
+          activeAddendumVersions[0]
+            .effective_week || 1
+        )
+      : null;
+
 const displayWeeks =
 weeks.flatMap((w)=>{
 
    const arr=[];
 
-   const isAddendum =
-   selectedVersion?.revision > 0 &&
-   Number(w.minggu_ke)===effectiveWeek;
+   const addendumMarkers =
+   activeAddendumVersions.filter(
+      version =>
+      Number(version.effective_week) ===
+      Number(w.minggu_ke)
+   );
 
-   // 🔥 tambahkan MC dulu
-   if(isAddendum){
+   // 🔥 tambahkan marker MC sesuai rantai addendum
+   addendumMarkers.forEach((version)=>{
 
       arr.push({
 
-         id:`mc-${w.id}`,
-         isMC:true
+         id:`mc-${version.id}-${w.id}`,
+         isMC:true,
+         code:version.code,
+         revision:version.revision,
+         versionId:version.id,
+         effectiveWeek:version.effective_week,
+         description:version.description
 
       });
 
-   }
+   });
 
    // 🔥 baru week normal
    arr.push(w);
@@ -789,15 +1347,492 @@ weeks.flatMap((w)=>{
 
 });
 
+  const selectedVersionLabel =
+    selectedVersion?.revision > 0
+      ? selectedVersion.code
+      : "MC0";
+
+  const selectedVersionDescription =
+    selectedVersion?.revision > 0
+      ? `Addendum aktif mulai minggu ke-${selectedVersion.effective_week || "-"}`
+      : "Baseline / kontrak awal";
+
+  const formatFooterNumber = value => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      return "";
+    }
+
+    return Number(value).toFixed(3);
+  };
+
+  const getWeekIndex = mingguKe =>
+    weeks.findIndex(
+      week =>
+        Number(week.minggu_ke) ===
+        Number(mingguKe)
+    );
+
+  const getScheduleTotalByWeek = mingguKe =>
+    schedule
+      .filter(item => {
+        const weekNumber = Number(mingguKe);
+        const itemWeek = Number(item.minggu_ke);
+
+        if (
+          selectedVersion?.revision > 0 &&
+          weekNumber >= Number(selectedVersion.effective_week || 1)
+        ) {
+          return (
+            itemWeek === weekNumber &&
+            Number(item.version_id) === Number(selectedVersion.id)
+          );
+        }
+
+        return itemWeek === weekNumber;
+      })
+      .reduce(
+        (sum, item) =>
+          sum.plus(new Decimal(item.bobot || 0)),
+        new Decimal(0)
+  );
+
+  const getRealCumulativeAtWeek = mingguKe => {
+    const index =
+      getWeekIndex(mingguKe);
+
+    if (index < 0) {
+      return new Decimal(0);
+    }
+
+    return new Decimal(
+      realKomulatif[index] || 0
+    );
+  };
+
+  const getAddendumRebaselineSeed = startWeek => {
+    const previousProgress =
+      getRealCumulativeAtWeek(startWeek - 1);
+    const startWeekReal =
+      realData.find(
+        item =>
+          Number(item.minggu_ke) ===
+          Number(startWeek)
+      );
+    const addendumAdjustment =
+      new Decimal(
+        startWeekReal?.penyesuaian_adendum || 0
+      );
+
+    return Decimal.max(
+      previousProgress.plus(addendumAdjustment),
+      new Decimal(0)
+    );
+  };
+
+  const getAddendumFooterMeta = (
+    version,
+    index
+  ) => {
+    const startWeek =
+      Number(version.effective_week || 1);
+    const nextVersion =
+      activeAddendumVersions[index + 1];
+    const endWeek =
+      nextVersion
+        ? Number(nextVersion.effective_week || 1) - 1
+        : Infinity;
+    const seed =
+      getAddendumRebaselineSeed(startWeek);
+    const planWeeks =
+      weeks
+        .filter(
+          week =>
+            Number(week.minggu_ke) >= startWeek &&
+            Number(week.minggu_ke) <= endWeek
+        )
+        .map(week => Number(week.minggu_ke));
+    const rawTotal =
+      planWeeks.reduce(
+        (sum, mingguKe) =>
+          sum.plus(
+            getScheduleTotalByWeek(mingguKe)
+          ),
+        new Decimal(0)
+      );
+    const remainingTarget =
+      rawTotal;
+    const factor =
+      new Decimal(1);
+
+    return {
+      version,
+      startWeek,
+      endWeek,
+      seed,
+      planWeeks,
+      rawTotal,
+      remainingTarget,
+      factor
+    };
+  };
+
+  const getNormalizedAddendumWeek =
+    (meta, mingguKe) => {
+      const weekNumber =
+        Number(mingguKe);
+
+      if (!meta.planWeeks.includes(weekNumber)) {
+        return new Decimal(0);
+      }
+
+      return getScheduleTotalByWeek(weekNumber);
+    };
+
+  const getBaselinePlanWeekly = mingguKe => {
+    if (
+      firstAddendumWeek &&
+      Number(mingguKe) >= firstAddendumWeek
+    ) {
+      return null;
+    }
+
+    return getScheduleTotalByWeek(mingguKe);
+  };
+
+  const getBaselinePlanCumulative = mingguKe => {
+    if (
+      firstAddendumWeek &&
+      Number(mingguKe) >= firstAddendumWeek
+    ) {
+      return null;
+    }
+
+    return weeks
+      .filter(
+        week =>
+          Number(week.minggu_ke) <=
+          Number(mingguKe)
+      )
+      .reduce(
+        (sum, week) =>
+          sum.plus(
+            getScheduleTotalByWeek(
+              week.minggu_ke
+            )
+          ),
+        new Decimal(0)
+      );
+  };
+
+  const getAddendumPlanWeekly = (
+    meta,
+    mingguKe
+  ) => {
+    if (
+      Number(mingguKe) < meta.startWeek ||
+      Number(mingguKe) > meta.endWeek
+    ) {
+      return null;
+    }
+
+    return getNormalizedAddendumWeek(
+      meta,
+      mingguKe
+    );
+  };
+
+  const getAddendumPlanCumulative = (
+    meta,
+    mingguKe
+  ) => {
+    if (
+      Number(mingguKe) < meta.startWeek ||
+      Number(mingguKe) > meta.endWeek
+    ) {
+      return null;
+    }
+
+    const total =
+      meta.planWeeks
+        .filter(
+          week =>
+            Number(week) <=
+            Number(mingguKe)
+        )
+        .reduce(
+          (sum, week) =>
+            sum.plus(
+              getNormalizedAddendumWeek(
+                meta,
+                week
+              )
+            ),
+          new Decimal(0)
+        );
+
+    return Decimal.min(
+      meta.seed.plus(total),
+      new Decimal(100)
+    );
+  };
+
+  const getActivePlanCumulative =
+    mingguKe => {
+      const weekNumber =
+        Number(mingguKe);
+
+      if (
+        activeAddendumVersions.length === 0 ||
+        weekNumber < firstAddendumWeek
+      ) {
+        return getBaselinePlanCumulative(
+          mingguKe
+        );
+      }
+
+      const activeMeta =
+        activeAddendumVersions
+          .map(getAddendumFooterMeta)
+          .find(
+            meta =>
+              weekNumber >= meta.startWeek &&
+              weekNumber <= meta.endWeek
+          );
+
+      return activeMeta
+        ? getAddendumPlanCumulative(
+            activeMeta,
+            mingguKe
+          )
+        : null;
+    };
+
+  const chartData = weeks.map((w) => {
+
+    const real =
+      realData.find(
+        r => Number(r.minggu_ke) === Number(w.minggu_ke)
+      );
+
+    const target =
+      getActivePlanCumulative(w.minggu_ke);
+
+    return {
+
+      name: `M${w.minggu_ke}`,
+
+      target: Number(
+        target ?? 0
+      ),
+
+      real: Number(
+        real?.kum_real || 0
+      )
+    };
+  });
+
+  if (
+    selectedVersion?.revision > 0 &&
+    weeks.length > 0
+  ) {
+    const lastWeek =
+      weeks[weeks.length - 1];
+    const finalPlan =
+      getActivePlanCumulative(
+        lastWeek.minggu_ke
+      );
+
+    if (finalPlan !== null) {
+      scheduleTotal =
+        new Decimal(finalPlan);
+      isComplete =
+        scheduleTotal.gt(99.9) &&
+        scheduleTotal.lt(100.1);
+    }
+  }
+
+  const renderFooterWeekCells =
+    getValue => {
+      return displayWeeks.map((w, idx) => {
+        if (w.isMC) {
+          return (
+            <td
+              key={`footer-mc-${w.id}-${idx}`}
+              className="bg-red-50 border-r-2 border-red-500"
+            >
+              {formatFooterNumber(
+                getValue(w)
+              )}
+            </td>
+          );
+        }
+
+        const value =
+          getValue(w);
+
+        return (
+          <td
+            key={`footer-week-${w.id}-${idx}`}
+            className="p-3 border-r border-gray-200 text-center font-mono font-bold text-xs"
+          >
+            {formatFooterNumber(value)}
+          </td>
+        );
+      });
+    };
+
+  const renderFooterRow = ({
+    key,
+    label,
+    subLabel,
+    getValue,
+    rowClassName = "",
+    labelClassName = "",
+    subLabelClassName = ""
+  }) => (
+    <tr
+      key={key}
+      className={rowClassName}
+    >
+      <td
+        className={`p-4 border-r border-gray-200 text-right uppercase text-xs font-black sticky left-0 ${labelClassName}`}
+      >
+        {label}
+      </td>
+      {selectedVersion?.revision > 0 &&
+        showAddendumDetail && (
+          <td
+            colSpan={5}
+            className="border-r border-gray-200 bg-gray-50"
+          />
+        )}
+      <td
+        className={`p-3 border-r border-gray-200 text-left uppercase text-[11px] font-black whitespace-nowrap ${subLabelClassName}`}
+      >
+        {subLabel}
+      </td>
+      {renderFooterWeekCells(
+        week => getValue(week)
+      )}
+    </tr>
+  );
+
+  const footerPlanRows = [
+    {
+      key: "baseline-weekly",
+      label: "Rencana Fisik Pekerjaan",
+      subLabel: "Jumlah Per-Minggu",
+      getValue: week =>
+        week.isMC
+          ? null
+          : getBaselinePlanWeekly(
+              week.minggu_ke
+            ),
+      rowClassName:
+        "border-t-2 border-gray-300 bg-white",
+      labelClassName:
+        "bg-white text-gray-800",
+      subLabelClassName:
+        "bg-white text-gray-800"
+    },
+    {
+      key: "baseline-cumulative",
+      label: "",
+      subLabel:
+        "Jumlah Komulatif Per-Minggu",
+      getValue: week =>
+        week.isMC
+          ? null
+          : getBaselinePlanCumulative(
+              week.minggu_ke
+            ),
+      rowClassName:
+        "border-b-2 border-gray-300 bg-white",
+      labelClassName:
+        "bg-white text-gray-800",
+      subLabelClassName:
+        "bg-white text-gray-800"
+    },
+    ...activeAddendumVersions.flatMap(
+      (version, index) => {
+        const meta =
+          getAddendumFooterMeta(
+            version,
+            index
+          );
+        const revisionLabel =
+          version.code ||
+          `MC${version.revision}`;
+
+        return [
+          {
+            key: `add-${version.id}-weekly`,
+            label: `Rencana Fisik Pekerjaan ${revisionLabel}`,
+            subLabel: "Jumlah Per-Minggu",
+            getValue: week =>
+              week.isMC
+                ? null
+                : getAddendumPlanWeekly(
+                    meta,
+                    week.minggu_ke
+                  ),
+            rowClassName:
+              "border-t-2 border-orange-300 bg-orange-50/30",
+            labelClassName:
+              "bg-orange-50 text-orange-800",
+            subLabelClassName:
+              "bg-orange-50 text-orange-800"
+          },
+          {
+            key: `add-${version.id}-cumulative`,
+            label: "",
+            subLabel:
+              "Jumlah Komulatif Per-Minggu",
+            getValue: week => {
+              if (
+                week.isMC &&
+                Number(week.effectiveWeek) ===
+                  meta.startWeek
+              ) {
+                return meta.seed;
+              }
+
+              return week.isMC
+                ? null
+                : getAddendumPlanCumulative(
+                    meta,
+                    week.minggu_ke
+                  );
+            },
+            rowClassName:
+              "border-b-2 border-orange-300 bg-orange-50/30",
+            labelClassName:
+              "bg-orange-50 text-orange-800",
+            subLabelClassName:
+              "bg-orange-50 text-orange-800"
+          }
+        ];
+      }
+    )
+  ];
+
   const renderRows = (items, level = 0) => {
     return items.map(item => {
+      const tableExtraColumns =
+        selectedVersion?.revision > 0 && showAddendumDetail
+          ? 5
+          : 0;
 
       // 🔷 HEADER
       if (item.tipe === "header") {
         return (
           <React.Fragment key={item.id}>
             <tr className="bg-gradient-to-r from-slate-800 to-slate-700 text-white">
-              <td colSpan={displayWeeks.length + 2} className="p-4 font-bold tracking-wide text-sm">
+              <td colSpan={displayWeeks.length + 2 + tableExtraColumns} className="p-4 font-bold tracking-wide text-sm">
                 🔷 {item.kode} - {item.uraian}
               </td>
             </tr>
@@ -811,7 +1846,7 @@ weeks.flatMap((w)=>{
         return (
           <React.Fragment key={item.id}>
             <tr className="bg-slate-100">
-              <td colSpan={displayWeeks.length + 2} className="p-3 pl-6 font-semibold text-gray-700 text-xs">
+              <td colSpan={displayWeeks.length + 2 + tableExtraColumns} className="p-3 pl-6 font-semibold text-gray-700 text-xs">
                 🔹 {item.kode} - {item.uraian}
               </td>
             </tr>
@@ -822,6 +1857,10 @@ weeks.flatMap((w)=>{
 
       // 📌 ITEM
       const bobotResmi = Number(Number(item.bobot || 0).toFixed(3));
+      const addendumInfo =
+        selectedVersion?.revision > 0
+          ? getAddendumInfo(item)
+          : null;
 
       return (
         <tr key={item.id} className="group hover:bg-blue-50/40 transition-all">
@@ -879,6 +1918,26 @@ weeks.flatMap((w)=>{
             </div>
           </td>
 
+          {selectedVersion?.revision > 0 && showAddendumDetail && (
+            <>
+              <td className="min-w-[80px] p-2 border-b border-r bg-slate-50 text-center font-mono text-[11px] text-slate-700">
+                {Number(addendumInfo?.mc0Volume || 0).toFixed(3)}
+              </td>
+              <td className="min-w-[80px] p-2 border-b border-r bg-slate-50 text-center font-mono text-[11px] text-slate-700">
+                {addendumInfo?.mc0Bobot.toDecimalPlaces(3).toFixed(3)}
+              </td>
+              <td className="min-w-[80px] p-2 border-b border-r bg-orange-50 text-center font-mono text-[11px] text-orange-700 font-bold">
+                {Number(addendumInfo?.mcVolume || 0).toFixed(3)}
+              </td>
+              <td className="min-w-[80px] p-2 border-b border-r bg-orange-50 text-center font-mono text-[11px] text-orange-700 font-bold">
+                {addendumInfo?.mcBobot.toDecimalPlaces(3).toFixed(3)}
+              </td>
+              <td className="min-w-[95px] p-2 border-b border-r bg-emerald-50 text-center font-mono text-[11px] text-emerald-700 font-bold">
+                {addendumInfo?.beforeProgress.toDecimalPlaces(3).toFixed(3)}
+              </td>
+            </>
+          )}
+
           {/* BOBOT */}
             <td className="p-2 border-b border-r border-gray-100 text-center bg-amber-50 text-amber-700 font-mono text-xs font-bold">
               {bobotResmi.toFixed(3)}
@@ -888,19 +1947,18 @@ weeks.flatMap((w)=>{
 
               // 🔥 kalau kolom MC
               if(w.isMC){
+                  const isSelectedVersionMarker =
+                    Number(w.versionId) ===
+                    Number(selectedVersion?.id);
 
                   return(
-
                     <td
-                        key={w.id}
-                        className="
-                        w-[35px]
-                        min-w-[35px]
-                        bg-red-50
-                        border-r-2
-                        border-red-500
-                        "
+                      key={`mc-sisa-${item.id}-${w.id}`}
+                      className="min-w-[85px] p-2 border-b border-r-2 border-red-500 bg-red-50 text-center font-mono text-[11px] text-red-700 font-black"
                     >
+                      {isSelectedVersionMarker
+                        ? addendumInfo?.remaining.toDecimalPlaces(3).toFixed(3)
+                        : ""}
                     </td>
 
                   )
@@ -908,12 +1966,27 @@ weeks.flatMap((w)=>{
               }
 
               // 🔥 WEEK NORMAL
+              const effectiveWeek =
+              Number(
+                  selectedVersion?.effective_week || 1
+              );
+
+              const isAddendumEditableWeek =
+              selectedVersion?.revision > 0 &&
+              Number(w.minggu_ke) >= effectiveWeek;
+
               const cellData =
               schedule.find(
                   (s)=>
                   Number(s.boq_id)===Number(item.id)
                   &&
                   Number(s.minggu_ke)===Number(w.minggu_ke)
+                  &&
+                  (
+                    !isAddendumEditableWeek ||
+                    Number(s.version_id) ===
+                    Number(selectedVersion?.id)
+                  )
               );
 
               const val =
@@ -923,11 +1996,6 @@ weeks.flatMap((w)=>{
 
               const isActive =
               val !== "";
-
-              const effectiveWeek =
-              Number(
-                  selectedVersion?.effective_week || 1
-              );
 
               const isLocked =
               selectedVersion?.revision > 0 &&
@@ -980,6 +2048,10 @@ weeks.flatMap((w)=>{
                     onChange={(e)=>{
 
                         const v=e.target.value;
+                        const isCommandInput =
+                          /^s(\/\d+)?$/i.test(v.trim()) ||
+                          /^\/\d+$/.test(v.trim()) ||
+                          /^=/.test(v.trim());
 
                         setInputMap(prev=>({
 
@@ -990,11 +2062,24 @@ weeks.flatMap((w)=>{
 
                         }));
 
+                        const calculatedValue =
                         handleSingleCellChange(
                         item.id,
                         w.minggu_ke,
                         v
                         );
+
+                        if (
+                          isCommandInput &&
+                          calculatedValue !== null &&
+                          calculatedValue !== undefined
+                        ) {
+                          setInputMap(prev=>({
+                            ...prev,
+                            [`${item.id}-${w.minggu_ke}`]:
+                            Number(calculatedValue).toFixed(3)
+                          }));
+                        }
 
                     }}
 
@@ -1097,6 +2182,20 @@ weeks.flatMap((w)=>{
               <div>
                 <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
                   Schedule Proyek (Time Schedule)
+                  {selectedVersion && (
+                    <span
+                      className={`
+                        px-3 py-1 rounded-full text-sm font-bold
+                        ${
+                          selectedVersion.revision > 0
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-blue-100 text-blue-700"
+                        }
+                      `}
+                    >
+                      {selectedVersionLabel}
+                    </span>
+                  )}
                 </h1>
                 <p className="text-gray-500">Buat Kurva S Rencana dan jadwalkan bobot bobot pekerjaan</p>
               </div>
@@ -1131,7 +2230,9 @@ weeks.flatMap((w)=>{
                   key={v.id}
                   value={v.id}
                 >
-                  {v.code}
+                  {v.revision > 0
+                    ? `${v.code} - Addendum minggu ${v.effective_week}`
+                    : `${v.code} - Baseline`}
                 </option>
 
               ))}
@@ -1139,6 +2240,52 @@ weeks.flatMap((w)=>{
             </select>
 
           </div>
+
+          {selectedVersion && (
+            <div
+              className={`
+                mb-6 rounded-2xl border p-4 flex flex-col md:flex-row
+                md:items-center md:justify-between gap-2
+                ${
+                  selectedVersion.revision > 0
+                    ? "bg-orange-50 border-orange-200"
+                    : "bg-blue-50 border-blue-200"
+                }
+              `}
+            >
+              <div>
+                <p
+                  className={`
+                    text-xs font-black uppercase tracking-widest
+                    ${
+                      selectedVersion.revision > 0
+                        ? "text-orange-600"
+                        : "text-blue-600"
+                    }
+                  `}
+                >
+                  Version Schedule Aktif
+                </p>
+                <h2 className="text-xl font-black text-gray-800">
+                  {selectedVersionLabel}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {selectedVersionDescription}
+                </p>
+              </div>
+              {selectedVersion.description && (
+                <div className="text-sm font-semibold text-gray-600">
+                  {selectedVersion.description}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedVersion?.revision > 0 && (
+            <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
+              Progress berubah karena ada addendum. Bobot dan volume kontrak dihitung ulang berdasarkan kontrak terbaru, sehingga persentase progress dapat turun walaupun volume realisasi tidak berkurang.
+            </div>
+          )}
 
           {/* OVERVIEW CHARTS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -1149,9 +2296,9 @@ weeks.flatMap((w)=>{
                   <h3 className="text-lg font-bold text-gray-800">Kurva S Rencana Kumulatif (%)</h3>
                   <p className="text-sm text-gray-500">Visualisasi bobot pekerjaan yang harus diselesaikan tiap minggu</p>
                 </div>
-                {!isComplete && akumulasi > 0 && (
+                {!isComplete && scheduleTotal.gt(0) && (
                   <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                    <AlertCircle size={14} /> Total Belum 100% ({akumulasi.toFixed(2)}%)
+                    <AlertCircle size={14} /> Total Belum 100% ({scheduleTotal.toFixed(2)}%)
                   </span>
                 )}
                 {isComplete && (
@@ -1176,7 +2323,7 @@ weeks.flatMap((w)=>{
                     font-bold
                     text-sm
                   ">
-                    ADDENDUM ACTIVE
+                    ADDENDUM ACTIVE - {selectedVersionLabel}
                   </div>
 
                   <div className="
@@ -1293,7 +2440,7 @@ weeks.flatMap((w)=>{
 
                   <div className={`p-4 rounded-2xl border flex items-center justify-between ${isComplete ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
                     <span className="text-sm font-bold text-gray-600">Total Komulatif</span>
-                    <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{akumulasi.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
+                    <span className={`text-2xl font-black ${isComplete ? 'text-emerald-600' : 'text-red-500'}`}>{scheduleTotal.toFixed(3)} <span className="text-sm font-bold opacity-70">%</span></span>
                   </div>
                 </div>
               </div>
@@ -1360,6 +2507,37 @@ weeks.flatMap((w)=>{
 
                 </div>
 
+                {selectedVersion?.revision > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetAddendumSchedule}
+                      className="px-3 py-1 rounded-full text-xs font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-all"
+                    >
+                      Kosongkan Jadwal {selectedVersionLabel}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowAddendumDetail(prev => !prev)
+                      }
+                      className={`
+                        px-3 py-1 rounded-full text-xs font-bold border transition-all
+                        ${
+                          showAddendumDetail
+                            ? "bg-orange-600 text-white border-orange-600"
+                            : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                        }
+                      `}
+                    >
+                      {showAddendumDetail
+                        ? "Sembunyikan Detail Addendum"
+                        : "Lihat Detail Addendum"}
+                    </button>
+                  </div>
+                )}
+
               </div>
 
               <table className="w-full text-sm border-collapse min-w-[800px]">
@@ -1368,6 +2546,15 @@ weeks.flatMap((w)=>{
                     <th className="p-4 border-b border-r border-gray-200 sticky left-0 bg-white z-20 w-[300px]">
                       <div className="text-left uppercase font-black text-xs tracking-wider">Uraian Pekerjaan</div>
                     </th>
+                    {selectedVersion?.revision > 0 && showAddendumDetail && (
+                      <>
+                        <th className="p-3 border-b border-r border-gray-200 text-center uppercase font-black text-[10px] tracking-wider bg-slate-50 min-w-[80px]">Vol MC0</th>
+                        <th className="p-3 border-b border-r border-gray-200 text-center uppercase font-black text-[10px] tracking-wider bg-slate-50 min-w-[80px]">Bobot MC0</th>
+                        <th className="p-3 border-b border-r border-gray-200 text-center uppercase font-black text-[10px] tracking-wider bg-orange-50 min-w-[80px]">Vol {selectedVersionLabel}</th>
+                        <th className="p-3 border-b border-r border-gray-200 text-center uppercase font-black text-[10px] tracking-wider bg-orange-50 min-w-[80px]">Bobot {selectedVersionLabel}</th>
+                        <th className="p-3 border-b border-r border-gray-200 text-center uppercase font-black text-[10px] tracking-wider bg-emerald-50 min-w-[95px]">Progres s/d W{Number(selectedVersion.effective_week || 1) - 1}</th>
+                      </>
+                    )}
                     <th className="p-4 border-b border-r border-gray-200 text-center uppercase font-black text-xs tracking-wider w-[80px]">Bobot</th>
 
                     {displayWeeks.length > 0 ? (
@@ -1377,14 +2564,13 @@ weeks.flatMap((w)=>{
                         return (
                           <th
                             key={w.id}
-                            className="min-w-[70px] p-3 border-b border-r-2 border-red-500 bg-red-50 text-center"
+                            className="min-w-[85px] p-3 border-b border-r-2 border-red-500 bg-red-50 text-center"
                           >
                             <div className="font-bold text-red-600">
-                              MC1
+                              Sisa
                             </div>
-
                             <div className="text-[10px] text-gray-500 mt-1 whitespace-nowrap">
-                              Addendum
+                              {w.code || selectedVersionLabel} W{w.effectiveWeek || selectedVersion?.effective_week}
                             </div>
                           </th>
                         );
@@ -1414,97 +2600,85 @@ weeks.flatMap((w)=>{
                 </tbody>
 
                 <tfoot className="sticky bottom-0 bg-white z-20 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
-                  {/* ========================================== */}
-                  {/* TARGET RENCANA PER MINGGU                  */}
-                  {/* ========================================== */}
-                  <tr className="border-t border-gray-200">
-                    <td className="p-4 border-r border-gray-200 text-right uppercase text-xs font-bold text-gray-600 sticky left-0 bg-white">
-                      Target Rencana per Bulan (%)
-                    </td>
-                    <td className="border-r border-gray-200 bg-gray-50" />
-                    {displayWeeks.map((w, idx) => {
-                      if (w.isMC) {
-                        return <td key={w.id} className="w-[35px] min-w-[35px] bg-red-50 border-r-2 border-red-500" />;
+                  {footerPlanRows.map(row =>
+                    renderFooterRow(row)
+                  )}
+
+                  {renderFooterRow({
+                    key: "real-weekly",
+                    label: "Realisasi Fisik Pekerjaan",
+                    subLabel: "Jumlah Per-Minggu",
+                    getValue: week =>
+                      week.isMC
+                        ? null
+                        : realPerMinggu[
+                            getWeekIndex(
+                              week.minggu_ke
+                            )
+                          ] || 0,
+                    rowClassName:
+                      "border-t-2 border-green-300 bg-green-50/40",
+                    labelClassName:
+                      "bg-green-50 text-green-800",
+                    subLabelClassName:
+                      "bg-green-50 text-green-800"
+                  })}
+
+                  {renderFooterRow({
+                    key: "real-cumulative",
+                    label: "",
+                    subLabel:
+                      "Jumlah Komulatif Per-Minggu",
+                    getValue: week =>
+                      week.isMC
+                        ? null
+                        : realKomulatif[
+                            getWeekIndex(
+                              week.minggu_ke
+                            )
+                          ] || 0,
+                    rowClassName:
+                      "border-b-2 border-green-300 bg-green-50/40",
+                    labelClassName:
+                      "bg-green-50 text-green-800",
+                    subLabelClassName:
+                      "bg-green-50 text-green-800"
+                  })}
+
+                  {renderFooterRow({
+                    key: "deviation-cumulative",
+                    label: "Deviasi",
+                    subLabel:
+                      "Jumlah Komulatif Per-Minggu",
+                    getValue: week => {
+                      if (week.isMC) {
+                        return null;
                       }
-                      const realIdx = idx - displayWeeks.slice(0, idx).filter(x => x.isMC).length;
-                      const total = rencanaPerMinggu[realIdx] || 0;
 
-                      return (
-                        <td key={idx} className="p-3 border-r border-gray-200 text-center font-mono font-bold text-indigo-600 text-xs bg-indigo-50/50">
-                          {total.toFixed(3)}
-                        </td>
-                      );
-                    })}
-                  </tr>
+                      const real =
+                        new Decimal(
+                          realKomulatif[
+                            getWeekIndex(
+                              week.minggu_ke
+                            )
+                          ] || 0
+                        );
+                      const plan =
+                        getActivePlanCumulative(
+                          week.minggu_ke
+                        );
 
-                  {/* ========================================== */}
-                  {/* KOMULATIF RENCANA                          */}
-                  {/* ========================================== */}
-                  <tr className="bg-indigo-600">
-                    <td className="p-4 border-r border-indigo-700 text-right uppercase text-xs font-black text-white sticky left-0 bg-indigo-600">
-                      Komulatif Rencana (%)
-                    </td>
-                    <td className="border-r border-indigo-700" />
-                    {displayWeeks.map((w, idx) => {
-                      if (w.isMC) {
-                        return <td key={w.id} className="w-[35px] min-w-[35px] bg-red-100 border-r-2 border-red-500" />;
-                      }
-                      const realIdx = idx - displayWeeks.slice(0, idx).filter(x => x.isMC).length;
-                      const total = rencanaKomulatif[realIdx] || 0;
-
-                      return (
-                        <td key={idx} className={`p-3 border-r border-indigo-700 text-center font-mono font-black text-xs ${total > 100.001 ? "text-red-300" : "text-white"}`}>
-                          {total.toFixed(3)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-
-                  {/* ========================================== */}
-                  {/* REALISASI FISIK                            */}
-                  {/* ========================================== */}
-                  <tr className="border-t border-gray-200">
-                    <td className="p-4 border-r border-gray-200 text-right uppercase text-xs font-bold text-green-700 sticky left-0 bg-white">
-                      Realisasi Fisik (%)
-                    </td>
-                    <td className="border-r border-gray-200 bg-gray-50" />
-                    {displayWeeks.map((w, idx) => {
-                      if (w.isMC) {
-                        return <td key={w.id} className="w-[35px] min-w-[35px] bg-red-50 border-r-2 border-red-500" />;
-                      }
-                      const realIdx = idx - displayWeeks.slice(0, idx).filter(x => x.isMC).length;
-                      const total = realPerMinggu[realIdx] || 0;
-
-                      return (
-                        <td key={idx} className="p-3 border-r border-gray-200 text-center font-mono font-bold text-xs bg-green-50 text-green-700">
-                          {total.toFixed(3)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-
-                  {/* ========================================== */}
-                  {/* KOMULATIF REALISASI                        */}
-                  {/* ========================================== */}
-                  <tr className="bg-green-600">
-                    <td className="p-4 border-r border-green-700 text-right uppercase text-xs font-black text-white sticky left-0 bg-green-600">
-                      Komulatif Realisasi (%)
-                    </td>
-                    <td className="border-r border-green-700" />
-                    {displayWeeks.map((w, idx) => {
-                      if (w.isMC) {
-                        return <td key={w.id} className="w-[35px] min-w-[35px] bg-red-100 border-r-2 border-red-500" />;
-                      }
-                      const realIdx = idx - displayWeeks.slice(0, idx).filter(x => x.isMC).length;
-                      const total = realKomulatif[realIdx] || 0;
-
-                      return (
-                        <td key={idx} className="p-3 border-r border-green-700 text-center font-black font-mono text-xs text-white">
-                          {total.toFixed(3)}
-                        </td>
-                      );
-                    })}
-                  </tr>
+                      return plan === null
+                        ? null
+                        : real.minus(plan);
+                    },
+                    rowClassName:
+                      "border-t-2 border-gray-400 bg-gray-100",
+                    labelClassName:
+                      "bg-gray-100 text-gray-900",
+                    subLabelClassName:
+                      "bg-gray-100 text-gray-900"
+                  })}
                 </tfoot>
               </table>
             </div>
@@ -1536,6 +2710,33 @@ weeks.flatMap((w)=>{
               </h2>
 
               <div className="space-y-4">
+                {selectedItem && selectedVersion?.revision > 0 && (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm">
+                    <div className="font-black text-orange-700 mb-2">
+                      Dasar Pembagian {selectedVersionLabel}
+                    </div>
+                    {(() => {
+                      const info = getAddendumInfo(selectedItem);
+
+                      return (
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-gray-500 font-bold uppercase">Bobot {selectedVersionLabel}</p>
+                            <p className="font-mono font-black text-gray-800">{info.mcBobot.toDecimalPlaces(3).toFixed(3)}%</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500 font-bold uppercase">Progres s/d W{Number(selectedVersion.effective_week || 1) - 1}</p>
+                            <p className="font-mono font-black text-emerald-700">{info.beforeProgress.toDecimalPlaces(3).toFixed(3)}%</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-gray-500 font-bold uppercase">Sisa yang dibagi</p>
+                            <p className="font-mono font-black text-red-700">{info.remaining.toDecimalPlaces(3).toFixed(3)}%</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div>
                     <label className="block mb-2 text-sm font-semibold">

@@ -43,6 +43,7 @@ export default function Dashboard() {
    const [editId, setEditId] = useState(null);
    const [form, setForm] = useState({
       kegiatan: '',
+      sub_kegiatan: '',
       pekerjaan: '',
       lokasi: '',
       tahun: '',
@@ -67,6 +68,9 @@ export default function Dashboard() {
    useEffect(() => {
       if (selectedProject) {
          fetchProjectData(selectedProject.id);
+         fetchVersions(selectedProject.id);
+      } else {
+         setVersions([]);
       }
    }, [selectedProject]);
 
@@ -86,9 +90,43 @@ export default function Dashboard() {
       try {
          const res = await api.get(`/projects/${id}`);
          setProjectData(res.data);
-         // Fetch chart data
-         const chartRes = await api.get(`/daily-plan/weekly-chart/${id}`);
-         setChartData(chartRes.data);
+
+         const [
+            realChartRes,
+            versionRes,
+            weekRes,
+            weeklyReportRes
+         ] = await Promise.all([
+            api.get(`/daily-plan/weekly-chart/${id}`),
+            api.get(`/project-versions/project/${id}`),
+            api.get(`/schedule/weeks/${id}`),
+            api.get(`/weekly-report/${id}`)
+         ]);
+
+         const versionData =
+            versionRes.data.data || [];
+         const selectedScheduleVersion =
+            [...versionData].sort(
+               (a, b) =>
+                  Number(b.revision || 0) -
+                  Number(a.revision || 0)
+            )[0];
+         const scheduleRes =
+            selectedScheduleVersion
+               ? await api.get(
+                  `/schedule/${id}/${selectedScheduleVersion.id}`
+               )
+               : { data: [] };
+         const scheduleChart =
+            buildScheduleProgressChart({
+               weeks: weekRes.data || [],
+               versions: versionData,
+               selectedVersion: selectedScheduleVersion,
+               schedule: scheduleRes.data || [],
+               realData: realChartRes.data || []
+            });
+
+         setChartData(scheduleChart);
 
          const weeklyRes = await api.get(`/daily-plan/weekly-report/${id}`);
          setWeeklyChartData(weeklyRes.data.map(w => ({
@@ -101,10 +139,246 @@ export default function Dashboard() {
       }
    };
 
+   const buildScheduleProgressChart = ({
+      weeks,
+      versions,
+      selectedVersion,
+      schedule,
+      realData
+   }) => {
+      const sortedWeeks =
+         [...weeks].sort(
+            (a, b) =>
+               Number(a.minggu_ke) -
+               Number(b.minggu_ke)
+         );
+      const activeVersionChain =
+         versions
+            .filter(
+               v =>
+                  selectedVersion &&
+                  Number(v.revision || 0) <=
+                     Number(selectedVersion.revision || 0)
+            )
+            .sort(
+               (a, b) =>
+                  Number(a.revision || 0) -
+                  Number(b.revision || 0)
+            );
+      const activeAddendumVersions =
+         activeVersionChain.filter(
+            v => Number(v.revision || 0) > 0
+         );
+      const firstAddendumWeek =
+         activeAddendumVersions.length > 0
+            ? Number(
+               activeAddendumVersions[0].effective_week || 1
+            )
+            : null;
+
+      const getScheduleTotalByWeek = mingguKe =>
+         schedule
+            .filter(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(mingguKe)
+            )
+            .reduce(
+               (sum, item) =>
+                  sum + Number(item.bobot || 0),
+               0
+            );
+
+      const getRealCumulativeAtWeek = mingguKe => {
+         const real =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(mingguKe)
+            );
+
+         return Number(real?.kum_real || 0);
+      };
+
+      const getAddendumRebaselineSeed = startWeek => {
+         const previousProgress =
+            getRealCumulativeAtWeek(startWeek - 1);
+         const startWeekReal =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(startWeek)
+            );
+         const addendumAdjustment =
+            Number(
+               startWeekReal?.penyesuaian_adendum || 0
+            );
+
+         return Math.max(
+            previousProgress + addendumAdjustment,
+            0
+         );
+      };
+
+      const getBaselinePlanCumulative = mingguKe => {
+         if (
+            firstAddendumWeek &&
+            Number(mingguKe) >= firstAddendumWeek
+         ) {
+            return null;
+         }
+
+         return sortedWeeks
+            .filter(
+               week =>
+                  Number(week.minggu_ke) <=
+                  Number(mingguKe)
+            )
+            .reduce(
+               (sum, week) =>
+                  sum +
+                  getScheduleTotalByWeek(
+                     week.minggu_ke
+                  ),
+               0
+            );
+      };
+
+      const getAddendumMeta = (version, index) => {
+         const startWeek =
+            Number(version.effective_week || 1);
+         const nextVersion =
+            activeAddendumVersions[index + 1];
+         const endWeek =
+            nextVersion
+               ? Number(nextVersion.effective_week || 1) - 1
+               : Infinity;
+         const seed =
+            getAddendumRebaselineSeed(startWeek);
+         const planWeeks =
+            sortedWeeks
+               .filter(
+                  week =>
+                     Number(week.minggu_ke) >= startWeek &&
+                     Number(week.minggu_ke) <= endWeek
+               )
+               .map(week => Number(week.minggu_ke));
+         const rawTotal =
+            planWeeks.reduce(
+               (sum, week) =>
+                  sum + getScheduleTotalByWeek(week),
+               0
+            );
+         const remainingTarget =
+            rawTotal;
+         const factor =
+            1;
+
+         return {
+            startWeek,
+            endWeek,
+            seed,
+            planWeeks,
+            remainingTarget,
+            factor
+         };
+      };
+
+      const getNormalizedAddendumWeek =
+         (meta, mingguKe) => {
+            const weekNumber =
+               Number(mingguKe);
+
+            if (!meta.planWeeks.includes(weekNumber)) {
+               return 0;
+            }
+
+            return getScheduleTotalByWeek(weekNumber);
+         };
+
+      const getAddendumPlanCumulative =
+         (meta, mingguKe) => {
+            if (
+               Number(mingguKe) < meta.startWeek ||
+               Number(mingguKe) > meta.endWeek
+            ) {
+               return null;
+            }
+
+            const total =
+               meta.planWeeks
+                  .filter(
+                     week =>
+                        Number(week) <=
+                        Number(mingguKe)
+                  )
+                  .reduce(
+                     (sum, week) =>
+                        sum +
+                        getNormalizedAddendumWeek(
+                           meta,
+                           week
+                        ),
+                     0
+                  );
+
+            return Math.min(meta.seed + total, 100);
+         };
+
+      const getActivePlanCumulative = mingguKe => {
+         const weekNumber =
+            Number(mingguKe);
+
+         if (
+            activeAddendumVersions.length === 0 ||
+            weekNumber < firstAddendumWeek
+         ) {
+            return getBaselinePlanCumulative(mingguKe);
+         }
+
+         const activeMeta =
+            activeAddendumVersions
+               .map(getAddendumMeta)
+               .find(
+                  meta =>
+                     weekNumber >= meta.startWeek &&
+                     weekNumber <= meta.endWeek
+               );
+
+         return activeMeta
+            ? getAddendumPlanCumulative(
+               activeMeta,
+               mingguKe
+            )
+            : null;
+      };
+
+      return sortedWeeks.map((week) => {
+         const real =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(week.minggu_ke)
+            );
+         const target =
+            getActivePlanCumulative(week.minggu_ke);
+
+         return {
+            minggu_ke: Number(week.minggu_ke),
+            rencana_kumulatif: Number(
+               Number(
+                  target ?? real?.kum_rencana ?? 0
+               ).toFixed(3)
+            ),
+            real_kumulatif: Number(
+               Number(real?.kum_real || 0).toFixed(3)
+            )
+         };
+      });
+   };
+
    const handleProjectSelect = (project) => {
       setSelectedProject(project);
-      fetchProjectData(project.id);
-      fetchVersions(project.id);
       setShowDropdown(false);
    };
 
@@ -120,6 +394,7 @@ export default function Dashboard() {
       setEditId(selectedProject.id);
       setForm({
          kegiatan: selectedProject.kegiatan || '',
+         sub_kegiatan: selectedProject.sub_kegiatan || '',
          pekerjaan: selectedProject.pekerjaan || '',
          lokasi: selectedProject.lokasi || '',
          tahun: selectedProject.tahun || '',
@@ -170,6 +445,7 @@ export default function Dashboard() {
    const resetForm = () => {
       setForm({
          kegiatan: '',
+         sub_kegiatan: '',
          pekerjaan: '',
          lokasi: '',
          tahun: '',
@@ -349,14 +625,15 @@ export default function Dashboard() {
    // Filtered projects for dropdown
    const filteredProjects = projects.filter(project =>
       project.kegiatan?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.sub_kegiatan?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.pekerjaan?.toLowerCase().includes(searchQuery.toLowerCase())
    );
 
    // Dummy data for project charts (replace with real data when available)
    const projectProgressData = chartData.length > 0 ? chartData.map(d => ({
       name: `Minggu ${d.minggu_ke}`,
-      rencana: d.kum_rencana,
-      real: d.kum_real
+      rencana: Number(d.rencana_kumulatif || 0),
+      real: Number(d.real_kumulatif || 0)
    })) : [
       { name: 'Minggu 1', rencana: 10, real: 8 },
       { name: 'Minggu 2', rencana: 25, real: 22 },
@@ -449,7 +726,7 @@ export default function Dashboard() {
    };
 
    return (
-      <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
+      <div className="p-8 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
 
          {/* HEADER DASHBOARD CAKUPAN SISTEM */}
          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -507,6 +784,11 @@ export default function Dashboard() {
                      <p className="font-semibold text-lg text-primary">
                         {selectedProject ? selectedProject.kegiatan : "Pilih Proyek"}
                      </p>
+                     {selectedProject?.sub_kegiatan && (
+                        <p className="text-xs font-semibold text-secondary">
+                           {selectedProject.sub_kegiatan}
+                        </p>
+                     )}
                      <p className="text-sm text-gray-500 line-clamp-2">
                         {selectedProject ? selectedProject.pekerjaan : "Cari berdasarkan nama kegiatan"}
                      </p>
@@ -536,6 +818,9 @@ export default function Dashboard() {
                                     className="w-full px-4 py-3 text-left hover:bg-accent/20 transition-colors border-b border-muted-gray last:border-b-0 cursor-pointer"
                                  >
                                     <p className="font-bold text-primary">{project.kegiatan}</p>
+                                    {project.sub_kegiatan && (
+                                       <p className="text-xs font-semibold text-secondary">{project.sub_kegiatan}</p>
+                                    )}
                                     <p className="text-sm text-gray-600">{project.pekerjaan}</p>
                                     <div class="mt-2.5 flex items-center gap-2">
                                        <p className="text-xs text-gray-400">{project.lokasi}</p>
@@ -588,7 +873,7 @@ export default function Dashboard() {
                </div>
                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Progress Saat Ini</p>
                <h3 className="text-3xl font-black text-primary relative z-10">
-                  {chartData.length > 0 ? Math.round(chartData[chartData.length - 1]?.kum_real || 0) : 0}%
+                  {chartData.length > 0 ? Math.round(chartData[chartData.length - 1]?.real_kumulatif || 0) : 0}%
                </h3>
                <p className="text-xs text-gray-400 mt-2 font-medium relative z-10">Berdasarkan realisasi</p>
             </div>
@@ -600,7 +885,7 @@ export default function Dashboard() {
                </div>
                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Deviasi Progress</p>
                <h3 className="text-3xl font-black text-primary relative z-10">
-                  {chartData.length > 0 ? Math.round((chartData[chartData.length - 1]?.kum_real || 0) - (chartData[chartData.length - 1]?.kum_rencana || 0)) : 0}%
+                  {chartData.length > 0 ? Math.round((chartData[chartData.length - 1]?.real_kumulatif || 0) - (chartData[chartData.length - 1]?.rencana_kumulatif || 0)) : 0}%
                </h3>
                <p className="text-xs text-warning mt-2 font-bold relative z-10">Real vs Rencana</p>
             </div>
@@ -649,6 +934,12 @@ export default function Dashboard() {
                               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{activeProject.no_kontrak}</p>
                               <p className="text-lg font-black text-primary">{activeProject.kegiatan}</p>
                            </div>
+                           {activeProject.sub_kegiatan && (
+                              <div>
+                                 <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Sub Kegiatan</p>
+                                 <p className="text-base font-semibold text-gray-700">{activeProject.sub_kegiatan}</p>
+                              </div>
+                           )}
                            <div>
                               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pekerjaan</p>
                               <p className="text-base font-semibold text-gray-700">{activeProject.pekerjaan}</p>
@@ -1044,6 +1335,16 @@ export default function Dashboard() {
                                        onChange={handleChange}
                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
                                        required
+                                    />
+                                 </div>
+                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sub Kegiatan</label>
+                                    <input
+                                       type="text"
+                                       name="sub_kegiatan"
+                                       value={form.sub_kegiatan}
+                                       onChange={handleChange}
+                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
                                     />
                                  </div>
                                  <div>

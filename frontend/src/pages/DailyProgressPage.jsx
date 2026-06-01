@@ -38,6 +38,7 @@ export default function DailyProgressPage() {
 
   // --- States ---
   const [boqList, setBoqList] = useState([]);
+  const [versions, setVersions] = useState([]);
   const [data, setData] = useState([]);
   const formRef = useRef(null);
 
@@ -81,10 +82,62 @@ export default function DailyProgressPage() {
     }
   };
 
-  const fetchBoq = async () => {
-  try {
+  const getFormWeek = () => {
+    if (modeInput === "weekly" && form.minggu_ke) {
+      return Number(form.minggu_ke);
+    }
 
-    const versionId = 0;
+    if (form.hari_ke) {
+      const plan =
+        dailyPlan.find(
+          item =>
+            Number(item.hari_ke) ===
+            Number(form.hari_ke)
+        );
+
+      return Number(plan?.minggu_ke || 0);
+    }
+
+    return 0;
+  };
+
+  const getActiveVersionIdByWeek = (weekNumber) => {
+    if (!weekNumber || versions.length === 0) {
+      return 0;
+    }
+
+    const activeVersion =
+      [...versions]
+        .sort(
+          (a, b) =>
+            Number(a.effective_week || 1) -
+            Number(b.effective_week || 1)
+        )
+        .filter(
+          version =>
+            Number(weekNumber) >=
+            Number(version.effective_week || 1)
+        )
+        .at(-1);
+
+    return activeVersion?.id || 0;
+  };
+
+  const fetchVersions = async () => {
+    try {
+      const res =
+        await api.get(
+          `/project-versions/project/${id}`
+        );
+
+      setVersions(res.data.data || []);
+    } catch (err) {
+      console.log("Gagal fetch versi", err);
+    }
+  };
+
+  const fetchBoq = async (versionId = 0) => {
+  try {
 
     const res = await api.get(
       `/boq/project/${id}/${versionId}`
@@ -117,9 +170,44 @@ export default function DailyProgressPage() {
 
   useEffect(() => {
     fetchData();
-    fetchBoq();
+    fetchVersions();
     fetchDailyPlan();
   }, [id]);
+
+  useEffect(() => {
+    const weekNumber =
+      getFormWeek();
+    const versionId =
+      getActiveVersionIdByWeek(weekNumber);
+
+    fetchBoq(versionId);
+  }, [
+    id,
+    versions,
+    dailyPlan,
+    form.hari_ke,
+    form.minggu_ke,
+    modeInput
+  ]);
+
+  useEffect(() => {
+    if (!form.boq_id) {
+      return;
+    }
+
+    const boq =
+      boqList.find(
+        b =>
+          Number(b.id) === Number(form.boq_id) ||
+          Number(b.boq_item_id) === Number(form.boq_id)
+      );
+
+    if (boq) {
+      setSearchBoqQuery(
+        `${boq.kode ? boq.kode + " - " : ""}${boq.uraian}`
+      );
+    }
+  }, [boqList, form.boq_id]);
 
 
 
@@ -262,7 +350,9 @@ export default function DailyProgressPage() {
           project_id: id,
           boq_id: form.boq_id,
           minggu_ke: form.minggu_ke,
-          persentase: form.persentase,
+          ...(isIntegerWeeklyBoq
+            ? { volume: form.volume }
+            : { persentase: form.persentase }),
           cuaca: form.cuaca,
           jam_mulai: form.jam_mulai,
           jam_selesai: form.jam_selesai
@@ -447,6 +537,103 @@ export default function DailyProgressPage() {
 
   const summary = getSummary();
 
+  const selectedFormBoq =
+    boqList.find(
+      b =>
+        Number(b.id) === Number(form.boq_id) ||
+        Number(b.boq_item_id) === Number(form.boq_id)
+    );
+
+  const isWholeNumber = (value) =>
+    Math.abs(Number(value) - Math.round(Number(value))) < 0.0000001;
+
+  const isIntegerWeeklyBoq =
+    Boolean(selectedFormBoq) &&
+    isWholeNumber(selectedFormBoq.volume || 0);
+
+  const formatVolumeValue = (value) => {
+    const num = Number(value || 0);
+
+    if (isWholeNumber(num)) {
+      return String(Math.round(num));
+    }
+
+    return num
+      .toFixed(7)
+      .replace(/\.?0+$/, "");
+  };
+
+  const getRemainingToFull = () => {
+    if (!selectedFormBoq) return 0;
+
+    const boqIdFix = form.boq_id;
+    const target = Number(selectedFormBoq.volume || 0);
+
+    const totalSemua =
+      data
+        .filter(
+          d =>
+            Number(d.boq_id) === Number(boqIdFix) ||
+            Number(d.boq?.id) === Number(boqIdFix)
+        )
+        .reduce(
+          (sum, item) =>
+            sum + Number(item.volume || 0),
+          0
+        );
+
+    const currentItem =
+      data.find(
+        d => d.id === editId
+      );
+
+    const volumeLama =
+      Number(currentItem?.volume || 0);
+
+    const totalSebelumInput =
+      editId
+        ? totalSemua - volumeLama
+        : totalSemua;
+
+    return Math.max(target - totalSebelumInput, 0);
+  };
+
+  const remainingToFull =
+    getRemainingToFull();
+
+  const fillRemainingToFull = () => {
+    if (!selectedFormBoq) return;
+
+    if (
+      modeInput === "weekly" &&
+      !isIntegerWeeklyBoq
+    ) {
+      const target =
+        Number(selectedFormBoq.volume || 0);
+
+      const percent =
+        target > 0
+          ? (remainingToFull / target) * 100
+          : 0;
+
+      setForm({
+        ...form,
+        persentase:
+          percent
+            .toFixed(7)
+            .replace(/\.?0+$/, "")
+      });
+
+      return;
+    }
+
+    setForm({
+      ...form,
+      volume:
+        formatVolumeValue(remainingToFull)
+    });
+  };
+
 // ================= GROUP BY TANGGAL =================
 const groupedByTanggal = {};
 
@@ -599,7 +786,12 @@ const renderTree = (nodes, level = 0) => {
       <div
         key={node.id}
         onClick={() => {
-          setForm({ ...form, boq_id: node.id });
+          setForm({
+            ...form,
+            boq_id: node.id,
+            volume: "",
+            persentase: ""
+          });
           setSearchBoqQuery(`${node.kode} - ${node.uraian}`);
           setIsBoqDropdownOpen(false);
         }}
@@ -975,7 +1167,7 @@ const buildRows = () => {
 
   return (
     <>
-      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6  mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 
         {/* HEADER */}
         <div ref={formRef} className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -1131,6 +1323,32 @@ const buildRows = () => {
                     </div>
 
                   </div>
+
+                  {summary && (
+                    <button
+                      type="button"
+                      onClick={fillRemainingToFull}
+                      disabled={remainingToFull <= 0}
+                      className="
+                        mt-2
+                        w-full
+                        rounded-xl
+                        border
+                        border-green-200
+                        bg-green-50
+                        px-3
+                        py-2
+                        text-xs
+                        font-bold
+                        text-green-700
+                        hover:bg-green-100
+                        disabled:cursor-not-allowed
+                        disabled:opacity-50
+                      "
+                    >
+                      Isi Sisa 100%: {formatVolumeValue(remainingToFull)} {summary.satuan}
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -1181,28 +1399,41 @@ const buildRows = () => {
                   </select>
                 </div>
 
-                {/* PERSENTASE */}
+                {/* PROGRESS MINGGUAN */}
                 <div>
 
                   <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Persentase Progress
+                    {isIntegerWeeklyBoq
+                      ? "Jumlah Volume Minggu Ini"
+                      : "Persentase Progress"}
                   </label>
 
                   <div className="relative">
 
                     <input
                       type="number"
-                      step="any"
+                      step={isIntegerWeeklyBoq ? "1" : "any"}
+                      min="0"
 
-                      placeholder="50"
+                      placeholder={isIntegerWeeklyBoq ? "4" : "50"}
 
-                      value={form.persentase}
+                      value={
+                        isIntegerWeeklyBoq
+                          ? form.volume
+                          : form.persentase
+                      }
 
                       onChange={(e) =>
                         setForm({
                           ...form,
+                          volume:
+                            isIntegerWeeklyBoq
+                              ? e.target.value
+                              : form.volume,
                           persentase:
-                            e.target.value
+                            isIntegerWeeklyBoq
+                              ? form.persentase
+                              : e.target.value
                         })
                       }
 
@@ -1217,10 +1448,45 @@ const buildRows = () => {
                     />
 
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 font-bold">
-                      %
+                      {isIntegerWeeklyBoq
+                        ? selectedFormBoq?.satuan || "Vol"
+                        : "%"}
                     </div>
 
                   </div>
+
+                  {summary && (
+                    <button
+                      type="button"
+                      onClick={fillRemainingToFull}
+                      disabled={remainingToFull <= 0}
+                      className="
+                        mt-2
+                        w-full
+                        rounded-xl
+                        border
+                        border-blue-200
+                        bg-blue-50
+                        px-3
+                        py-2
+                        text-xs
+                        font-bold
+                        text-blue-700
+                        hover:bg-blue-100
+                        disabled:cursor-not-allowed
+                        disabled:opacity-50
+                      "
+                    >
+                      {isIntegerWeeklyBoq
+                        ? `Isi Sisa 100%: ${formatVolumeValue(remainingToFull)} ${summary.satuan}`
+                        : `Isi Persen Sisa 100%: ${
+                            selectedFormBoq?.volume
+                              ? ((remainingToFull / Number(selectedFormBoq.volume || 1)) * 100)
+                                  .toFixed(3)
+                              : "0.000"
+                          }%`}
+                    </button>
+                  )}
                 </div>
               </>
             )}

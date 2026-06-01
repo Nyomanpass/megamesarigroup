@@ -1221,12 +1221,59 @@ export const getBoqWithBobot = async (project_id, version_id) => {
 
     // Kondisi MC0: Jika tidak ada version_id, langsung kalkulasi bobot baseline
     if (!version_id) {
+        const newChanges = await BoqVersionChange.findAll({
+            where: { action: "new" }
+        });
+
+        const hiddenNewIds = new Set(
+            newChanges.map(item => Number(item.boq_item_id))
+        );
+
+        return generateBobot(
+            boqItems.filter(item => !hiddenNewIds.has(Number(item.id)))
+        );
+    }
+
+    const currentVersion = await ProjectVersionModel.findByPk(version_id);
+
+    if (!currentVersion) {
         return generateBobot(boqItems);
     }
 
-    // 2. Ambil semua data perubahan untuk versi ini
+    if (Number(currentVersion.revision || 0) === 0) {
+        const newChanges = await BoqVersionChange.findAll({
+            where: { action: "new" }
+        });
+
+        const hiddenNewIds = new Set(
+            newChanges.map(item => Number(item.boq_item_id))
+        );
+
+        return generateBobot(
+            boqItems.filter(item => !hiddenNewIds.has(Number(item.id)))
+        );
+    }
+
+    const versionChain = await ProjectVersionModel.findAll({
+        where: {
+            project_id,
+            revision: {
+                [Op.lte]: currentVersion.revision
+            }
+        },
+        order: [["revision", "ASC"]]
+    });
+
+    const versionIds = versionChain.map(version => version.id);
+
+    // 2. Ambil semua data perubahan sampai versi aktif
     const changes = await BoqVersionChange.findAll({
-        where: { version_id }
+        where: {
+            version_id: {
+                [Op.in]: versionIds
+            }
+        },
+        order: [["id", "ASC"]]
     });
 
     // Petakan perubahan ke bentuk Map Object agar pencarian O(1) cepat
@@ -1235,8 +1282,16 @@ export const getBoqWithBobot = async (project_id, version_id) => {
         changeMap[item.boq_item_id] = item;
     });
 
+    const newItemIds = changes
+        .filter(x => x.action === "new")
+        .map(x => Number(x.boq_item_id));
+
+    const newItemIdSet = new Set(newItemIds);
+
     // 3. Gabungkan perubahan (Merge Volume & Harga Satuan)
-    let merged = boqItems.map(item => {
+    let merged = boqItems
+      .filter(item => !newItemIdSet.has(Number(item.id)))
+      .map(item => {
         const change = changeMap[item.id];
         return {
             ...item.toJSON(),
@@ -1249,10 +1304,6 @@ export const getBoqWithBobot = async (project_id, version_id) => {
     merged = merged.filter(item => changeMap[item.id]?.action !== "delete");
 
     // 5. Ambil dan tambahkan item baru hasil addendum secara efisien (Bulk Fetch)
-    const newItemIds = changes
-        .filter(x => x.action === "new")
-        .map(x => x.boq_item_id);
-
     if (newItemIds.length > 0) {
         const newBoqItems = await Boq.findAll({
             where: {
@@ -1260,8 +1311,20 @@ export const getBoqWithBobot = async (project_id, version_id) => {
             }
         });
 
-        // Masukkan semua item baru ke dalam array merged
-        newBoqItems.forEach(boq => merged.push(boq.toJSON()));
+        // Masukkan item baru satu kali, lalu tetap pakai perubahan terakhir jika ada.
+        newBoqItems.forEach(boq => {
+            const change = changeMap[boq.id];
+
+            if (change?.action === "delete") {
+                return;
+            }
+
+            merged.push({
+                ...boq.toJSON(),
+                volume: change?.volume ?? boq.volume,
+                harga_satuan: change?.harga_satuan ?? boq.harga_satuan
+            });
+        });
     }
 
     // 6. Hitung total bobot akhir

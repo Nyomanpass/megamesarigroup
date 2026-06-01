@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
-import { ArrowLeft, CalendarDays, BarChart as BarChartIcon, Zap, Calendar as CalIcon, CalendarPlus, Clock, CalendarRange } from "lucide-react";
+import { ArrowLeft, CalendarDays, BarChart as BarChartIcon, Zap, Calendar as CalIcon, CalendarPlus, Clock, CalendarRange, Info } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
@@ -143,6 +143,9 @@ export default function DailyPlanPage() {
     Kumulatif: Number(w.kumulatif).toFixed(2)
   }));
 
+  const hasAddendumWeekly =
+    weekly.some(item => item.is_addendum);
+
   const fetchProjectSetting = async () => {
     try {
 
@@ -193,7 +196,7 @@ export default function DailyPlanPage() {
 
   return (
     <>
-      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigate("/dashboard")}
@@ -258,6 +261,15 @@ export default function DailyPlanPage() {
 
 
         </div>
+
+        {hasAddendumWeekly && (
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex gap-3">
+            <Info size={18} className="mt-0.5 shrink-0" />
+            <span>
+              Progress berubah karena ada addendum. Bobot dan volume kontrak dihitung ulang berdasarkan kontrak terbaru, sehingga persentase progress dapat turun walaupun volume realisasi tidak berkurang.
+            </span>
+          </div>
+        )}
 
         {/* --- CHARTS OVERVIEW --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -392,6 +404,7 @@ export default function DailyPlanPage() {
                   <th className="py-4 px-4 text-center">Bulan</th>
                   <th className="py-4 px-4 text-right">Bobot Mingguan</th>
                   <th className="py-4 px-4 text-right text-indigo-600 font-bold">Bobot Harian</th>
+                  <th className="py-4 px-4 text-right text-blue-600 font-bold">Kumulatif</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -410,9 +423,10 @@ export default function DailyPlanPage() {
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-gray-500">{Number(item.bobot_mingguan).toFixed(3)}%</td>
                     <td className="py-3 px-4 text-right font-mono font-black text-indigo-600 bg-indigo-50/30">{Number(item.bobot_harian).toFixed(3)}%</td>
+                    <td className="py-3 px-4 text-right font-mono font-black text-blue-600 bg-blue-50/30">{Number(item.rencana_kumulatif || 0).toFixed(3)}%</td>
                   </tr>
                 ))}
-                {data.length === 0 && <tr><td colSpan={6} className="py-12 text-center text-gray-400 italic font-medium">Klik tombol Generate Plan untuk membuat jadwal tabel harian.</td></tr>}
+                {data.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-gray-400 italic font-medium">Klik tombol Generate Plan untuk membuat jadwal tabel harian.</td></tr>}
               </tbody>
             </table>
           </div>

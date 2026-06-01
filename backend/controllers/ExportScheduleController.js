@@ -1,36 +1,88 @@
 import ExcelJS from "exceljs";
 import { Project } from "../models/ProjectModel.js";
-import { Boq } from "../models/BoqModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
 import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { getBoqWithBobot } from "./BoqController.js";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 import axios from "axios";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { PythonShell } from "python-shell";
+import { Op } from "sequelize";
 
 export const exportTimeSchedule = async (req, res) => {
   try {
     const { project_id } = req.params;
+    const { version_id } = req.query;
 
     // =========================
     // 🔥 AMBIL DATA
     // =========================
     const project = await Project.findByPk(project_id);
 
-    const boq = await Boq.findAll({
-      where: { project_id },
-      order: [["id", "ASC"]],
-    });
+    const boq = await getBoqWithBobot(project_id, version_id);
 
     const weeks = await ProjectWeek.findAll({
       where: { project_id },
       order: [["minggu_ke", "ASC"]],
     });
 
-    const schedules = await Schedule.findAll({
-      where: { project_id },
-    });
+    let schedules = [];
+
+    if (version_id) {
+      const currentVersion = await ProjectVersionModel.findByPk(version_id);
+
+      if (!currentVersion) {
+        return res.status(404).json({
+          message: "Version tidak ditemukan"
+        });
+      }
+
+      if (currentVersion.revision === 0) {
+        schedules = await Schedule.findAll({
+          where: {
+            project_id,
+            version_id
+          }
+        });
+      } else {
+        const previousVersion = await ProjectVersionModel.findOne({
+          where: {
+            project_id,
+            revision: currentVersion.revision - 1
+          }
+        });
+
+        const oldSchedules = previousVersion
+          ? await Schedule.findAll({
+              where: {
+                project_id,
+                version_id: previousVersion.id,
+                minggu_ke: {
+                  [Op.lt]: currentVersion.effective_week
+                }
+              }
+            })
+          : [];
+
+        const newSchedules = await Schedule.findAll({
+          where: {
+            project_id,
+            version_id
+          }
+        });
+
+        schedules = [
+          ...oldSchedules,
+          ...newSchedules
+        ];
+      }
+    } else {
+      schedules = await Schedule.findAll({
+        where: { project_id }
+      });
+    }
 
     // =========================
     // 🔥 CREATE EXCEL
