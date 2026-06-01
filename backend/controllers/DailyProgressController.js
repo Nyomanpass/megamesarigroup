@@ -9,6 +9,83 @@ import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { ProjectItem } from "../models/ProjekItem.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
 import { DailyProgressPhoto } from "../models/DailyProgressPhotos.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { getBoqWithBobot } from "./BoqController.js";
+
+const getActiveVersionByWeek = async (
+  project_id,
+  minggu_ke
+) => {
+  const versions =
+    await ProjectVersionModel.findAll({
+      where: { project_id },
+      order: [["effective_week", "ASC"]]
+    });
+
+  let activeVersion = null;
+
+  versions.forEach((version) => {
+    if (
+      Number(minggu_ke) >=
+      Number(version.effective_week || 1)
+    ) {
+      activeVersion = version;
+    }
+  });
+
+  return activeVersion;
+};
+
+const getActiveBoqForProgress = async (
+  project_id,
+  boq_id,
+  minggu_ke
+) => {
+  const activeVersion =
+    await getActiveVersionByWeek(
+      Number(project_id),
+      Number(minggu_ke)
+    );
+
+  const activeBoqs =
+    await getBoqWithBobot(
+      Number(project_id),
+      activeVersion?.id
+    );
+
+  const activeBoq =
+    activeBoqs.find(
+      item =>
+        Number(item.id) === Number(boq_id) ||
+        Number(item.boq_item_id) === Number(boq_id)
+    );
+
+  if (!activeBoq) {
+    throw new Error(
+      "BOQ tidak aktif pada versi/adendum minggu ini"
+    );
+  }
+
+  const masterBoq =
+    await Boq.findByPk(
+      activeBoq.boq_item_id || activeBoq.id
+    );
+
+  return {
+    ...(
+      typeof activeBoq.toJSON === "function"
+        ? activeBoq.toJSON()
+        : activeBoq
+    ),
+    id: activeBoq.boq_item_id || activeBoq.id,
+    analisa_id:
+      activeBoq.analisa_id ??
+      masterBoq?.analisa_id,
+    volume:
+      activeBoq.volume ??
+      masterBoq?.volume
+  };
+};
 
 export const createDailyProgress = async (req, res) => {
   const t = await sequelize.transaction();
@@ -33,13 +110,6 @@ export const createDailyProgress = async (req, res) => {
     if (!boq_id) throw new Error("BOQ wajib dipilih");
     if (!inputVolume || inputVolume <= 0) throw new Error("Volume harus > 0");
 
-    const boq = await Boq.findByPk(boq_id);
-    if (!boq) throw new Error("BOQ tidak ditemukan");
-
-    if (!boq.analisa_id) {
-      throw new Error("BOQ belum punya analisa!");
-    }
-
     const plan = await DailyPlan.findOne({
       where: { project_id, hari_ke }
     });
@@ -49,6 +119,16 @@ export const createDailyProgress = async (req, res) => {
     }
 
     const tanggal = plan.tanggal;
+    const boq =
+      await getActiveBoqForProgress(
+        project_id,
+        boq_id,
+        plan.minggu_ke
+      );
+
+    if (!boq.analisa_id) {
+      throw new Error("BOQ belum punya analisa!");
+    }
 
     // =========================
     // 🔥 AMBIL ANALISA DETAIL
@@ -66,7 +146,7 @@ export const createDailyProgress = async (req, res) => {
     // =========================
     const progress = await DailyProgress.create({
       project_id,
-      boq_id,
+      boq_id: boq.id,
       tanggal,
       volume: inputVolume,
 
@@ -132,6 +212,7 @@ export const createDailyProgressWeekly =
       minggu_ke,
 
       persentase,
+      volume,
 
       cuaca,
       jam_mulai,
@@ -145,29 +226,6 @@ export const createDailyProgressWeekly =
     if (!boq_id) {
       throw new Error(
         "BOQ wajib dipilih"
-      );
-    }
-
-    if (
-      !persentase ||
-      persentase <= 0
-    ) {
-      throw new Error(
-        "Persentase wajib > 0"
-      );
-    }
-
-    // =========================
-    // AMBIL BOQ
-    // =========================
-    const boq =
-      await Boq.findByPk(
-        boq_id
-      );
-
-    if (!boq) {
-      throw new Error(
-        "BOQ tidak ditemukan"
       );
     }
 
@@ -195,6 +253,16 @@ export const createDailyProgressWeekly =
     }
 
     // =========================
+    // AMBIL BOQ AKTIF VERSI MINGGU INI
+    // =========================
+    const boq =
+      await getActiveBoqForProgress(
+        project_id,
+        boq_id,
+        minggu_ke
+      );
+
+    // =========================
     // HITUNG TARGET
     // =========================
     const totalVolume =
@@ -202,22 +270,109 @@ export const createDailyProgressWeekly =
         boq.volume || 0
       );
 
+    const isWholeNumber = (value) =>
+      Math.abs(Number(value) - Math.round(Number(value))) < 0.0000001;
+
+    const isIntegerVolume =
+      isWholeNumber(totalVolume);
+
+    if (
+      isIntegerVolume &&
+      volume !== undefined &&
+      volume !== null &&
+      volume !== ""
+    ) {
+      if (
+        !Number(volume) ||
+        Number(volume) <= 0
+      ) {
+        throw new Error(
+          "Jumlah volume wajib > 0"
+        );
+      }
+
+      if (!isWholeNumber(Number(volume))) {
+        throw new Error(
+          "Jumlah volume harus bilangan bulat"
+        );
+      }
+    } else if (
+      !persentase ||
+      Number(persentase) <= 0
+    ) {
+      throw new Error(
+        "Persentase wajib > 0"
+      );
+    }
+
     const targetVolume =
-      (
-        totalVolume *
-        Number(persentase)
-      ) / 100;
+      isIntegerVolume &&
+      volume !== undefined &&
+      volume !== null &&
+      volume !== ""
+        ? Number(volume)
+        : (
+            totalVolume *
+            Number(persentase)
+          ) / 100;
+
+    const targetPersentase =
+      totalVolume > 0
+        ? (targetVolume / totalVolume) * 100
+        : 0;
 
     // =========================
     // BAGI HARI
     // =========================
-    const volumePerHari =
-      Number(
-        (
-          targetVolume /
-          plans.length
-        ).toFixed(7)
+    const targetInt =
+      Math.round(targetVolume);
+
+    const dailyVolumes =
+      isIntegerVolume
+        ? plans.map((plan, index) => {
+
+            const baseVolume =
+              Math.floor(
+                targetInt / plans.length
+              );
+
+            const remainder =
+              targetInt % plans.length;
+
+            return {
+              plan,
+              volume:
+                baseVolume +
+                (
+                  index < remainder
+                    ? 1
+                    : 0
+                )
+            };
+
+          })
+        : plans.map((plan) => ({
+            plan,
+            volume:
+              Number(
+                (
+                  targetVolume /
+                  plans.length
+                ).toFixed(7)
+              )
+          }));
+
+    const filledDailyVolumes =
+      dailyVolumes.filter(
+        item =>
+          Number(item.volume) > 0
       );
+
+    if (!filledDailyVolumes.length) {
+      throw new Error(
+        "Target volume terlalu kecil untuk dibuat laporan mingguan"
+      );
+    }
 
     // =========================
     // AMBIL ANALISA
@@ -240,7 +395,13 @@ export const createDailyProgressWeekly =
     // =========================
     // LOOP HARI
     // =========================
-    for (const plan of plans) {
+    for (const item of filledDailyVolumes) {
+
+      const plan =
+        item.plan;
+
+      const volumeHari =
+        Number(item.volume);
 
       // =========================
       // CREATE HEADER
@@ -249,13 +410,13 @@ export const createDailyProgressWeekly =
         await DailyProgress.create({
 
           project_id,
-          boq_id,
+          boq_id: boq.id,
 
           tanggal:
             plan.tanggal,
 
           volume:
-            volumePerHari,
+            volumeHari,
 
           cuaca,
           jam_mulai,
@@ -283,7 +444,7 @@ export const createDailyProgressWeekly =
           Number(
             (
               koef *
-              volumePerHari
+              volumeHari
             ).toFixed(7)
           );
 
@@ -307,7 +468,7 @@ export const createDailyProgressWeekly =
           koef,
 
           volume:
-            volumePerHari,
+            volumeHari,
 
           hasil
 
@@ -330,10 +491,18 @@ export const createDailyProgressWeekly =
         "✅ Generate Weekly Progress berhasil",
 
       total_hari:
-        plans.length,
+        filledDailyVolumes.length,
 
       volume_per_hari:
-        volumePerHari
+        filledDailyVolumes.map(
+          item => item.volume
+        ),
+
+      target_volume:
+        Number(targetVolume.toFixed(7)),
+
+      persentase:
+        Number(targetPersentase.toFixed(3))
 
     });
 
@@ -376,13 +545,6 @@ export const updateDailyProgress = async (req, res) => {
     if (!boq_id) throw new Error("BOQ wajib dipilih");
     if (!inputVolume || inputVolume <= 0) throw new Error("Volume harus > 0");
 
-    const boq = await Boq.findByPk(boq_id);
-    if (!boq) throw new Error("BOQ tidak ditemukan");
-
-    if (!boq.analisa_id) {
-      throw new Error("BOQ belum punya analisa!");
-    }
-
     // =========================
     // 🔥 VALIDASI JAM (OPSIONAL TAPI BAGUS)
     // =========================
@@ -404,6 +566,16 @@ export const updateDailyProgress = async (req, res) => {
     }
 
     const tanggal = plan.tanggal;
+    const boq =
+      await getActiveBoqForProgress(
+        project_id,
+        boq_id,
+        plan.minggu_ke
+      );
+
+    if (!boq.analisa_id) {
+      throw new Error("BOQ belum punya analisa!");
+    }
 
     // =========================
     // 🔥 AMBIL ANALISA DETAIL
@@ -421,7 +593,7 @@ export const updateDailyProgress = async (req, res) => {
     // =========================
     await progress.update({
       project_id,
-      boq_id,
+      boq_id: boq.id,
       tanggal,
       volume: inputVolume,
 
@@ -566,4 +738,3 @@ export const deleteDailyProgress = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-

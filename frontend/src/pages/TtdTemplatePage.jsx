@@ -73,7 +73,7 @@ const handleSave = async () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 mx-auto">
       <h1 className="text-xl font-bold mb-4">TTD Template Manager</h1>
 
       <div className="flex gap-4 mb-4">

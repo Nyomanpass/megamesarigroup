@@ -3,6 +3,8 @@ import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { Schedule } from "../models/ScheduleModel.js";
 import { Op } from "sequelize";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { DailyProgress } from "../models/DailyProgressModel.js";
+import { getBoqWithBobot } from "./BoqController.js";
 import moment from "moment";
 import "moment/locale/id.js";
 
@@ -13,6 +15,319 @@ const getNamaHari = (date) => {
     .format("dddd")
     .toLowerCase();
 
+};
+
+const roundScheduleBobot = (value) =>
+  Number(Number(value || 0).toFixed(8));
+
+const isAddendumVersion = version =>
+  Number(version?.revision || 0) > 0 ||
+  Number(version?.effective_week || 1) > 1;
+
+const getRealCumulativeAtWeek = async (
+  project_id,
+  minggu_ke,
+  forcedVersionId = null
+) => {
+
+  if (Number(minggu_ke) <= 0) {
+    return 0;
+  }
+
+  const week =
+    await ProjectWeek.findOne({
+      where: {
+        project_id,
+        minggu_ke
+      }
+    });
+
+  if (!week) {
+    return 0;
+  }
+
+  let activeVersion = null;
+
+  if (forcedVersionId) {
+    activeVersion =
+      await ProjectVersionModel.findByPk(
+        forcedVersionId
+      );
+  } else {
+    const versions =
+      await ProjectVersionModel.findAll({
+        where: { project_id },
+        order: [["effective_week", "ASC"]]
+      });
+
+    for (const version of versions) {
+      if (
+        Number(minggu_ke) >=
+        Number(version.effective_week || 1)
+      ) {
+        activeVersion = version;
+      }
+    }
+  }
+
+  const boqs =
+    (
+      await getBoqWithBobot(
+        Number(project_id),
+        activeVersion?.id
+      )
+    ).filter(item => item.tipe === "item");
+
+  const progress =
+    await DailyProgress.findAll({
+      where: {
+        project_id: Number(project_id),
+        tanggal: {
+          [Op.lte]: week.end_date
+        }
+      }
+    });
+
+  const total =
+    boqs.reduce((sum, boq) => {
+      const boqId =
+        boq.boq_item_id || boq.id;
+      const volume =
+        Number(boq.volume || 0);
+      const bobot =
+        Number(boq.bobot || 0);
+
+      if (volume <= 0 || bobot <= 0) {
+        return sum;
+      }
+
+      const volumeTerpasang =
+        progress
+          .filter(
+            item =>
+              Number(item.boq_id) ===
+              Number(boqId)
+          )
+          .reduce(
+            (progressSum, item) =>
+              progressSum +
+              Number(item.volume || 0),
+            0
+          );
+
+      return sum +
+        Math.min(volumeTerpasang / volume, 1) *
+        bobot;
+    }, 0);
+
+  return Number(total.toFixed(3));
+};
+
+const normalizeAddendumScheduleItems =
+  async (
+    project_id,
+    currentVersion,
+    items
+  ) => {
+
+  return items;
+};
+
+export const buildSchedulePlanTimeline = async (
+  project_id,
+  schedules,
+  versions
+) => {
+  const perWeek = {};
+  const weekStart = {};
+  const cumulative = {};
+
+  const sortedVersions = [...versions].sort(
+    (a, b) =>
+      Number(a.revision || 0) -
+      Number(b.revision || 0)
+  );
+
+  const addendumVersions =
+    sortedVersions.filter(
+      v => isAddendumVersion(v)
+    );
+
+  schedules.forEach((item) => {
+    const mingguKe = Number(item.minggu_ke);
+
+    if (!perWeek[mingguKe]) {
+      perWeek[mingguKe] = 0;
+    }
+
+    perWeek[mingguKe] += Number(item.bobot || 0);
+  });
+
+  Object.keys(perWeek).forEach((mingguKe) => {
+    perWeek[mingguKe] = Number(
+      perWeek[mingguKe].toFixed(3)
+    );
+  });
+
+  // =========================
+  // TANPA ADDENDUM
+  // =========================
+  if (addendumVersions.length === 0) {
+    let running = 0;
+
+    Object.keys(perWeek)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .forEach((mingguKe) => {
+        weekStart[mingguKe] = Number(running.toFixed(3));
+
+        running += Number(perWeek[mingguKe] || 0);
+        running = Math.min(running, 100);
+
+        cumulative[mingguKe] = Number(running.toFixed(3));
+      });
+
+    return {
+      perWeek,
+      weekStart,
+      cumulative
+    };
+  }
+
+  // =========================
+  // SEBELUM ADDENDUM PERTAMA
+  // =========================
+  const firstAddendumWeek =
+    Number(addendumVersions[0].effective_week || 1);
+
+  let running = 0;
+
+  Object.keys(perWeek)
+    .map(Number)
+    .filter(mingguKe => mingguKe < firstAddendumWeek)
+    .sort((a, b) => a - b)
+    .forEach((mingguKe) => {
+      weekStart[mingguKe] = Number(running.toFixed(3));
+
+      running += Number(perWeek[mingguKe] || 0);
+      running = Math.min(running, 100);
+
+      cumulative[mingguKe] = Number(running.toFixed(3));
+    });
+
+  // =========================
+  // MULAI ADDENDUM
+  // SEED HARUS DARI REAL SEBELUM ADDENDUM
+  // =========================
+  for (let i = 0; i < addendumVersions.length; i++) {
+    const version = addendumVersions[i];
+    const nextVersion = addendumVersions[i + 1];
+
+    const startWeek = Number(version.effective_week || 1);
+    const endWeek = nextVersion
+      ? Number(nextVersion.effective_week || 1) - 1
+      : Infinity;
+
+    let seed = await getRealCumulativeAtWeek(
+      project_id,
+      startWeek - 1,
+      version.id
+    );
+
+    if (!seed || seed <= 0) {
+      seed = cumulative[startWeek - 1] || running || 0;
+    }
+
+    let addendumRunning = Number(seed);
+
+    Object.keys(perWeek)
+      .map(Number)
+      .filter(
+        mingguKe =>
+          mingguKe >= startWeek &&
+          mingguKe <= endWeek
+      )
+      .sort((a, b) => a - b)
+      .forEach((mingguKe) => {
+        weekStart[mingguKe] = Number(
+          addendumRunning.toFixed(3)
+        );
+
+        addendumRunning += Number(perWeek[mingguKe] || 0);
+        addendumRunning = Math.min(addendumRunning, 100);
+
+        cumulative[mingguKe] = Number(
+          addendumRunning.toFixed(3)
+        );
+      });
+  }
+
+  return {
+    perWeek,
+    weekStart,
+    cumulative
+  };
+};
+
+
+export const getScheduleChainByProject = async (project_id) => {
+  const versions = await ProjectVersionModel.findAll({
+    where: { project_id },
+    order: [["revision", "ASC"]]
+  });
+
+  if (!versions.length) return [];
+
+  const firstAddendumWeek =
+    versions
+      .filter(isAddendumVersion)
+      .map(version =>
+        Number(version.effective_week || 1)
+      )
+      .sort((a, b) => a - b)[0] || null;
+
+  const finalData = [];
+
+  for (let i = 0; i < versions.length; i++) {
+    const version = versions[i];
+    const nextVersion = versions[i + 1];
+
+    const where = {
+      project_id,
+      version_id: version.id
+    };
+
+    const weekWhere = {};
+
+    if (isAddendumVersion(version)) {
+      weekWhere[Op.gte] = Number(version.effective_week || 1);
+    } else if (firstAddendumWeek) {
+      weekWhere[Op.lt] = firstAddendumWeek;
+    }
+
+    if (
+      nextVersion &&
+      isAddendumVersion(version)
+    ) {
+      weekWhere[Op.lt] = Number(nextVersion.effective_week || 1);
+    }
+
+    if (Reflect.ownKeys(weekWhere).length > 0) {
+      where.minggu_ke = weekWhere;
+    }
+
+    const schedules = await Schedule.findAll({
+      where,
+      order: [
+        ["minggu_ke", "ASC"],
+        ["boq_id", "ASC"]
+      ]
+    });
+
+    finalData.push(...schedules);
+  }
+
+  return finalData;
 };
 
 export const generateWeeks = async (req, res) => {
@@ -191,86 +506,88 @@ export const getScheduleByProject = async (req, res) => {
       });
     }
 
-    // =========================
-    // JIKA REVISION 0
-    // =========================
-    if (currentVersion.revision === 0) {
+    const versionChain =
+      await ProjectVersionModel.findAll({
+        where: {
+          project_id,
+          revision: {
+            [Op.lte]:
+              currentVersion.revision
+          }
+        },
+        order: [
+          ["revision", "ASC"]
+        ]
+      });
 
-      const data =
+    const finalData = [];
+
+    for (
+      let i = 0;
+      i < versionChain.length;
+      i++
+    ) {
+
+      const version =
+        versionChain[i];
+
+      const nextVersion =
+        versionChain[i + 1];
+
+      const weekWhere = {};
+
+      if (isAddendumVersion(version)) {
+        weekWhere[Op.gte] =
+          Number(
+            version.effective_week
+          );
+      } else {
+        const firstAddendumWeek =
+          versionChain
+            .filter(isAddendumVersion)
+            .map(item =>
+              Number(item.effective_week || 1)
+            )
+            .sort((a, b) => a - b)[0] || null;
+
+        if (firstAddendumWeek) {
+          weekWhere[Op.lt] =
+            firstAddendumWeek;
+        }
+      }
+
+      if (
+        nextVersion &&
+        isAddendumVersion(version)
+      ) {
+        weekWhere[Op.lt] =
+          Number(
+            nextVersion.effective_week
+          );
+      }
+
+      const where = {
+        project_id,
+        version_id:
+          version.id
+      };
+
+      if (
+        Reflect.ownKeys(weekWhere).length > 0
+      ) {
+        where.minggu_ke =
+          weekWhere;
+      }
+
+      const schedules =
         await Schedule.findAll({
-
-          where: {
-            project_id,
-            version_id
-          },
-
-          order: [
-            ["minggu_ke", "ASC"]
-          ]
+          where
         });
 
-      return res.json(data);
+      finalData.push(
+        ...schedules
+      );
     }
-
-    // =========================
-    // AMBIL VERSION SEBELUMNYA
-    // =========================
-    const previousVersion =
-      await ProjectVersionModel.findOne({
-
-        where: {
-
-          project_id,
-
-          revision:
-            currentVersion.revision - 1
-        }
-      });
-
-    // =========================
-    // AMBIL JADWAL LAMA
-    // HANYA < EFFECTIVE WEEK
-    // =========================
-    const oldSchedules =
-      await Schedule.findAll({
-
-        where: {
-
-          project_id,
-
-          version_id:
-            previousVersion.id,
-
-          minggu_ke: {
-            [Op.lt]:
-              currentVersion.effective_week
-          }
-        }
-      });
-
-    // =========================
-    // AMBIL JADWAL ADDENDUM
-    // =========================
-    const newSchedules =
-      await Schedule.findAll({
-
-        where: {
-
-          project_id,
-
-          version_id
-        }
-      });
-
-    // =========================
-    // GABUNGKAN
-    // =========================
-    const finalData = [
-
-      ...oldSchedules,
-
-      ...newSchedules
-    ];
 
     // =========================
     // SORT
@@ -313,6 +630,16 @@ async (req, res) => {
   } = req.body;
 
   try {
+    const currentVersion =
+      await ProjectVersionModel.findByPk(
+        version_id
+      );
+
+    if (!currentVersion) {
+      return res.status(404).json({
+        message: "Version tidak ditemukan"
+      });
+    }
 
     // ==========================
     // HAPUS SCHEDULE
@@ -338,8 +665,24 @@ async (req, res) => {
       items.length > 0
     ) {
 
+      const itemsToSave =
+        isAddendumVersion(currentVersion)
+          ? items.filter(
+              item =>
+                Number(item.minggu_ke) >=
+                Number(currentVersion.effective_week)
+            )
+          : items;
+
+      const normalizedItems =
+        await normalizeAddendumScheduleItems(
+          Number(project_id),
+          currentVersion,
+          itemsToSave
+        );
+
       const formatted =
-        items.map((item) => ({
+        normalizedItems.map((item) => ({
 
           project_id,
 

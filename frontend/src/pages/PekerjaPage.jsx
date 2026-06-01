@@ -307,7 +307,7 @@ export default function PekerjaPage() {
           className="flex items-center gap-2 cursor-pointer bg-secondary text-white border-2 border-tranpanret hover:bg-transparent hover:text-secondary transition-all bg-border-secondary px-5 py-2.5 rounded-md font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap"
         >
           <Plus size={24} />
-          Tambah Material
+          Tambah Tenaga
         </button>
 
       </div>

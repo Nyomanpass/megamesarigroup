@@ -5,6 +5,296 @@ import { getBoqStructured } from "./BoqController.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import { BoqVersionChange } from "../models/BoqVersionChangeModel.js";
 import { getBoqWithBobot } from "./BoqController.js";
+import { Schedule } from "../models/ScheduleModel.js";
+import { ProjectWeek } from "../models/ProjectWeekModel.js";
+import { Op } from "sequelize";
+
+const round3 = value =>
+  Number(Number(value || 0).toFixed(3));
+
+const getScheduleChainByProject = async (project_id) => {
+  const versions =
+    await ProjectVersionModel.findAll({
+      where: { project_id },
+      order: [["revision", "ASC"]]
+    });
+
+  if (versions.length === 0) {
+    return Schedule.findAll({
+      where: { project_id },
+      order: [["minggu_ke", "ASC"]]
+    });
+  }
+
+  const result = [];
+
+  for (let i = 0; i < versions.length; i++) {
+    const version = versions[i];
+    const nextVersion = versions[i + 1];
+    const weekWhere = {};
+
+    if (Number(version.revision || 0) > 0) {
+      weekWhere[Op.gte] =
+        Number(version.effective_week || 1);
+    }
+
+    if (nextVersion) {
+      weekWhere[Op.lt] =
+        Number(nextVersion.effective_week || 1);
+    }
+
+    const where = {
+      project_id,
+      version_id: version.id
+    };
+
+    if (Reflect.ownKeys(weekWhere).length > 0) {
+      where.minggu_ke = weekWhere;
+    }
+
+    const schedules =
+      await Schedule.findAll({ where });
+
+    result.push(...schedules);
+  }
+
+  return result.sort((a, b) => {
+    if (a.minggu_ke !== b.minggu_ke) {
+      return a.minggu_ke - b.minggu_ke;
+    }
+
+    return a.boq_id - b.boq_id;
+  });
+};
+
+const getRealCumulativeAtWeek = async (
+  project_id,
+  minggu_ke,
+  forcedVersionId = null
+) => {
+  if (Number(minggu_ke) <= 0) {
+    return 0;
+  }
+
+  const week =
+    await ProjectWeek.findOne({
+      where: {
+        project_id,
+        minggu_ke
+      }
+    });
+
+  if (!week) {
+    return 0;
+  }
+
+  let activeVersion = null;
+
+  if (forcedVersionId) {
+    activeVersion =
+      await ProjectVersionModel.findByPk(
+        forcedVersionId
+      );
+  } else {
+    const versions =
+      await ProjectVersionModel.findAll({
+        where: { project_id },
+        order: [["effective_week", "ASC"]]
+      });
+
+    for (const version of versions) {
+      if (
+        Number(minggu_ke) >=
+        Number(version.effective_week || 1)
+      ) {
+        activeVersion = version;
+      }
+    }
+  }
+
+  const boqs =
+    (
+      await getBoqWithBobot(
+        Number(project_id),
+        activeVersion?.id
+      )
+    ).filter(item => item.tipe === "item");
+
+  const progress =
+    await DailyProgress.findAll({
+      where: {
+        project_id: Number(project_id),
+        tanggal: {
+          [Op.lte]: week.end_date
+        }
+      }
+    });
+
+  const total =
+    boqs.reduce((sum, boq) => {
+      const boqId =
+        boq.boq_item_id || boq.id;
+      const volume =
+        Number(boq.volume || 0);
+      const bobot =
+        Number(boq.bobot || 0);
+
+      if (volume <= 0 || bobot <= 0) {
+        return sum;
+      }
+
+      const volumeTerpasang =
+        progress
+          .filter(
+            item =>
+              Number(item.boq_id) ===
+              Number(boqId)
+          )
+          .reduce(
+            (progressSum, item) =>
+              progressSum +
+              Number(item.volume || 0),
+            0
+          );
+
+      return sum +
+        Math.min(volumeTerpasang / volume, 1) *
+        bobot;
+    }, 0);
+
+  return round3(total);
+};
+
+const buildAddendumPlanTimeline = async (
+  project_id,
+  weekNumbers
+) => {
+  const schedules =
+    await getScheduleChainByProject(project_id);
+
+  const versions =
+    await ProjectVersionModel.findAll({
+      where: { project_id },
+      order: [["revision", "ASC"]]
+    });
+
+  const rawByWeek = {};
+
+  schedules.forEach((schedule) => {
+    const week =
+      Number(schedule.minggu_ke);
+
+    rawByWeek[week] =
+      round3(
+        Number(rawByWeek[week] || 0) +
+        Number(schedule.bobot || 0)
+      );
+  });
+
+  const perWeek = { ...rawByWeek };
+  const cumulative = {};
+  const sortedWeeks =
+    [...weekNumbers]
+      .map(Number)
+      .sort((a, b) => a - b);
+
+  const addendumVersions =
+    versions
+      .filter(
+        version =>
+          Number(version.revision || 0) > 0
+      )
+      .sort(
+        (a, b) =>
+          Number(a.revision || 0) -
+          Number(b.revision || 0)
+      );
+
+  for (let i = 0; i < addendumVersions.length; i++) {
+    const version = addendumVersions[i];
+    const nextVersion = addendumVersions[i + 1];
+    const startWeek =
+      Number(version.effective_week || 1);
+    const endWeek =
+      nextVersion
+        ? Number(nextVersion.effective_week || 1) - 1
+        : Math.max(...sortedWeeks, startWeek);
+    const periodWeeks =
+      sortedWeeks.filter(
+        week =>
+          week >= startWeek &&
+          week <= endWeek
+      );
+    const totalRaw =
+      periodWeeks.reduce(
+        (sum, week) =>
+          sum + Number(rawByWeek[week] || 0),
+        0
+      );
+
+    if (totalRaw <= 0) {
+      continue;
+    }
+
+    const seed =
+      await getRealCumulativeAtWeek(
+        project_id,
+        startWeek - 1,
+        version.id
+      );
+    let running = 0;
+
+    periodWeeks.forEach((week) => {
+      running =
+        round3(
+          running +
+          Number(perWeek[week] || 0)
+        );
+
+      cumulative[week] =
+        round3(
+          Math.min(
+            seed + running,
+            100
+          )
+        );
+    });
+  }
+
+  let normalRunning = 0;
+
+  sortedWeeks.forEach((week) => {
+    const inAddendum =
+      addendumVersions.some((version, index) => {
+        const nextVersion =
+          addendumVersions[index + 1];
+        const startWeek =
+          Number(version.effective_week || 1);
+        const endWeek =
+          nextVersion
+            ? Number(nextVersion.effective_week || 1) - 1
+            : Infinity;
+
+        return week >= startWeek && week <= endWeek;
+      });
+
+    if (!inAddendum) {
+      normalRunning =
+        round3(
+          normalRunning +
+          Number(perWeek[week] || 0)
+        );
+
+      cumulative[week] =
+        normalRunning;
+    }
+  });
+
+  return {
+    perWeek,
+    cumulative
+  };
+};
 
 export const getWeeklyReport = async (req, res) => {
   try {
@@ -22,6 +312,10 @@ export const getWeeklyReport = async (req, res) => {
     const progress = await DailyProgress.findAll({
       where: { project_id: Number(project_id) }
     });
+
+    if (plans.length === 0) {
+      return res.json([]);
+    }
 
     const versions = await ProjectVersionModel.findAll({
       where: {
@@ -45,6 +339,12 @@ export const getWeeklyReport = async (req, res) => {
 
     });
 
+    const planTimeline =
+      await buildAddendumPlanTimeline(
+        Number(project_id),
+        Object.keys(group).map(Number)
+      );
+
     const result=[];
 
     const totalHari =
@@ -58,7 +358,6 @@ export const getWeeklyReport = async (req, res) => {
     const kumulatifPerBoq={};
 
     let kumulatifProject=0;
-    let kumulatifRencana=0;
 
     // =========================
     // 🔥 LOOP MINGGU
@@ -94,9 +393,14 @@ export const getWeeklyReport = async (req, res) => {
       ) / (1000 * 60 * 60 * 24) + 1;
 
     const sisa_waktu = totalHari - waktu_berjalan;
-    const rencanaMingguan = Number(items[0]?.bobot_mingguan || 0);
+    const rencanaMingguan =
+      round3(
+        planTimeline.perWeek[Number(minggu)] ??
+        Number(items[0]?.bobot_mingguan || 0)
+      );
 
     let totalKumulatif = 0;
+    let totalMingguan = 0;
     const laporan = [];
 
     // ==========================================
@@ -128,10 +432,32 @@ export const getWeeklyReport = async (req, res) => {
 
         const persenKumulatif = total > 0 ? Math.min(sdIni / total, 1) : 0;
         const progresProyek = persenKumulatif * bobot;
+        const sdSebelumMingguIni =
+          Math.max(
+            sdIni - mingguIni,
+            0
+          );
+        const persenSebelumMingguIni =
+          total > 0
+            ? Math.min(sdSebelumMingguIni / total, 1)
+            : 0;
+        const progresSebelumMingguIni =
+          persenSebelumMingguIni * bobot;
+        const progresMingguan =
+          Math.max(
+            progresProyek -
+            progresSebelumMingguIni,
+            0
+          );
 
         totalKumulatif += progresProyek;
+        totalMingguan += progresMingguan;
 
         laporan.push({
+            boq_id: boqId,
+            parent_id: boq.parent_id,
+            tipe: boq.tipe,
+            kode: boq.kode,
             uraian: boq.uraian,
             level: boq.level,
             bobot,
@@ -148,17 +474,38 @@ export const getWeeklyReport = async (req, res) => {
     // ==========================================
     // 4. SUMMARY AKUMULASI & DEVIASI MINGGUAN
     // ==========================================
-    const realMingguan = Number(
-   (totalKumulatif - kumulatifProject).toFixed(3)
-    );
+    const realMingguan =
+      Number(
+        totalMingguan.toFixed(3)
+      );
 
-    kumulatifProject = Number(
-      totalKumulatif.toFixed(3)
-    );
+    const rawKumulatif =
+      Number(
+        totalKumulatif.toFixed(3)
+      );
 
-    kumulatifRencana = Number(
-      (kumulatifRencana + rencanaMingguan).toFixed(3)
-    );
+    const penyesuaianAdendum =
+      Number(
+        (
+          rawKumulatif -
+          kumulatifProject -
+          totalMingguan
+        ).toFixed(3)
+      );
+
+    kumulatifProject =
+      Number(
+        Math.min(
+          rawKumulatif,
+          100
+        ).toFixed(3)
+      );
+
+    const rencanaKumulatif =
+      round3(
+        planTimeline.cumulative[Number(minggu)] ??
+        rencanaMingguan
+      );
 
     result.push({
         minggu_ke: Number(minggu),
@@ -169,9 +516,15 @@ export const getWeeklyReport = async (req, res) => {
         sisa_waktu,
         rencana_mingguan: rencanaMingguan,
         real_mingguan: realMingguan,
-        rencana_kumulatif: kumulatifRencana,
+        penyesuaian_adendum: penyesuaianAdendum,
+        rencana_kumulatif: rencanaKumulatif,
         real_kumulatif: kumulatifProject,
-        deviasi: kumulatifProject - kumulatifRencana,
+        deviasi: round3(
+          kumulatifProject - rencanaKumulatif
+        ),
+        deviasiMingguan: round3(
+          realMingguan - rencanaMingguan
+        ),
         data: laporan
     });
 }
@@ -377,6 +730,7 @@ export const getMonthlyReport = async (req, res) => {
           );
 
       let totalKumulatif = 0;
+      let totalBulanan = 0;
 
       const laporan = [];
 
@@ -484,10 +838,49 @@ export const getMonthlyReport = async (req, res) => {
           persenKumulatif *
           bobot;
 
+        const sdSebelumBulanIni =
+          Math.max(
+            sdIni - bulanIni,
+            0
+          );
+
+        const persenSebelumBulanIni =
+          total > 0
+            ? Math.min(
+                sdSebelumBulanIni / total,
+                1
+              )
+            : 0;
+
+        const progresSebelumBulanIni =
+          persenSebelumBulanIni *
+          bobot;
+
+        const progresBulanan =
+          Math.max(
+            progresProyek -
+            progresSebelumBulanIni,
+            0
+          );
+
         totalKumulatif +=
           progresProyek;
 
+        totalBulanan +=
+          progresBulanan;
+
         laporan.push({
+          boq_id:
+            boqId,
+
+          parent_id:
+            boq.parent_id,
+
+          tipe:
+            boq.tipe,
+
+          kode:
+            boq.kode,
 
           uraian:
             boq.uraian,
@@ -533,17 +926,22 @@ export const getMonthlyReport = async (req, res) => {
 
       }
 
+      const rawKumulatif =
+        Number(
+          totalKumulatif.toFixed(3)
+        );
+
       const realBulanan =
         Number(
-          (
-            totalKumulatif -
-            kumulatifProject
-          ).toFixed(3)
+          totalBulanan.toFixed(3)
         );
 
       kumulatifProject =
         Number(
-          totalKumulatif.toFixed(3)
+          Math.min(
+            rawKumulatif,
+            100
+          ).toFixed(3)
         );
 
       kumulatifRencana =
@@ -974,6 +1372,86 @@ export const getDailyReport = async (req, res) => {
 
     );
 
+    const buildResourceTotal = (tipe) => {
+
+      const totals = {};
+
+      result.forEach((reportItem) => {
+
+        const resources = [
+          ...reportItem.materials,
+          ...reportItem.pekerja,
+          ...reportItem.peralatan
+        ];
+
+        resources
+          .filter(item => item.tipe === tipe)
+          .forEach((item) => {
+
+            const itemId =
+              item.item_id ||
+              item.item?.id ||
+              item.nama;
+
+            const key =
+              `${itemId}-${item.satuan || ""}`;
+
+            if (!totals[key]) {
+              totals[key] = {
+                item_id:
+                item.item_id ||
+                item.item?.id ||
+                null,
+
+                nama:
+                item.nama,
+
+                satuan:
+                item.satuan,
+
+                total:
+                0
+              };
+            }
+
+            totals[key].total +=
+              Number(item.hasil || 0);
+
+          });
+
+      });
+
+      return Object.values(totals)
+        .map(item => ({
+          ...item,
+          total:
+          Number(
+            item.total.toFixed(7)
+          )
+        }))
+        .sort((a, b) =>
+          String(a.nama || "")
+            .localeCompare(
+              String(b.nama || ""),
+              "id",
+              {
+                numeric: true,
+                sensitivity: "base"
+              }
+            )
+        );
+
+    };
+
+    const total_material =
+      buildResourceTotal("BAHAN");
+
+    const total_pekerja =
+      buildResourceTotal("TENAGA");
+
+    const total_peralatan =
+      buildResourceTotal("ALAT");
+
     // =========================
     // RESPONSE
     // =========================
@@ -1001,9 +1479,9 @@ export const getDailyReport = async (req, res) => {
         .toFixed(3)
       ),
 
-      total_material:[],
-      total_pekerja:[],
-      total_peralatan:[]
+      total_material,
+      total_pekerja,
+      total_peralatan
 
     });
 

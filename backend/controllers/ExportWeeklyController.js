@@ -10,6 +10,72 @@ import { DailyProgressPhoto } from "../models/DailyProgressPhotos.js";
 import { DailyProgress } from "../models/DailyProgressModel.js";
 import { Boq } from "../models/BoqModel.js";
 
+const buildWeeklyGroupedRows = (reportRows = [], boqRows = []) => {
+  const boqMap = new Map();
+  const printedHeaders = new Set();
+  const printedSubheaders = new Set();
+  const groupedRows = [];
+
+  boqRows.forEach((boq) => {
+    boqMap.set(Number(boq.id), boq);
+  });
+
+  const getParents = (boq) => {
+    let header = null;
+    let subheader = null;
+    let current = boq;
+
+    while (current?.parent_id) {
+      current = boqMap.get(Number(current.parent_id));
+
+      if (current?.tipe === "subheader") {
+        subheader = current;
+      }
+
+      if (current?.tipe === "header") {
+        header = current;
+      }
+    }
+
+    return { header, subheader };
+  };
+
+  reportRows.forEach((reportRow) => {
+    const boq = boqMap.get(Number(reportRow.boq_id));
+    if (!boq) {
+      groupedRows.push(reportRow);
+      return;
+    }
+
+    const { header, subheader } = getParents(boq);
+
+    if (header && !printedHeaders.has(Number(header.id))) {
+      groupedRows.push({
+        boq_id: header.id,
+        tipe: "header",
+        uraian: header.uraian
+      });
+      printedHeaders.add(Number(header.id));
+    }
+
+    if (subheader && !printedSubheaders.has(Number(subheader.id))) {
+      groupedRows.push({
+        boq_id: subheader.id,
+        tipe: "subheader",
+        uraian: subheader.uraian
+      });
+      printedSubheaders.add(Number(subheader.id));
+    }
+
+    groupedRows.push({
+      ...reportRow,
+      tipe: "item"
+    });
+  });
+
+  return groupedRows.length ? groupedRows : reportRows;
+};
+
 
 export const exportWeeklyReportExcel = async (req, res) => {
   try {
@@ -36,6 +102,12 @@ export const exportWeeklyReportExcel = async (req, res) => {
     if (!dataMinggu) {
       return res.status(404).json({ message: "Data minggu tidak ditemukan" });
     }
+
+    const boqRows = await Boq.findAll({
+      where: { project_id },
+      order: [["id", "ASC"]]
+    });
+    const groupedWeeklyData = buildWeeklyGroupedRows(dataMinggu.data, boqRows);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Mingguan");
@@ -663,7 +735,7 @@ let lastTipe = null;
 
 const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
 
-dataMinggu.data.forEach((item) => {
+groupedWeeklyData.forEach((item) => {
 
   // =========================
   // 🔥 HEADER
@@ -707,7 +779,7 @@ dataMinggu.data.forEach((item) => {
       sheet.getRow(rowIndex).height = 15;
     }
 
-    sheet.getCell(`A${rowIndex}`).value = roman[nomorSub - 1];
+    sheet.getCell(`A${rowIndex}`).value = roman[nomorSub - 1] || nomorSub;
     sheet.getCell(`B${rowIndex}`).value = item.uraian || "-";
 
     mergeBE(rowIndex);
@@ -1455,6 +1527,12 @@ export const exportWeeklyReportPDF = async (req, res) => {
       return res.status(404).json({ message: "Data minggu tidak ditemukan" });
     }
 
+    const boqRows = await Boq.findAll({
+      where: { project_id },
+      order: [["id", "ASC"]]
+    });
+    const groupedWeeklyData = buildWeeklyGroupedRows(dataMinggu.data, boqRows);
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Mingguan");
 
@@ -2097,7 +2175,7 @@ let lastTipe = null;
 
 const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
 
-dataMinggu.data.forEach((item) => {
+groupedWeeklyData.forEach((item) => {
 
   // =========================
   // 🔥 HEADER
@@ -2141,7 +2219,7 @@ dataMinggu.data.forEach((item) => {
       sheet.getRow(rowIndex).height = 15;
     }
 
-    sheet.getCell(`A${rowIndex}`).value = roman[nomorSub - 1];
+    sheet.getCell(`A${rowIndex}`).value = roman[nomorSub - 1] || nomorSub;
     sheet.getCell(`B${rowIndex}`).value = item.uraian || "-";
 
     mergeBE(rowIndex);

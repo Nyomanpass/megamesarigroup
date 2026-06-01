@@ -128,7 +128,12 @@ export default function BoqPage() {
 
       alert("Addendum berhasil disimpan");
       setShowVersionModal(false);
-      fetchVersionChanges(selectedVersion.id);
+      setEditingVersionChange(null);
+
+      await Promise.all([
+        fetchBoq(selectedVersion.id),
+        fetchVersionChanges(selectedVersion.id)
+      ]);
 
     } catch (error) {
       console.error(error);
@@ -142,7 +147,13 @@ export default function BoqPage() {
 
     try {
       await api.delete(`/boq-version-changes/${id}`);
-      fetchVersionChanges(selectedVersion.id);
+      setShowVersionModal(false);
+      setEditingVersionChange(null);
+
+      await Promise.all([
+        fetchBoq(selectedVersion.id),
+        fetchVersionChanges(selectedVersion.id)
+      ]);
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.message || "Gagal menghapus data addendum");
@@ -186,7 +197,7 @@ export default function BoqPage() {
       setSelectedAnalisa("");
       setSelectedBoq(null);
 
-      fetchBoq(); // 🔥 refresh tabel
+      fetchBoq(selectedVersion?.id); // 🔥 refresh tabel
 
     } catch (err) {
       console.error(err);
@@ -239,7 +250,7 @@ export default function BoqPage() {
         { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
       ]);
 
-      fetchBoq();
+      fetchBoq(selectedVersion?.id);
 
     } catch (err) {
       console.error(err);
@@ -272,7 +283,7 @@ export default function BoqPage() {
       alert(res.data.message);
 
       setImportFile(null);
-      fetchBoq(); // 🔥 reload tabel
+      fetchBoq(selectedVersion?.id); // 🔥 reload tabel
 
     } catch (err) {
       console.error(err);
@@ -333,7 +344,7 @@ export default function BoqPage() {
       await api.delete(`/boq/${id}`);
 
       alert("Berhasil hapus");
-      fetchBoq(); // 🔥 reload
+      fetchBoq(selectedVersion?.id); // 🔥 reload
 
     } catch (err) {
       console.error(err);
@@ -404,7 +415,7 @@ export default function BoqPage() {
         tipe: "item"
       });
 
-      fetchBoq();
+      fetchBoq(selectedVersion?.id);
 
     } catch (err) {
       console.error(err);
@@ -426,10 +437,13 @@ export default function BoqPage() {
 const fetchBoq =
   async (versionId) => {
 
+    const activeVersionId =
+      versionId || selectedVersion?.id || 0;
+
     const res =
       await api.get(
 
-        `/boq/project/${id}/${versionId}`
+        `/boq/project/${id}/${activeVersionId}`
 
       );
 
@@ -559,8 +573,16 @@ const fetchBoq =
       setVersions(res.data.data);
       // 🔥 default MC0
       if (res.data.data.length > 0) {
+        const currentVersion =
+          selectedVersion
+            ? res.data.data.find(
+                version =>
+                  Number(version.id) === Number(selectedVersion.id)
+              )
+            : null;
+
         setSelectedVersion(
-          res.data.data[0]
+          currentVersion || res.data.data[0]
         );
       }
     } catch (error) {
@@ -594,6 +616,9 @@ const fetchBoq =
   useEffect(() => {
 
   if (selectedVersion) {
+    setIsAddendumMode(
+      selectedVersion.revision > 0
+    );
 
     fetchBoq(
       selectedVersion.id
@@ -607,15 +632,6 @@ const fetchBoq =
 
 }, [selectedVersion]);
 
-  useEffect(() => {
-
-  if (selectedVersion) {
-      fetchVersionChanges(
-        selectedVersion.id
-      );
-    }
-  }, [selectedVersion]);
-
 
   if (!project) {
     return (
@@ -624,6 +640,16 @@ const fetchBoq =
       </div>
     );
   }
+
+  const selectedVersionLabel =
+    selectedVersion?.revision > 0
+      ? selectedVersion.code
+      : "MC0";
+
+  const selectedVersionDescription =
+    selectedVersion?.revision > 0
+      ? `Addendum aktif mulai minggu ke-${selectedVersion.effective_week || "-"}`
+      : "Baseline / kontrak awal";
 
 const handleAddendumItem = async () => {
     try {
@@ -673,7 +699,7 @@ const handleAddendumItem = async () => {
 
   return (
     <>
-      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigate("/dashboard")}
@@ -691,9 +717,12 @@ const handleAddendumItem = async () => {
               const version =
                 versions.find(
                   v =>
-                    v.id === Number(e.target.value)
+                    String(v.id) === e.target.value
                 );
 
+              setVersionChanges([]);
+              setBoq([]);
+              setIsAddendumMode(version?.revision > 0);
               setSelectedVersion(version);
 
             }}
@@ -703,10 +732,27 @@ const handleAddendumItem = async () => {
                 key={v.id}
                 value={v.id}
               >
-                {v.code}
+                {v.revision > 0
+                  ? `${v.code} - Addendum minggu ${v.effective_week}`
+                  : `${v.code} - Baseline`}
               </option>
             ))}
           </select>
+
+          {selectedVersion && (
+            <div
+              className={`
+                px-4 py-2 rounded-xl border text-sm font-bold
+                ${
+                  selectedVersion.revision > 0
+                    ? "bg-orange-50 border-orange-200 text-orange-700"
+                    : "bg-blue-50 border-blue-200 text-blue-700"
+                }
+              `}
+            >
+              Mode: {selectedVersionLabel}
+            </div>
+          )}
 
             {/* Import Excel section */}
             <div className="flex flex-col items-end relative">
@@ -761,8 +807,15 @@ const handleAddendumItem = async () => {
                 </h1>
                 {selectedVersion && (
                   <span
-                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
-                    {selectedVersion.code}
+                    className={`
+                      px-3 py-1 rounded-full text-sm font-bold
+                      ${
+                        selectedVersion.revision > 0
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-blue-100 text-blue-700"
+                      }
+                    `}>
+                    {selectedVersionLabel}
                   </span>
                 )}
               </div>
@@ -771,6 +824,46 @@ const handleAddendumItem = async () => {
           </div>
 
         </div>
+
+        {selectedVersion && (
+          <div
+            className={`
+              mb-6 rounded-2xl border p-4 flex flex-col md:flex-row
+              md:items-center md:justify-between gap-2
+              ${
+                selectedVersion.revision > 0
+                  ? "bg-orange-50 border-orange-200"
+                  : "bg-blue-50 border-blue-200"
+              }
+            `}
+          >
+            <div>
+              <p
+                className={`
+                  text-xs font-black uppercase tracking-widest
+                  ${
+                    selectedVersion.revision > 0
+                      ? "text-orange-600"
+                      : "text-blue-600"
+                  }
+                `}
+              >
+                Version BOQ Aktif
+              </p>
+              <h2 className="text-xl font-black text-gray-800">
+                {selectedVersionLabel}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {selectedVersionDescription}
+              </p>
+            </div>
+            {selectedVersion.description && (
+              <div className="text-sm font-semibold text-gray-600">
+                {selectedVersion.description}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 🔥 Analytics / Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
