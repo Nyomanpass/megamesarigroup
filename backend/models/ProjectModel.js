@@ -32,7 +32,10 @@ export const Project = sequelize.define("Project", {
     type: DataTypes.ENUM("static", "calendar"),
     defaultValue: "static",
   },
-
+  status: {
+    type: DataTypes.ENUM("progress", "completed"),
+    defaultValue: "progress"
+  },
   week_start_day: {
     type: DataTypes.STRING,
     allowNull: true,

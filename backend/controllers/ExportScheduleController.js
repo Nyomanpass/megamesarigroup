@@ -29,9 +29,10 @@ export const exportTimeSchedule = async (req, res) => {
     });
 
     let schedules = [];
+    let currentVersion = null;
 
     if (version_id) {
-      const currentVersion = await ProjectVersionModel.findByPk(version_id);
+      currentVersion = await ProjectVersionModel.findByPk(version_id);
 
       if (!currentVersion) {
         return res.status(404).json({
@@ -83,6 +84,190 @@ export const exportTimeSchedule = async (req, res) => {
         where: { project_id }
       });
     }
+
+    const isAddendumExport =
+      currentVersion && Number(currentVersion.revision || 0) > 0;
+
+    const activeVersionChain =
+      isAddendumExport
+        ? await ProjectVersionModel.findAll({
+            where: {
+              project_id,
+              revision: {
+                [Op.lte]: currentVersion.revision
+              }
+            },
+            order: [["revision", "ASC"]]
+          })
+        : [];
+
+    const activeAddendumVersions =
+      activeVersionChain.filter(
+        version => Number(version.revision || 0) > 0
+      );
+
+    const weeklyReports =
+      isAddendumExport
+        ? (
+            await axios.get(
+              `http://localhost:3000/api/weekly-report/${project_id}`
+            )
+          ).data || []
+        : [];
+
+    const boqMapByRevision = new Map();
+
+    if (isAddendumExport) {
+      const mc0Boq =
+        await getBoqWithBobot(project_id, 0);
+
+      boqMapByRevision.set(
+        0,
+        new Map(
+          mc0Boq.map(item => [
+            Number(item.id),
+            item
+          ])
+        )
+      );
+
+      for (const version of activeAddendumVersions) {
+        const versionBoq =
+          await getBoqWithBobot(project_id, version.id);
+
+        boqMapByRevision.set(
+          Number(version.revision || 0),
+          new Map(
+            versionBoq.map(item => [
+              Number(item.id),
+              item
+            ])
+          )
+        );
+      }
+    }
+
+    const addendumTransitions =
+      activeAddendumVersions.map(version => {
+        const revision =
+          Number(version.revision || 0);
+        const previousVersion =
+          activeVersionChain.find(
+            item =>
+              Number(item.revision || 0) ===
+              revision - 1
+          ) || null;
+        const previousWeek =
+          Number(version.effective_week || 1) - 1;
+
+        return {
+          version,
+          previousVersion,
+          revision,
+          previousWeek,
+          previousMap:
+            boqMapByRevision.get(revision - 1) ||
+            new Map(),
+          currentMap:
+            boqMapByRevision.get(revision) ||
+            new Map(),
+          report:
+            weeklyReports.find(
+              item =>
+                Number(item.minggu_ke) ===
+                Number(previousWeek)
+            ) || null
+        };
+      });
+
+    const getBeforeEffectiveProgress = (
+      item,
+      transition
+    ) => {
+      if (
+        !isAddendumExport ||
+        !transition.report
+      ) {
+        return {
+          volume: 0,
+          bobot: 0
+        };
+      }
+
+      const progressItem =
+        transition.report.data?.find(
+          progress =>
+            Number(progress.boq_id) ===
+            Number(item.boq_item_id || item.id)
+        );
+
+      const progressVolume =
+        Number(progressItem?.sd_ini || 0);
+      const mcVolume =
+        Number(item.volume || 0);
+      const mcBobot =
+        Number(item.bobot || 0);
+
+      if (
+        mcVolume <= 0 ||
+        progressVolume <= 0
+      ) {
+        return {
+          volume: 0,
+          bobot: 0
+        };
+      }
+
+      const ratio = Math.min(
+        progressVolume / mcVolume,
+        1
+      );
+
+      return {
+        volume: progressVolume,
+        bobot: ratio * mcBobot
+      };
+    };
+
+    const getAddendumInfo = (
+      item,
+      transition
+    ) => {
+      const currentItem =
+        transition.currentMap.get(Number(item.id)) || {};
+
+      const mcBobot =
+        Number(currentItem.bobot || 0);
+      const mcVolume =
+        Number(currentItem.volume || 0);
+      const beforeProgress =
+        getBeforeEffectiveProgress(
+          currentItem,
+          transition
+        );
+
+      return {
+        mcVolume,
+        mcHargaSatuan:
+          Number(currentItem.harga_satuan || 0),
+        mcJumlahHarga:
+          Number(
+            currentItem.jumlah ||
+            mcVolume * Number(currentItem.harga_satuan || 0)
+          ),
+        mcBobot,
+        progressVolume: beforeProgress.volume,
+        progressBobot: beforeProgress.bobot,
+        remainingVolume: Math.max(
+          mcVolume - beforeProgress.volume,
+          0
+        ),
+        remainingBobot: Math.max(
+          mcBobot - beforeProgress.bobot,
+          0
+        )
+      };
+    };
 
     // =========================
     // 🔥 CREATE EXCEL
@@ -248,28 +433,175 @@ sheet.getCell(`B${row}`).value = "NO.";
 sheet.mergeCells(`C${row}:F${row + 4}`);
 sheet.getCell(`C${row}`).value = "URAIAN";
 
-// 🔹 SATUAN
-sheet.mergeCells(`G${row}:G${row + 4}`);
-sheet.getCell(`G${row}`).value = "SATUAN";
+const addendumDetailColumns =
+  isAddendumExport
+    ? addendumTransitions.flatMap(transition => [
+        {
+          group: `ADD ${transition.revision}`,
+          label: "VOLUME",
+          number: 3,
+          type: "mcVolume",
+          transition
+        },
+        {
+          group: `ADD ${transition.revision}`,
+          label: "HARGA SATUAN",
+          number: 4,
+          type: "mcHargaSatuan",
+          transition,
+          currency: true
+        },
+        {
+          group: `ADD ${transition.revision}`,
+          label: "JUMLAH HARGA",
+          number: 5,
+          type: "mcJumlahHarga",
+          transition,
+          currency: true
+        },
+        {
+          group: `ADD ${transition.revision}`,
+          label: "BOBOT",
+          number: 6,
+          type: "mcBobot",
+          transition
+        },
+        {
+          group: `PROGRES MINGGU ${transition.previousWeek}`,
+          label: "VOLUME",
+          number: 3,
+          type: "progressVolume",
+          transition
+        },
+        {
+          group: `PROGRES MINGGU ${transition.previousWeek}`,
+          label: "BOBOT",
+          number: 6,
+          type: "progressBobot",
+          transition
+        },
+        {
+          group: "SISA PROGRES",
+          label: "VOLUME",
+          number: 3,
+          type: "remainingVolume",
+          transition
+        },
+        {
+          group: "SISA PROGRES",
+          label: "BOBOT",
+          number: 6,
+          type: "remainingBobot",
+          transition
+        }
+      ])
+    : [];
 
-// 🔹 VOLUME
-sheet.mergeCells(`H${row}:H${row + 4}`);
-sheet.getCell(`H${row}`).value = "VOLUME";
+const hiddenAddendumDetailTypes =
+  new Set([
+    "mcHargaSatuan",
+    "mcJumlahHarga"
+  ]);
 
-// 🔹 HARGA SATUAN
-sheet.mergeCells(`I${row}:I${row + 4}`);
-sheet.getCell(`I${row}`).value = "HARGA SATUAN";
+const addendumDetailStartCol = 12;
+const spacerCol =
+  addendumDetailStartCol + addendumDetailColumns.length;
+const footerLabelEndCol =
+  isAddendumExport
+    ? spacerCol - 1
+    : 11;
 
-// 🔹 JUMLAH HARGA
-sheet.mergeCells(`J${row}:J${row + 4}`);
-sheet.getCell(`J${row}`).value = "JUMLAH HARGA";
+if (isAddendumExport) {
+  const mc0Columns = [
+    { label: "SATUAN", number: 2 },
+    { label: "VOLUME", number: 3 },
+    { label: "HARGA SATUAN", number: 4 },
+    { label: "JUMLAH HARGA", number: 5 },
+    { label: "BOBOT", number: 6 }
+  ];
 
-// 🔹 BOBOT
-sheet.mergeCells(`K${row}:K${row + 4}`);
-sheet.getCell(`K${row}`).value = "BOBOT";
+  sheet.mergeCells(`G${row}:K${row}`);
+  sheet.getCell(`G${row}`).value = "MC-0";
 
-// 🔹 L kosong
-sheet.mergeCells(`L${row}:L${row + 5}`);
+  mc0Columns.forEach((column, index) => {
+    const col =
+      7 + index;
+
+    sheet.mergeCells(
+      `${sheet.getColumn(col).letter}${row + 1}:` +
+      `${sheet.getColumn(col).letter}${row + 4}`
+    );
+
+    sheet.getCell(row + 1, col).value =
+      column.label;
+  });
+
+  let groupStartCol = addendumDetailStartCol;
+  let currentGroup = null;
+
+  addendumDetailColumns.forEach((column, index) => {
+    const nextColumn =
+      addendumDetailColumns[index + 1];
+
+    if (currentGroup === null) {
+      currentGroup = column.group;
+      groupStartCol =
+        addendumDetailStartCol + index;
+    }
+
+    const col =
+      addendumDetailStartCol + index;
+
+    sheet.mergeCells(
+      `${sheet.getColumn(col).letter}${row + 1}:` +
+      `${sheet.getColumn(col).letter}${row + 4}`
+    );
+
+    sheet.getCell(row + 1, col).value =
+      column.label;
+
+    if (
+      !nextColumn ||
+      nextColumn.group !== currentGroup
+    ) {
+      sheet.mergeCells(
+        `${sheet.getColumn(groupStartCol).letter}${row}:` +
+        `${sheet.getColumn(col).letter}${row}`
+      );
+
+      sheet.getCell(row, groupStartCol).value =
+        currentGroup;
+
+      currentGroup = null;
+    }
+  });
+} else {
+  // 🔹 SATUAN
+  sheet.mergeCells(`G${row}:G${row + 4}`);
+  sheet.getCell(`G${row}`).value = "SATUAN";
+
+  // 🔹 VOLUME
+  sheet.mergeCells(`H${row}:H${row + 4}`);
+  sheet.getCell(`H${row}`).value = "VOLUME";
+
+  // 🔹 HARGA SATUAN
+  sheet.mergeCells(`I${row}:I${row + 4}`);
+  sheet.getCell(`I${row}`).value = "HARGA SATUAN";
+
+  // 🔹 JUMLAH HARGA
+  sheet.mergeCells(`J${row}:J${row + 4}`);
+  sheet.getCell(`J${row}`).value = "JUMLAH HARGA";
+
+  // 🔹 BOBOT
+  sheet.mergeCells(`K${row}:K${row + 4}`);
+  sheet.getCell(`K${row}`).value = "BOBOT";
+}
+
+// 🔹 KOLOM KOSONG SEBELUM MINGGU
+sheet.mergeCells(
+  `${sheet.getColumn(spacerCol).letter}${row}:` +
+  `${sheet.getColumn(spacerCol).letter}${row + 5}`
+);
 
 
 const nomorRow = row + 5;
@@ -293,12 +625,65 @@ sheet.getCell(`J${nomorRow}`).value = 5;
 // 🔹 K = 6
 sheet.getCell(`K${nomorRow}`).value = 6;
 
+addendumDetailColumns.forEach((column, index) => {
+  sheet.getCell(
+    nomorRow,
+    addendumDetailStartCol + index
+  ).value = column.number;
+});
+
 
 // =========================
 // 🔥 WEEK START (M)
 // =========================
-const weekStartCol = 13; // M
-const weekEndCol = weekStartCol + weeks.length - 1;
+const weekStartCol = spacerCol + 1;
+const scheduleColumns = [];
+
+weeks.forEach(w => {
+  if (isAddendumExport) {
+    addendumTransitions
+      .filter(
+        transition =>
+          Number(transition.version.effective_week) ===
+          Number(w.minggu_ke)
+      )
+      .forEach(transition => {
+        scheduleColumns.push({
+          type: "marker",
+          transition,
+          label: `ADDENDUM ${transition.revision}`
+        });
+      });
+  }
+
+  scheduleColumns.push({
+    type: "week",
+    week: w
+  });
+});
+
+const weekEndCol =
+  weekStartCol + scheduleColumns.length - 1;
+
+const weekColumnMap = new Map();
+const markerScheduleColumns = [];
+
+scheduleColumns.forEach((column, index) => {
+  const colNumber =
+    weekStartCol + index;
+
+  if (column.type === "week") {
+    weekColumnMap.set(
+      Number(column.week.minggu_ke),
+      colNumber
+    );
+  } else {
+    markerScheduleColumns.push({
+      ...column,
+      colNumber
+    });
+  }
+});
 
 sheet.mergeCells(
   `${sheet.getColumn(weekStartCol).letter}${row}:` +
@@ -314,10 +699,23 @@ sheet.getCell(`${sheet.getColumn(weekStartCol).letter}${row}`).value =
 let bulanRow = row + 1;
 let mingguPerBulan = 4;
 let bulanIndex = 1;
+const weekScheduleColumns =
+  scheduleColumns
+    .map((column, index) => ({
+      ...column,
+      colNumber: weekStartCol + index
+    }))
+    .filter(column => column.type === "week");
 
-for (let i = 0; i < weeks.length; i += mingguPerBulan) {
-  const start = weekStartCol + i;
-  const end = Math.min(start + mingguPerBulan - 1, weekEndCol);
+for (let i = 0; i < weekScheduleColumns.length; i += mingguPerBulan) {
+  const start = weekScheduleColumns[i].colNumber;
+  const end =
+    weekScheduleColumns[
+      Math.min(
+        i + mingguPerBulan - 1,
+        weekScheduleColumns.length - 1
+      )
+    ].colNumber;
 
   sheet.mergeCells(
     `${sheet.getColumn(start).letter}${bulanRow}:` +
@@ -349,8 +747,31 @@ const formatShortDate = (date) => {
   });
 };
 
-weeks.forEach((w, i) => {
-  const col = sheet.getColumn(weekStartCol + i).letter;
+scheduleColumns.forEach((column, i) => {
+  const colNumber =
+    weekStartCol + i;
+  const col =
+    sheet.getColumn(colNumber).letter;
+
+  if (column.type === "marker") {
+    sheet.mergeCells(
+      `${col}${bulanRow}:${col}${mingguRow}`
+    );
+
+    const markerHeaderCell =
+      sheet.getCell(`${col}${bulanRow}`);
+
+    markerHeaderCell.value = null;
+    markerHeaderCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFD9D9D9" }
+    };
+
+    return;
+  }
+
+  const w = column.week;
 
   // 🔹 tanggal mulai
   sheet.getCell(`${col}${tglMulaiRow}`).value = formatShortDate(w.start_date);
@@ -407,9 +828,9 @@ for (let r = row; r <= row + 5; r++) {
     };
 
     // =========================
-    // 🔥 KHUSUS L & V (NO BOTTOM)
+    // 🔥 KHUSUS KOLOM SPASI (NO BOTTOM)
     // =========================
-    if (c === 12 || c === 22) {
+    if (c === spacerCol || c === kosongCol) {
       cell.border = {
         top: { style: "thin" },
         left: { style: "thin" },
@@ -526,49 +947,99 @@ boq.forEach((item) => {
 
       c = 7;
 
-      sheet.getCell(row, c++).value =
-        item.satuan || "";
+      const writeNumberCell = (
+        value,
+        numFmt =
+          '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-',
+        fill = null
+      ) => {
+        const cell =
+          sheet.getCell(row, c++);
 
-      const volumeCell =
-        sheet.getCell(row, c++);
+        cell.value =
+          Number(value || 0);
+        cell.numFmt = numFmt;
 
-      volumeCell.value =
-        Number(item.volume || 0);
+        if (fill) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: fill
+            }
+          };
+        }
 
-      volumeCell.numFmt =
-        '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
+        return cell;
+      };
 
-      const hargaCell =
-        sheet.getCell(row, c++);
+      if (isAddendumExport) {
+        const mc0Item =
+          boqMapByRevision
+            .get(0)
+            ?.get(Number(item.id)) || {};
 
-      hargaCell.value =
-        Number(item.harga_satuan || 0);
+        sheet.getCell(row, c++).value =
+          mc0Item.satuan || item.satuan || "";
 
-      hargaCell.numFmt =
-        '"Rp" * #,##0.00';
+        writeNumberCell(mc0Item.volume);
+        writeNumberCell(
+          mc0Item.harga_satuan,
+          '"Rp" * #,##0.00'
+        );
+        writeNumberCell(
+          Number(mc0Item.jumlah || 0),
+          '"Rp" * #,##0.00'
+        );
+        writeNumberCell(mc0Item.bobot);
 
+        addendumDetailColumns.forEach(column => {
+          const addendumInfo =
+            getAddendumInfo(
+              item,
+              column.transition
+            );
 
-      const jumlahCell =
-        sheet.getCell(row, c++);
+          writeNumberCell(
+            addendumInfo[column.type],
+            column.currency
+              ? '"Rp" * #,##0.00'
+              : '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-'
+          );
+        });
+      } else {
+        sheet.getCell(row, c++).value =
+          item.satuan || "";
 
-      jumlahCell.value =
-        Number(item.jumlah || 0);
-
-      jumlahCell.numFmt =
-        '"Rp" * #,##0.00';
-
-      const bobotCell =
-        sheet.getCell(row, c++);
-
-      bobotCell.value =
-        Number(item.bobot || 0);
-
-      bobotCell.numFmt =
-        '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
+        writeNumberCell(item.volume);
+        writeNumberCell(
+          item.harga_satuan,
+          '"Rp" * #,##0.00'
+        );
+        writeNumberCell(
+          item.jumlah,
+          '"Rp" * #,##0.00'
+        );
+        writeNumberCell(item.bobot);
+      }
 
       c++;
 
-      weeks.forEach((w) => {
+      scheduleColumns.forEach(column => {
+        if (column.type === "marker") {
+          const cell = sheet.getCell(row, c++);
+
+          cell.value = null;
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFD9D9D9" }
+          };
+
+          return;
+        }
+
+        const w = column.week;
         const found = schedules.find(
           (s) =>
             Number(s.boq_id) === Number(item.id) &&
@@ -656,12 +1127,43 @@ for (let r = startDataRow; r <= endDataRow + 2; r++) {
 }
 
 
-for (let i = 0; i < weeks.length; i++) {
-  sheet.getColumn(weekStartCol + i).width = 15;
+scheduleColumns.forEach((column, index) => {
+  const excelColumn =
+    sheet.getColumn(weekStartCol + index);
+
+  excelColumn.width =
+    column.type === "marker" ? 12 : 15;
+});
+
+for (let i = 0; i < addendumDetailColumns.length; i++) {
+  const detailColumn =
+    addendumDetailColumns[i];
+  const excelColumn =
+    sheet.getColumn(addendumDetailStartCol + i);
+
+  if (
+    hiddenAddendumDetailTypes.has(detailColumn.type)
+  ) {
+    excelColumn.width = 0;
+    excelColumn.hidden = true;
+  } else {
+    excelColumn.width = 12;
+  }
 }
 
-    sheet.getColumn("V").width = 6;   // padding kiri kontraktor
-    sheet.getColumn("W").width = 15;
+if (isAddendumExport) {
+  [9, 10].forEach(col => {
+    const excelColumn =
+      sheet.getColumn(col);
+
+    excelColumn.width = 0;
+    excelColumn.hidden = true;
+  });
+}
+
+    sheet.getColumn(spacerCol).width = 6;   // padding setelah bobot/detail
+    sheet.getColumn(kosongCol).width = 6;   // padding sebelum ket
+    sheet.getColumn(ketCol).width = 15;
 
     const greyFill = {
       type: "pattern",
@@ -671,10 +1173,10 @@ for (let i = 0; i < weeks.length; i++) {
 
 for (let r = startDataRow; r <= endDataRow + 11; r++) {
 
-  // 🔹 KOLOM L (12)
-  const cellL = sheet.getCell(r, 12);
-  cellL.fill = greyFill;
-  cellL.border = {
+  // 🔹 KOLOM SPASI SEBELUM MINGGU
+  const beforeWeekSpacerCell = sheet.getCell(r, spacerCol);
+  beforeWeekSpacerCell.fill = greyFill;
+  beforeWeekSpacerCell.border = {
     left: { style: "thin" },
     right: { style: "thin" },
 
@@ -682,10 +1184,10 @@ for (let r = startDataRow; r <= endDataRow + 11; r++) {
     bottom: r === (endDataRow + 11) ? { style: "thin" } : undefined
   };
 
-  // 🔹 KOLOM V (22)
-  const cellV = sheet.getCell(r, 22);
-  cellV.fill = greyFill;
-  cellV.border = {
+  // 🔹 KOLOM SPASI SETELAH MINGGU
+  const afterWeekSpacerCell = sheet.getCell(r, kosongCol);
+  afterWeekSpacerCell.fill = greyFill;
+  afterWeekSpacerCell.border = {
     left: { style: "thin" },
     right: { style: "thin" },
 
@@ -788,6 +1290,66 @@ bulatCell.value = {
 };
 bulatCell.numFmt = '"Rp" * #,##0.00';
 
+const addendumFooterColumns =
+  addendumDetailColumns
+    .map((column, index) => ({
+      ...column,
+      colNumber: addendumDetailStartCol + index,
+      colLetter:
+        sheet.getColumn(addendumDetailStartCol + index).letter
+    }))
+    .filter(
+      column =>
+        column.type === "mcJumlahHarga" ||
+        column.type === "mcBobot" ||
+        column.type === "progressBobot" ||
+        column.type === "remainingBobot"
+    );
+
+addendumFooterColumns.forEach(column => {
+  const totalAddendumCell =
+    sheet.getCell(footerStart, column.colNumber);
+
+  totalAddendumCell.value = {
+    formula: `SUM(${column.colLetter}${startDataRow}:${column.colLetter}${endDataRow})`
+  };
+  totalAddendumCell.numFmt =
+    column.currency
+      ? '"Rp" * #,##0.00'
+      : '0.000';
+
+  const ppnAddendumCell =
+    sheet.getCell(footerStart + 1, column.colNumber);
+  const grandAddendumCell =
+    sheet.getCell(footerStart + 2, column.colNumber);
+  const roundedAddendumCell =
+    sheet.getCell(footerStart + 3, column.colNumber);
+
+  if (column.currency) {
+    ppnAddendumCell.value = {
+      formula: `${column.colLetter}${footerStart}*11%`
+    };
+    ppnAddendumCell.numFmt = '"Rp" * #,##0.00';
+
+    grandAddendumCell.value = {
+      formula:
+        `${column.colLetter}${footerStart}+` +
+        `${column.colLetter}${footerStart + 1}`
+    };
+    grandAddendumCell.numFmt = '"Rp" * #,##0.00';
+
+    roundedAddendumCell.value = {
+      formula:
+        `ROUND(${column.colLetter}${footerStart + 2},-3)`
+    };
+    roundedAddendumCell.numFmt = '"Rp" * #,##0.00';
+  } else {
+    ppnAddendumCell.value = null;
+    grandAddendumCell.value = null;
+    roundedAddendumCell.value = null;
+  }
+});
+
 
 
 // =========================
@@ -832,6 +1394,23 @@ for (let r = footerStart; r <= footerStart + 3; r++) {
     left: { style: "thin" },
     right: { style: "thin" }
   };
+
+  addendumFooterColumns.forEach(column => {
+    const cell =
+      sheet.getCell(r, column.colNumber);
+
+    cell.font = { bold: true };
+    cell.alignment = {
+      horizontal: "right",
+      vertical: "middle"
+    };
+    cell.border = {
+      top: { style: "thin" },
+      bottom: { style: "thin" },
+      left: { style: "thin" },
+      right: { style: "thin" }
+    };
+  });
 }
 
 // =========================
@@ -850,6 +1429,89 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
     bottom: { style: "thin" }
   };
 }
+
+// =========================
+// 🔥 AMBIL REALISASI DARI API
+// =========================
+const includeProgressChart =
+  !currentVersion || Number(currentVersion.revision) > 0;
+
+let realData = [];
+
+if (includeProgressChart) {
+  const chartResponse = await axios.get(
+    `http://localhost:3000/api/daily-plan/weekly-chart/${project_id}`
+  );
+
+  realData = chartResponse.data;
+}
+
+const firstAddendumWeek =
+  activeAddendumVersions.length > 0
+    ? Number(activeAddendumVersions[0].effective_week || 1)
+    : null;
+
+const getScheduleTotalByWeek = (
+  mingguKe,
+  versionId = null
+) => {
+  return schedules
+    .filter(item => {
+      if (Number(item.minggu_ke) !== Number(mingguKe)) {
+        return false;
+      }
+
+      if (versionId) {
+        return Number(item.version_id) === Number(versionId);
+      }
+
+      return true;
+    })
+    .reduce(
+      (sum, item) =>
+        sum + Number(item.bobot || 0),
+      0
+    );
+};
+
+const getRealDataByWeek = mingguKe =>
+  realData.find(
+    item =>
+      Number(item.minggu_ke) === Number(mingguKe)
+  ) || {};
+
+const getAddendumPlanMeta = (transition, index) => {
+  const startWeek =
+    Number(transition.version.effective_week || 1);
+  const nextTransition =
+    addendumTransitions[index + 1];
+  const endWeek =
+    nextTransition
+      ? Number(nextTransition.version.effective_week || 1) - 1
+      : Infinity;
+  const previousReal =
+    Number(
+      getRealDataByWeek(startWeek - 1).kum_real || 0
+    );
+  const startWeekReal =
+    getRealDataByWeek(startWeek);
+  const seed =
+    Math.max(
+      previousReal +
+        Number(startWeekReal.penyesuaian_adendum || 0),
+      0
+    );
+
+  return {
+    transition,
+    startWeek,
+    endWeek,
+    seed
+  };
+};
+
+const activePlanCumulativeByWeek =
+  new Map();
 
 
 // =========================
@@ -911,10 +1573,10 @@ for (let r = rencanaRow; r <= komulatifRow; r++) {
 }
 
 // =========================
-// 🔥 KOTAK BESAR E - K (2 BARIS)
+// 🔥 KOTAK BESAR E - AREA DETAIL (2 BARIS)
 // =========================
 for (let r = rencanaRow; r <= komulatifRow; r++) {
-  for (let c = 5; c <= 11; c++) { // E(5) sampai K(11)
+  for (let c = 5; c <= footerLabelEndCol; c++) {
 
     const cell = sheet.getRow(r).getCell(c);
 
@@ -928,8 +1590,8 @@ for (let r = rencanaRow; r <= komulatifRow; r++) {
       // kiri hanya di kolom E
       left: c === 5 ? { style: "thin" } : undefined,
 
-      // kanan hanya di kolom K
-      right: c === 11 ? { style: "thin" } : undefined
+      // kanan hanya di kolom terakhir area detail
+      right: c === footerLabelEndCol ? { style: "thin" } : undefined
     };
   }
 }
@@ -937,16 +1599,23 @@ for (let r = rencanaRow; r <= komulatifRow; r++) {
 // =========================
 // 🔹 RENCANA PER MINGGU (FINAL FIX)
 // =========================
-for (let c = weekStartCol; c <= weekEndCol; c++) {
+weeks.forEach(w => {
+  const c =
+    weekColumnMap.get(Number(w.minggu_ke));
+  const weekNumber =
+    Number(w.minggu_ke);
 
   const colLetter = sheet.getColumn(c).letter;
   const cell = sheet.getCell(`${colLetter}${rencanaRow}`);
 
-  // 🔥 PAKAI SUBTOTAL (ANTI WARNING)
-  cell.value = {
-    formula: `SUBTOTAL(9,${colLetter}${startDataRow}:${colLetter}${endDataRow})`,
-    result: 0
-  };
+  cell.value =
+    firstAddendumWeek &&
+    weekNumber >= firstAddendumWeek
+      ? null
+      : Number(
+          getScheduleTotalByWeek(weekNumber)
+            .toFixed(3)
+        );
 
   // 🔥 FORMAT
   cell.numFmt = '0.000';
@@ -964,28 +1633,35 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
     left: { style: "thin" },
     right: { style: "thin" }
   };
-}
+});
 
 // =========================
 // 🔹 KOMULATIF
 // =========================
-for (let c = weekStartCol; c <= weekEndCol; c++) {
+let baselineCumulative = 0;
 
+weeks.forEach(w => {
+  const c =
+    weekColumnMap.get(Number(w.minggu_ke));
+  const weekNumber =
+    Number(w.minggu_ke);
   const colLetter = sheet.getColumn(c).letter;
   const cell = sheet.getCell(`${colLetter}${komulatifRow}`);
 
-  if (c === weekStartCol) {
-    cell.value = {
-      formula: `${colLetter}${rencanaRow}`,
-      result: 0
-    };
+  if (
+    firstAddendumWeek &&
+    weekNumber >= firstAddendumWeek
+  ) {
+    cell.value = null;
   } else {
-    const prevCol = sheet.getColumn(c - 1).letter;
-
-    cell.value = {
-      formula: `${prevCol}${komulatifRow}+${colLetter}${rencanaRow}`,
-      result: 0
-    };
+    baselineCumulative +=
+      getScheduleTotalByWeek(weekNumber);
+    cell.value =
+      Number(baselineCumulative.toFixed(3));
+    activePlanCumulativeByWeek.set(
+      weekNumber,
+      cell.value
+    );
   }
 
   cell.numFmt = '0.000';
@@ -1002,7 +1678,7 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
     left: { style: "thin" },
     right: { style: "thin" }
   };
-}
+});
 
 
 // =========================
@@ -1022,12 +1698,183 @@ for (let r of [rencanaRow, komulatifRow]) {
   }
 }
 
+let nextFooterPlanRow =
+  komulatifRow + 1;
+
+const stylePlanFooterBlock = (
+  weeklyRow,
+  cumulativeRow,
+  fillColor = null
+) => {
+  for (let r = weeklyRow; r <= cumulativeRow; r++) {
+    for (let c = 2; c <= 4; c++) {
+      const cell = sheet.getRow(r).getCell(c);
+
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" }
+      };
+
+      cell.fill = undefined;
+    }
+
+    for (let c = 5; c <= footerLabelEndCol; c++) {
+      const cell = sheet.getRow(r).getCell(c);
+
+      cell.border = {
+        top: r === weeklyRow ? { style: "thin" } : undefined,
+        bottom: r === cumulativeRow ? { style: "thin" } : undefined,
+        left: c === 5 ? { style: "thin" } : undefined,
+        right: c === footerLabelEndCol ? { style: "thin" } : undefined
+      };
+
+      cell.fill = undefined;
+    }
+
+    for (let c = weekStartCol; c <= weekEndCol; c++) {
+      const cell = sheet.getRow(r).getCell(c);
+
+      cell.border = {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" }
+      };
+
+      cell.fill = undefined;
+    }
+  }
+};
+
+addendumTransitions.forEach((transition, index) => {
+  const addendumWeeklyRow =
+    nextFooterPlanRow;
+  const addendumCumulativeRow =
+    nextFooterPlanRow + 1;
+  const meta =
+    getAddendumPlanMeta(transition, index);
+  let addendumCumulative =
+    meta.seed;
+
+  sheet.mergeCells(
+    `B${addendumWeeklyRow}:D${addendumCumulativeRow}`
+  );
+  sheet.getCell(`B${addendumWeeklyRow}`).value =
+    `RENCANA FISIK PEKERJAAN ADD ${transition.revision}`;
+  sheet.getCell(`B${addendumWeeklyRow}`).font = {
+    bold: true
+  };
+  sheet.getCell(`B${addendumWeeklyRow}`).alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: true
+  };
+
+  sheet.getCell(`E${addendumWeeklyRow}`).value =
+    "JUMLAH PER-MINGGU";
+  sheet.getCell(`E${addendumCumulativeRow}`).value =
+    "JUMLAH KOMULATIF PER-MINGGU";
+  sheet.getCell(`E${addendumWeeklyRow}`).font = {
+    bold: true
+  };
+  sheet.getCell(`E${addendumCumulativeRow}`).font = {
+    bold: true
+  };
+
+  const marker =
+    markerScheduleColumns.find(
+      item =>
+        Number(item.transition.revision) ===
+        Number(transition.revision)
+    );
+
+  if (marker) {
+    const markerLetter =
+      sheet.getColumn(marker.colNumber).letter;
+    const markerCell =
+      sheet.getCell(
+        `${markerLetter}${addendumCumulativeRow}`
+      );
+
+    markerCell.value =
+      Number(meta.seed.toFixed(3));
+    markerCell.numFmt = '0.000';
+  }
+
+  weeks.forEach(w => {
+    const weekNumber =
+      Number(w.minggu_ke);
+    const colNumber =
+      weekColumnMap.get(weekNumber);
+    const colLetter =
+      sheet.getColumn(colNumber).letter;
+    const weeklyCell =
+      sheet.getCell(
+        `${colLetter}${addendumWeeklyRow}`
+      );
+    const cumulativeCell =
+      sheet.getCell(
+        `${colLetter}${addendumCumulativeRow}`
+      );
+
+    if (
+      weekNumber < meta.startWeek ||
+      weekNumber > meta.endWeek
+    ) {
+      weeklyCell.value = null;
+      cumulativeCell.value = null;
+    } else {
+      const weeklyValue =
+        getScheduleTotalByWeek(
+          weekNumber,
+          transition.version.id
+        );
+
+      addendumCumulative += weeklyValue;
+
+      weeklyCell.value =
+        Number(weeklyValue.toFixed(3));
+      cumulativeCell.value =
+        Number(
+          Math.min(
+            addendumCumulative,
+            100
+          ).toFixed(3)
+        );
+      activePlanCumulativeByWeek.set(
+        weekNumber,
+        cumulativeCell.value
+      );
+    }
+
+    weeklyCell.numFmt = '0.000';
+    cumulativeCell.numFmt = '0.000';
+    weeklyCell.alignment = {
+      horizontal: "center",
+      vertical: "middle"
+    };
+    cumulativeCell.alignment = {
+      horizontal: "center",
+      vertical: "middle"
+    };
+  });
+
+  stylePlanFooterBlock(
+    addendumWeeklyRow,
+    addendumCumulativeRow
+  );
+
+  nextFooterPlanRow += 2;
+});
+
 
 // =========================
 // 🔥 REALISASI (KOSONG)
 // =========================
-const realisasiRow = komulatifRow + 1;
-const realisasiKomulatifRow = komulatifRow + 2;
+const realisasiRow = nextFooterPlanRow;
+const realisasiKomulatifRow = realisasiRow + 1;
 
 // 🔹 KIRI BESAR
 sheet.mergeCells(`B${realisasiRow}:D${realisasiKomulatifRow}`);
@@ -1061,27 +1908,33 @@ for (let r = realisasiRow; r <= realisasiKomulatifRow; r++) {
 
 // 🔹 BORDER E-K
 for (let r = realisasiRow; r <= realisasiKomulatifRow; r++) {
-  for (let c = 5; c <= 11; c++) {
+  for (let c = 5; c <= footerLabelEndCol; c++) {
     const cell = sheet.getRow(r).getCell(c);
     cell.border = {
       top: r === realisasiRow ? { style: "thin" } : undefined,
       bottom: r === realisasiKomulatifRow ? { style: "thin" } : undefined,
       left: c === 5 ? { style: "thin" } : undefined,
-      right: c === 11 ? { style: "thin" } : undefined
+      right: c === footerLabelEndCol ? { style: "thin" } : undefined
     };
   }
 }
 
 // 🔹 VALUE (KOSONG DULU)
-for (let c = weekStartCol; c <= weekEndCol; c++) {
+weeks.forEach(w => {
+  const c =
+    weekColumnMap.get(Number(w.minggu_ke));
 
   const colLetter = sheet.getColumn(c).letter;
 
   const cell1 = sheet.getCell(`${colLetter}${realisasiRow}`);
   const cell2 = sheet.getCell(`${colLetter}${realisasiKomulatifRow}`);
+  const real =
+    getRealDataByWeek(w.minggu_ke);
 
-  cell1.value = null;
-  cell2.value = null;
+  cell1.value =
+    Number(real.real || 0);
+  cell2.value =
+    Number(real.kum_real || 0);
 
   cell1.numFmt = '0.000';
   cell2.numFmt = '0.000';
@@ -1102,7 +1955,7 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
     left: { style: "thin" },
     right: { style: "thin" }
   };
-}
+});
 
 
 // =========================
@@ -1145,7 +1998,7 @@ for (let c = 2; c <= 4; c++) {
 // =========================
 // 🔹 BORDER E-K (kotak)
 // =========================
-for (let c = 5; c <= 11; c++) {
+for (let c = 5; c <= footerLabelEndCol; c++) {
 
   const cell = sheet.getCell(deviasiRow, c);
 
@@ -1153,7 +2006,7 @@ for (let c = 5; c <= 11; c++) {
     top: { style: "thin" },
     bottom: { style: "thin" },
     left: c === 5 ? { style: "thin" } : undefined,
-    right: c === 11 ? { style: "thin" } : undefined
+    right: c === footerLabelEndCol ? { style: "thin" } : undefined
   };
 }
 
@@ -1165,7 +2018,29 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
   const colLetter = sheet.getColumn(c).letter;
   const cell = sheet.getCell(`${colLetter}${deviasiRow}`);
 
-  cell.value = null; // 🔥 kosong semua
+  const week =
+    weeks.find(
+      item =>
+        weekColumnMap.get(Number(item.minggu_ke)) === c
+    );
+
+  if (week) {
+    const real =
+      Number(
+        getRealDataByWeek(week.minggu_ke).kum_real || 0
+      );
+    const plan =
+      activePlanCumulativeByWeek.get(
+        Number(week.minggu_ke)
+      );
+
+    cell.value =
+      plan === undefined || plan === null
+        ? null
+        : Number((real - plan).toFixed(3));
+  } else {
+    cell.value = null;
+  }
 
   cell.numFmt = '0.000';
 
@@ -1182,6 +2057,117 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
     right: { style: "thin" }
   };
 }
+
+for (let r = rencanaRow; r <= deviasiRow; r++) {
+  for (let c = 2; c <= footerLabelEndCol; c++) {
+    const cell = sheet.getCell(r, c);
+
+    cell.border = {
+      top: { style: "thin" },
+      bottom: { style: "thin" },
+      left:
+        c >= 2 && c <= 4
+          ? { style: "thin" }
+          : undefined
+    };
+  }
+}
+
+if (isAddendumExport) {
+  for (let r = footerStart; r <= deviasiRow; r++) {
+    for (let c = addendumDetailStartCol; c < spacerCol; c++) {
+      const cell = sheet.getCell(r, c);
+
+      if (r > footerStart + 3) {
+        cell.value = null;
+      }
+      cell.fill = undefined;
+      cell.border =
+        r >= rencanaRow
+          ? {
+              top: { style: "thin" },
+              bottom: { style: "thin" }
+            }
+          : {
+              top: { style: "thin" },
+              bottom: { style: "thin" },
+              left: { style: "thin" },
+              right: { style: "thin" }
+            };
+    }
+  }
+}
+
+for (let r = startDataRow; r <= deviasiRow; r++) {
+  [spacerCol, kosongCol].forEach(col => {
+    const cell = sheet.getCell(r, col);
+
+    cell.fill = greyFill;
+    cell.border = {
+      left: { style: "thin" },
+      right: { style: "thin" },
+      bottom:
+        r === deviasiRow
+          ? { style: "thin" }
+          : undefined
+    };
+  });
+
+  const ketCell =
+    sheet.getCell(r, ketCol);
+
+  ketCell.value = null;
+  ketCell.border = {
+    top:
+      r === startDataRow
+        ? { style: "thin" }
+        : undefined,
+    bottom:
+      r === deviasiRow
+        ? { style: "thin" }
+        : undefined,
+    left: { style: "thin" },
+    right: { style: "thin" }
+  };
+}
+
+markerScheduleColumns.forEach(marker => {
+  const colLetter =
+    sheet.getColumn(marker.colNumber).letter;
+
+  sheet.mergeCells(
+    `${colLetter}${startDataRow}:` +
+    `${colLetter}${endDataRow}`
+  );
+
+  const markerCell =
+    sheet.getCell(`${colLetter}${startDataRow}`);
+
+  markerCell.value =
+    marker.label
+      .split("")
+      .join("\n");
+  markerCell.font = {
+    bold: true,
+    size: 18
+  };
+  markerCell.alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: true
+  };
+  markerCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFD9D9D9" }
+  };
+  markerCell.border = {
+    top: { style: "thin" },
+    bottom: { style: "thin" },
+    left: { style: "thin" },
+    right: { style: "thin" }
+  };
+});
 
 // =========================
 // 🔥 AMBIL TEMPLATE (SCHEDULE)
@@ -1219,9 +2205,47 @@ const namaRow = ttdStart + maxHeader + 4;
 // =========================
 // 🔥 LOOP TTD (SINGLE BLOCK)
 // =========================
+const excelColumnToNumber = column => {
+  return String(column)
+    .toUpperCase()
+    .split("")
+    .reduce(
+      (sum, char) =>
+        sum * 26 + char.charCodeAt(0) - 64,
+      0
+    );
+};
+
+const getTtdColumn = column => {
+  const colNumber =
+    excelColumnToNumber(column);
+
+  if (
+    !isAddendumExport ||
+    colNumber < 13
+  ) {
+    return column;
+  }
+
+  const oldWeekIndex =
+    colNumber - 13;
+  const markerCountBeforeColumn =
+    markerScheduleColumns.filter(
+      marker =>
+        Number(marker.transition.version.effective_week || 1) <=
+        oldWeekIndex + 1
+    ).length;
+  const shiftedColNumber =
+    colNumber +
+    (weekStartCol - 13) +
+    markerCountBeforeColumn;
+
+  return sheet.getColumn(shiftedColNumber).letter;
+};
+
 template.top.forEach((col) => {
 
-  const colCenter = col.range;
+  const colCenter = getTtdColumn(col.range);
   if (!colCenter) return;
 
   // 🔹 HEADER
@@ -1284,45 +2308,44 @@ for (let col = startCol; col <= endCol; col++) {
 
 
 // =========================
-// 🔥 AMBIL REALISASI DARI API
-// =========================
-const chartResponse = await axios.get(
-  `http://localhost:3000/api/daily-plan/weekly-chart/${project_id}`
-);
-
-const realData = chartResponse.data;
-
-// =========================
 // 🔥 RENCANA KOMULATIF
 // =========================
-const rencanaKomulatifChart = [];
+const rencanaKomulatifChart = weeks.map(w => {
+  const weekNumber =
+    Number(w.minggu_ke);
+  const activePlan =
+    activePlanCumulativeByWeek.get(weekNumber);
 
-let totalRencana = 0;
-
-for (let c = weekStartCol; c <= weekEndCol; c++) {
-
-  const colLetter = sheet.getColumn(c).letter;
-
-  let total = 0;
-
-  for (let r = startDataRow; r <= endDataRow; r++) {
-
-    const val = sheet.getCell(`${colLetter}${r}`).value;
-
-    total += Number(val || 0);
-  }
-
-  totalRencana += total;
-
-  rencanaKomulatifChart.push(
-    Number(totalRencana.toFixed(3))
-  );
-}
+  return activePlan === undefined ||
+    activePlan === null
+      ? null
+      : Number(Number(activePlan).toFixed(3));
+});
 
 // =========================
 // 🔥 REAL KOMULATIF
 // =========================
+const addendumProgressCutoffWeek =
+  addendumTransitions.length > 0
+    ? Math.max(
+        ...addendumTransitions.map(
+          transition =>
+            Number(transition.previousWeek)
+        )
+      )
+    : null;
+
 const realKomulatif = weeks.map((w) => {
+
+  if (
+    isAddendumExport &&
+    (
+      !addendumProgressCutoffWeek ||
+      Number(w.minggu_ke) > addendumProgressCutoffWeek
+    )
+  ) {
+    return null;
+  }
 
   const real = realData.find(
     r => Number(r.minggu_ke) === Number(w.minggu_ke)
@@ -1354,6 +2377,8 @@ chartSheet.getCell("F3").value = startDataRow;
 
 chartSheet.getCell("F4").value = endDataRow;
 
+chartSheet.getCell("F5").value = includeProgressChart ? 1 : 0;
+
 // HEADER
 chartSheet.getCell("A1").value = "Minggu";
 
@@ -1372,14 +2397,20 @@ weeks.forEach((w, idx) => {
 
 // rencana
 chartSheet.getCell(`B${r}`).value =
-  parseFloat(rencanaKomulatifChart[idx] || 0);
+  rencanaKomulatifChart[idx] === null ||
+  rencanaKomulatifChart[idx] === undefined
+    ? null
+    : parseFloat(rencanaKomulatifChart[idx]);
 
 chartSheet.getCell(`B${r}`).numFmt =
   "0.000";
 
 // realisasi
 chartSheet.getCell(`C${r}`).value =
-  parseFloat(realKomulatif[idx] || 0);
+  realKomulatif[idx] === null ||
+  realKomulatif[idx] === undefined
+    ? null
+    : parseFloat(realKomulatif[idx]);
 
 chartSheet.getCell(`C${r}`).numFmt =
   "0.000";
