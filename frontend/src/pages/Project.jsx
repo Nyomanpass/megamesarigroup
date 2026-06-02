@@ -362,7 +362,7 @@ export default function Project() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
+    <div className="p-8  mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
