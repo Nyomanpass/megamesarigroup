@@ -5,6 +5,83 @@ import path from "path";
 import { getMonthlyReport } from "./ReportController.js";
 import { Project } from "../models/ProjectModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
+import { Boq } from "../models/BoqModel.js";
+
+const buildMonthlyGroupedRows = (reportRows = [], boqRows = []) => {
+  if (
+    reportRows.some(
+      item => item.tipe === "header" || item.tipe === "subheader"
+    )
+  ) {
+    return reportRows;
+  }
+
+  const boqMap = new Map();
+  const printedHeaders = new Set();
+  const printedSubheaders = new Set();
+  const groupedRows = [];
+
+  boqRows.forEach(boq => {
+    boqMap.set(Number(boq.id), boq);
+  });
+
+  const getParents = boq => {
+    let header = null;
+    let subheader = null;
+    let current = boq;
+
+    while (current?.parent_id) {
+      current = boqMap.get(Number(current.parent_id));
+
+      if (current?.tipe === "subheader") {
+        subheader = current;
+      }
+
+      if (current?.tipe === "header") {
+        header = current;
+      }
+    }
+
+    return { header, subheader };
+  };
+
+  reportRows.forEach(reportRow => {
+    const boq = boqMap.get(Number(reportRow.boq_id));
+
+    if (!boq) {
+      groupedRows.push(reportRow);
+      return;
+    }
+
+    const { header, subheader } = getParents(boq);
+
+    if (header && !printedHeaders.has(Number(header.id))) {
+      groupedRows.push({
+        boq_id: header.id,
+        tipe: "header",
+        uraian: header.uraian
+      });
+      printedHeaders.add(Number(header.id));
+    }
+
+    if (subheader && !printedSubheaders.has(Number(subheader.id))) {
+      groupedRows.push({
+        boq_id: subheader.id,
+        tipe: "subheader",
+        uraian: subheader.uraian
+      });
+      printedSubheaders.add(Number(subheader.id));
+    }
+
+    groupedRows.push({
+      ...reportRow,
+      tipe: "item",
+      level: boq.level ?? reportRow.level ?? 0
+    });
+  });
+
+  return groupedRows.length ? groupedRows : reportRows;
+};
 
 export const exportMonthlyReportExcel = async (req, res) => {
   try {
@@ -31,6 +108,13 @@ export const exportMonthlyReportExcel = async (req, res) => {
     if (!dataBulan) {
       return res.status(404).json({ message: "Data bulan tidak ditemukan" });
     }
+
+    const boqRows = await Boq.findAll({
+      where: { project_id },
+      order: [["id", "ASC"]]
+    });
+    const groupedMonthlyData =
+      buildMonthlyGroupedRows(dataBulan.data, boqRows);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Bulanan");
@@ -653,7 +737,7 @@ let lastTipe = null;
 
 const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
 
-dataBulan.data.forEach((item) => {
+groupedMonthlyData.forEach((item) => {
 
   // =========================
   // 🔥 HEADER
@@ -1179,6 +1263,13 @@ export const exportMonthlyReportPDF = async (req, res) => {
     if (!dataBulan) {
       return res.status(404).json({ message: "Data bulan tidak ditemukan" });
     }
+
+    const boqRows = await Boq.findAll({
+      where: { project_id },
+      order: [["id", "ASC"]]
+    });
+    const groupedMonthlyData =
+      buildMonthlyGroupedRows(dataBulan.data, boqRows);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Bulanan");
@@ -1824,7 +1915,7 @@ let lastTipe = null;
 
 const roman = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
 
-dataBulan.data.forEach((item) => {
+groupedMonthlyData.forEach((item) => {
 
   // =========================
   // 🔥 HEADER

@@ -28,6 +28,14 @@ export default function Sidebar() {
           <span>Dashboard</span>
         </NavLink>
 
+        <NavLink to="/project" className={({ isActive }) =>
+          `flex items-center gap-3  ${isActive ? "font-semibold text-secondary" : "hover:text-secondary"
+          }`
+        }>
+          <Folder size={18} />
+          <span>Project</span>
+        </NavLink>
+
         {/* Project */}
         <NavLink to="/progress" className={({ isActive }) =>
           `flex items-center gap-3  ${isActive ? "font-semibold text-secondary" : "hover:text-secondary"

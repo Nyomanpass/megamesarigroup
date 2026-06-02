@@ -4,6 +4,7 @@ import { ProjectProvider } from "./context/ProjectContext";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Project from "./pages/Project";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/layout/Layout";
 // import ProjectDetail removed; functionality moved to Dashboard
@@ -61,7 +62,7 @@ const ProtectedElement = ({ element }) => (
 
 const protectedPageRoutes = [
   { path: "/dashboard", element: <Dashboard /> },
-  { path: "/project", element: <Navigate to="/dashboard" replace /> },
+  { path: "/project", element: <Project /> },
   { path: "/boq", element: <BoqPage /> },
   { path: "/schedule", element: <SchedulePage /> },
   { path: "/daily-plan", element: <DailyPlanPage /> },

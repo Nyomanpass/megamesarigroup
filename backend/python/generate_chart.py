@@ -27,6 +27,8 @@ start_data_row = ws["F3"].value
 
 end_data_row = ws["F4"].value
 
+include_progress_chart = bool(ws["F5"].value)
+
 # =========================
 # CHART
 # =========================
@@ -55,7 +57,7 @@ last_row = ws.max_row
 data = Reference(
     ws,
     min_col=2,
-    max_col=3,
+    max_col=3 if include_progress_chart else 2,
     min_row=2,
     max_row=last_row
 )
@@ -79,8 +81,6 @@ chart.add_data(
 )
 
 series1 = chart.series[0]  # rencana
-
-series2 = chart.series[1]  # realisasi
 
 chart.set_categories(cats)
 

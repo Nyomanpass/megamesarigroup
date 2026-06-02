@@ -78,9 +78,6 @@ export default function Dashboard() {
       try {
          const res = await api.get("/projects");
          setProjects(res.data);
-         if (res.data.length > 0 && !selectedProject) {
-            setSelectedProject(res.data[0]);
-         }
       } catch (err) {
          console.error(err);
       }
@@ -725,6 +722,44 @@ export default function Dashboard() {
       setShowVersionModal(true);
    };
 
+   if (!selectedProject) {
+      return (
+         <div className="p-8 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+               <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                     <span className="bg-accent text-secondary font-bold px-3 py-1 rounded-full text-xs tracking-wider">
+                        {user?.role === "admin" ? "ADMIN VIEW" : "STAFF VIEW"}
+                     </span>
+                  </div>
+                  <h1 className="text-3xl font-black text-primary flex items-center gap-3">
+                     <Activity className="text-secondary" size={32} /> Monitoring Proyek
+                  </h1>
+                  <p className="text-gray-500 mt-2 font-medium">
+                     Pilih project yang akan di-handle terlebih dahulu untuk membuka dashboard.
+                  </p>
+               </div>
+            </div>
+
+            <div className="bg-neutral border border-muted-gray rounded-xl p-10 text-center shadow-sm">
+               <div className="bg-accent text-secondary w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5">
+                  <Briefcase size={28} />
+               </div>
+               <h2 className="text-2xl font-black text-primary">Belum ada project aktif</h2>
+               <p className="text-gray-500 mt-2 mb-6">
+                  Buka halaman Project untuk memilih project berjalan atau mengelola project baru.
+               </p>
+               <button
+                  onClick={() => navigate("/project")}
+                  className="bg-secondary text-white px-5 py-3 rounded-lg border-2 border-secondary hover:bg-transparent hover:text-secondary transition-all font-bold"
+               >
+                  Pilih Project
+               </button>
+            </div>
+         </div>
+      );
+   }
+
    return (
       <div className="p-8 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
 
@@ -742,33 +777,15 @@ export default function Dashboard() {
                <p className="text-gray-500 mt-2 font-medium">Pantau kemajuan dan performa proyek konstruksi secara real-time.</p>
             </div>
 
-            {/* Add/Edit Buttons */}
+            {/* Project management moved to Project page */}
             <div className="flex gap-2">
                <m.button whileTap={{ scale: 0.9, }}
-                  onClick={handleAddProject}
+                  onClick={() => navigate("/project")}
                   className="bg-secondary text-white px-4 py-3 hover:bg-transparent hover:text-secondary hover:border-secondary border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
                >
-                  <Plus size={24} />
-                  <span className="hidden md:inline">TAMBAH PROYEK</span>
+                  <Briefcase size={24} />
+                  <span className="hidden md:inline">{selectedProject ? "GANTI PROYEK" : "PILIH PROYEK"}</span>
                </m.button>
-               {selectedProject && (
-                  <>
-                  <button
-                     onClick={handleEditProject}
-                     className="bg-primary text-white px-4 py-3 hover:bg-transparent hover:text-primary hover:border-primary border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
-                  >
-                     <Edit size={24} />
-                     <span className="hidden md:inline">Edit Proyek</span>
-                  </button>
-                   <button
-                        onClick={handleDeleteProject}
-                        className="bg-red-500 text-white px-4 py-3 hover:bg-transparent hover:text-red-500 hover:border-red-500 border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
-                     >
-                        <X size={24} />
-                        <span className="hidden md:inline">HAPUS</span>
-                     </button>
-                  </>
-               )}
             </div>
          </div>
 
