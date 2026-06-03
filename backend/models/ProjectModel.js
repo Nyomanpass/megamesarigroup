@@ -27,8 +27,19 @@ export const Project = sequelize.define("Project", {
   },
   logo_kontraktor: DataTypes.STRING,
   logo_konsultan: DataTypes.STRING,
-  logo_client: DataTypes.STRING
-
+  logo_client: DataTypes.STRING,
+  week_mode: {
+    type: DataTypes.ENUM("static", "calendar"),
+    defaultValue: "static",
+  },
+  status: {
+    type: DataTypes.ENUM("progress", "completed"),
+    defaultValue: "progress"
+  },
+  week_start_day: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  }
 }, {
   tableName: "projects",
   timestamps: true

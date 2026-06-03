@@ -29,11 +29,21 @@ export default function Dashboard() {
    const [weeklyChartData, setWeeklyChartData] = useState([]);
    const [showAccordion, setShowAccordion] = useState(false);
 
+   const [versions, setVersions] = useState([]);
+   const [showVersionModal, setShowVersionModal] = useState(false);
+   const [editingVersion, setEditingVersion] = useState(null);
+   const [versionForm, setVersionForm] = useState({
+      effective_date: "",
+      effective_week: "",
+      description: ""
+   });
+
    // Modal states
    const [showModal, setShowModal] = useState(false);
    const [editId, setEditId] = useState(null);
    const [form, setForm] = useState({
       kegiatan: '',
+      sub_kegiatan: '',
       pekerjaan: '',
       lokasi: '',
       tahun: '',
@@ -58,6 +68,9 @@ export default function Dashboard() {
    useEffect(() => {
       if (selectedProject) {
          fetchProjectData(selectedProject.id);
+         fetchVersions(selectedProject.id);
+      } else {
+         setVersions([]);
       }
    }, [selectedProject]);
 
@@ -65,9 +78,6 @@ export default function Dashboard() {
       try {
          const res = await api.get("/projects");
          setProjects(res.data);
-         if (res.data.length > 0 && !selectedProject) {
-            setSelectedProject(res.data[0]);
-         }
       } catch (err) {
          console.error(err);
       }
@@ -77,9 +87,43 @@ export default function Dashboard() {
       try {
          const res = await api.get(`/projects/${id}`);
          setProjectData(res.data);
-         // Fetch chart data
-         const chartRes = await api.get(`/daily-plan/weekly-chart/${id}`);
-         setChartData(chartRes.data);
+
+         const [
+            realChartRes,
+            versionRes,
+            weekRes,
+            weeklyReportRes
+         ] = await Promise.all([
+            api.get(`/daily-plan/weekly-chart/${id}`),
+            api.get(`/project-versions/project/${id}`),
+            api.get(`/schedule/weeks/${id}`),
+            api.get(`/weekly-report/${id}`)
+         ]);
+
+         const versionData =
+            versionRes.data.data || [];
+         const selectedScheduleVersion =
+            [...versionData].sort(
+               (a, b) =>
+                  Number(b.revision || 0) -
+                  Number(a.revision || 0)
+            )[0];
+         const scheduleRes =
+            selectedScheduleVersion
+               ? await api.get(
+                  `/schedule/${id}/${selectedScheduleVersion.id}`
+               )
+               : { data: [] };
+         const scheduleChart =
+            buildScheduleProgressChart({
+               weeks: weekRes.data || [],
+               versions: versionData,
+               selectedVersion: selectedScheduleVersion,
+               schedule: scheduleRes.data || [],
+               realData: realChartRes.data || []
+            });
+
+         setChartData(scheduleChart);
 
          const weeklyRes = await api.get(`/daily-plan/weekly-report/${id}`);
          setWeeklyChartData(weeklyRes.data.map(w => ({
@@ -92,9 +136,246 @@ export default function Dashboard() {
       }
    };
 
+   const buildScheduleProgressChart = ({
+      weeks,
+      versions,
+      selectedVersion,
+      schedule,
+      realData
+   }) => {
+      const sortedWeeks =
+         [...weeks].sort(
+            (a, b) =>
+               Number(a.minggu_ke) -
+               Number(b.minggu_ke)
+         );
+      const activeVersionChain =
+         versions
+            .filter(
+               v =>
+                  selectedVersion &&
+                  Number(v.revision || 0) <=
+                     Number(selectedVersion.revision || 0)
+            )
+            .sort(
+               (a, b) =>
+                  Number(a.revision || 0) -
+                  Number(b.revision || 0)
+            );
+      const activeAddendumVersions =
+         activeVersionChain.filter(
+            v => Number(v.revision || 0) > 0
+         );
+      const firstAddendumWeek =
+         activeAddendumVersions.length > 0
+            ? Number(
+               activeAddendumVersions[0].effective_week || 1
+            )
+            : null;
+
+      const getScheduleTotalByWeek = mingguKe =>
+         schedule
+            .filter(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(mingguKe)
+            )
+            .reduce(
+               (sum, item) =>
+                  sum + Number(item.bobot || 0),
+               0
+            );
+
+      const getRealCumulativeAtWeek = mingguKe => {
+         const real =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(mingguKe)
+            );
+
+         return Number(real?.kum_real || 0);
+      };
+
+      const getAddendumRebaselineSeed = startWeek => {
+         const previousProgress =
+            getRealCumulativeAtWeek(startWeek - 1);
+         const startWeekReal =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(startWeek)
+            );
+         const addendumAdjustment =
+            Number(
+               startWeekReal?.penyesuaian_adendum || 0
+            );
+
+         return Math.max(
+            previousProgress + addendumAdjustment,
+            0
+         );
+      };
+
+      const getBaselinePlanCumulative = mingguKe => {
+         if (
+            firstAddendumWeek &&
+            Number(mingguKe) >= firstAddendumWeek
+         ) {
+            return null;
+         }
+
+         return sortedWeeks
+            .filter(
+               week =>
+                  Number(week.minggu_ke) <=
+                  Number(mingguKe)
+            )
+            .reduce(
+               (sum, week) =>
+                  sum +
+                  getScheduleTotalByWeek(
+                     week.minggu_ke
+                  ),
+               0
+            );
+      };
+
+      const getAddendumMeta = (version, index) => {
+         const startWeek =
+            Number(version.effective_week || 1);
+         const nextVersion =
+            activeAddendumVersions[index + 1];
+         const endWeek =
+            nextVersion
+               ? Number(nextVersion.effective_week || 1) - 1
+               : Infinity;
+         const seed =
+            getAddendumRebaselineSeed(startWeek);
+         const planWeeks =
+            sortedWeeks
+               .filter(
+                  week =>
+                     Number(week.minggu_ke) >= startWeek &&
+                     Number(week.minggu_ke) <= endWeek
+               )
+               .map(week => Number(week.minggu_ke));
+         const rawTotal =
+            planWeeks.reduce(
+               (sum, week) =>
+                  sum + getScheduleTotalByWeek(week),
+               0
+            );
+         const remainingTarget =
+            rawTotal;
+         const factor =
+            1;
+
+         return {
+            startWeek,
+            endWeek,
+            seed,
+            planWeeks,
+            remainingTarget,
+            factor
+         };
+      };
+
+      const getNormalizedAddendumWeek =
+         (meta, mingguKe) => {
+            const weekNumber =
+               Number(mingguKe);
+
+            if (!meta.planWeeks.includes(weekNumber)) {
+               return 0;
+            }
+
+            return getScheduleTotalByWeek(weekNumber);
+         };
+
+      const getAddendumPlanCumulative =
+         (meta, mingguKe) => {
+            if (
+               Number(mingguKe) < meta.startWeek ||
+               Number(mingguKe) > meta.endWeek
+            ) {
+               return null;
+            }
+
+            const total =
+               meta.planWeeks
+                  .filter(
+                     week =>
+                        Number(week) <=
+                        Number(mingguKe)
+                  )
+                  .reduce(
+                     (sum, week) =>
+                        sum +
+                        getNormalizedAddendumWeek(
+                           meta,
+                           week
+                        ),
+                     0
+                  );
+
+            return Math.min(meta.seed + total, 100);
+         };
+
+      const getActivePlanCumulative = mingguKe => {
+         const weekNumber =
+            Number(mingguKe);
+
+         if (
+            activeAddendumVersions.length === 0 ||
+            weekNumber < firstAddendumWeek
+         ) {
+            return getBaselinePlanCumulative(mingguKe);
+         }
+
+         const activeMeta =
+            activeAddendumVersions
+               .map(getAddendumMeta)
+               .find(
+                  meta =>
+                     weekNumber >= meta.startWeek &&
+                     weekNumber <= meta.endWeek
+               );
+
+         return activeMeta
+            ? getAddendumPlanCumulative(
+               activeMeta,
+               mingguKe
+            )
+            : null;
+      };
+
+      return sortedWeeks.map((week) => {
+         const real =
+            realData.find(
+               item =>
+                  Number(item.minggu_ke) ===
+                  Number(week.minggu_ke)
+            );
+         const target =
+            getActivePlanCumulative(week.minggu_ke);
+
+         return {
+            minggu_ke: Number(week.minggu_ke),
+            rencana_kumulatif: Number(
+               Number(
+                  target ?? real?.kum_rencana ?? 0
+               ).toFixed(3)
+            ),
+            real_kumulatif: Number(
+               Number(real?.kum_real || 0).toFixed(3)
+            )
+         };
+      });
+   };
+
    const handleProjectSelect = (project) => {
       setSelectedProject(project);
-      fetchProjectData(project.id);
       setShowDropdown(false);
    };
 
@@ -110,6 +391,7 @@ export default function Dashboard() {
       setEditId(selectedProject.id);
       setForm({
          kegiatan: selectedProject.kegiatan || '',
+         sub_kegiatan: selectedProject.sub_kegiatan || '',
          pekerjaan: selectedProject.pekerjaan || '',
          lokasi: selectedProject.lokasi || '',
          tahun: selectedProject.tahun || '',
@@ -129,9 +411,38 @@ export default function Dashboard() {
       setShowModal(true);
    };
 
+   const handleDeleteProject = async () => {
+   if (!selectedProject) return;
+
+   const confirmDelete = window.confirm(
+      `Yakin ingin menghapus project "${selectedProject.kegiatan}" ?`
+   );
+
+   if (!confirmDelete) return;
+
+   try {
+
+      await api.delete(`/projects/${selectedProject.id}`);
+
+      // refresh project list
+      await fetchProjects();
+
+      // reset selected project
+      setSelectedProject(null);
+      setProjectData(null);
+
+      alert("Project berhasil dihapus");
+
+   } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus project");
+   }
+};
+
    const resetForm = () => {
       setForm({
          kegiatan: '',
+         sub_kegiatan: '',
          pekerjaan: '',
          lokasi: '',
          tahun: '',
@@ -165,7 +476,8 @@ export default function Dashboard() {
          const start = new Date(currentForm.tgl_spmk);
          const end = new Date(currentForm.end_date);
          const diffTime = Math.abs(end - start);
-         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+         const diffDays =
+         Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
          setForm({ ...currentForm, waktu_pelaksanaan: diffDays });
       }
    };
@@ -176,23 +488,104 @@ export default function Dashboard() {
    };
 
    const handleSubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData();
-      Object.keys(form).forEach(key => {
-         if (form[key] !== null && form[key] !== '') {
-            formData.append(key, form[key]);
-         }
-      });
+   e.preventDefault();
 
-      try {
-         if (editId) {
-            await api.put(`/projects/${editId}`, formData);
-         } else {
-            await api.post('/projects', formData);
+   const formData = new FormData();
+
+   // =====================
+   // FIELD BIASA
+   // =====================
+   Object.keys(form).forEach(key => {
+
+      // skip file dulu
+      if (
+         key !== "logo_kontraktor" &&
+         key !== "logo_konsultan" &&
+         key !== "logo_client"
+      ) {
+
+         if (
+            form[key] !== null &&
+            form[key] !== ""
+         ) {
+
+            formData.append(
+               key,
+               form[key]
+            );
          }
+      }
+   });
+
+   // =====================
+   // TYPE UNTUK MULTER
+   // =====================
+   formData.append(
+      "type",
+      "logo"
+   );
+
+   // =====================
+   // FILE LOGO
+   // =====================
+   if (form.logo_kontraktor) {
+
+      formData.append(
+         "logo_kontraktor",
+         form.logo_kontraktor
+      );
+   }
+
+   if (form.logo_konsultan) {
+
+      formData.append(
+         "logo_konsultan",
+         form.logo_konsultan
+      );
+   }
+
+   if (form.logo_client) {
+
+      formData.append(
+         "logo_client",
+         form.logo_client
+      );
+   }
+
+   try {
+
+         if (editId) {
+
+            await api.put(
+               `/projects/${editId}`,
+               formData,
+               {
+                  headers: {
+                     "Content-Type":
+                        "multipart/form-data"
+                  }
+               }
+            );
+
+         } else {
+
+            await api.post(
+               "/projects",
+               formData,
+               {
+                  headers: {
+                     "Content-Type":
+                        "multipart/form-data"
+                  }
+               }
+            );
+         }
+
          fetchProjects();
          setShowModal(false);
+
       } catch (err) {
+
          console.error(err);
       }
    };
@@ -229,14 +622,15 @@ export default function Dashboard() {
    // Filtered projects for dropdown
    const filteredProjects = projects.filter(project =>
       project.kegiatan?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.sub_kegiatan?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.pekerjaan?.toLowerCase().includes(searchQuery.toLowerCase())
    );
 
    // Dummy data for project charts (replace with real data when available)
    const projectProgressData = chartData.length > 0 ? chartData.map(d => ({
       name: `Minggu ${d.minggu_ke}`,
-      rencana: d.kum_rencana,
-      real: d.kum_real
+      rencana: Number(d.rencana_kumulatif || 0),
+      real: Number(d.real_kumulatif || 0)
    })) : [
       { name: 'Minggu 1', rencana: 10, real: 8 },
       { name: 'Minggu 2', rencana: 25, real: 22 },
@@ -244,8 +638,130 @@ export default function Dashboard() {
       { name: 'Minggu 4', rencana: 60, real: 55 },
    ];
 
+   const fetchVersions = async (projectId) => {
+      try {
+         const res = await api.get(
+            `/project-versions/project/${projectId}`
+         );
+         setVersions(res.data.data);
+      } catch (error) {
+         console.error(error);
+      }
+   };
+
+   const saveVersion = async () => {
+   try {
+
+      if (!editingVersion) {
+
+         await api.post(
+         "/project-versions",
+         {
+            project_id: selectedProject.id,
+            ...versionForm
+         }
+         );
+
+      }
+
+      // UPDATE
+      else {
+
+         await api.put(
+         `/project-versions/${editingVersion.id}`,
+         versionForm
+         );
+
+      }
+
+      // REFRESH
+      fetchVersions(selectedProject.id);
+
+      // RESET
+      setShowVersionModal(false);
+
+      setEditingVersion(null);
+
+      setVersionForm({
+         effective_date: "",
+         effective_week: "",
+         description: ""
+      });
+
+   } catch (error) {
+
+      console.error(error);
+
+   }
+
+   };
+
+   const deleteVersion = async (id) => {
+   const confirmDelete =
+      window.confirm(
+         "Hapus addendum?"
+      );
+   if (!confirmDelete) return;
+   try {
+      await api.delete(
+         `/project-versions/${id}`
+      );
+      fetchVersions(selectedProject.id);
+   } catch (error) {
+      console.error(error);
+   }
+   };
+
+   const editVersion = (version) => {
+      setEditingVersion(version);
+      setVersionForm({
+         effective_date: version.effective_date,
+         effective_week: version.effective_week,
+         description: version.description
+      });
+      setShowVersionModal(true);
+   };
+
+   if (!selectedProject) {
+      return (
+         <div className="p-8 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+               <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                     <span className="bg-accent text-secondary font-bold px-3 py-1 rounded-full text-xs tracking-wider">
+                        {user?.role === "admin" ? "ADMIN VIEW" : "STAFF VIEW"}
+                     </span>
+                  </div>
+                  <h1 className="text-3xl font-black text-primary flex items-center gap-3">
+                     <Activity className="text-secondary" size={32} /> Monitoring Proyek
+                  </h1>
+                  <p className="text-gray-500 mt-2 font-medium">
+                     Pilih project yang akan di-handle terlebih dahulu untuk membuka dashboard.
+                  </p>
+               </div>
+            </div>
+
+            <div className="bg-neutral border border-muted-gray rounded-xl p-10 text-center shadow-sm">
+               <div className="bg-accent text-secondary w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5">
+                  <Briefcase size={28} />
+               </div>
+               <h2 className="text-2xl font-black text-primary">Belum ada project aktif</h2>
+               <p className="text-gray-500 mt-2 mb-6">
+                  Buka halaman Project untuk memilih project berjalan atau mengelola project baru.
+               </p>
+               <button
+                  onClick={() => navigate("/project")}
+                  className="bg-secondary text-white px-5 py-3 rounded-lg border-2 border-secondary hover:bg-transparent hover:text-secondary transition-all font-bold"
+               >
+                  Pilih Project
+               </button>
+            </div>
+         </div>
+      );
+   }
+
    return (
-      <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
+      <div className="p-8 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
 
          {/* HEADER DASHBOARD CAKUPAN SISTEM */}
          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -261,24 +777,15 @@ export default function Dashboard() {
                <p className="text-gray-500 mt-2 font-medium">Pantau kemajuan dan performa proyek konstruksi secara real-time.</p>
             </div>
 
-            {/* Add/Edit Buttons */}
+            {/* Project management moved to Project page */}
             <div className="flex gap-2">
                <m.button whileTap={{ scale: 0.9, }}
-                  onClick={handleAddProject}
+                  onClick={() => navigate("/project")}
                   className="bg-secondary text-white px-4 py-3 hover:bg-transparent hover:text-secondary hover:border-secondary border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
                >
-                  <Plus size={24} />
-                  <span className="hidden md:inline">TAMBAH PROYEK</span>
+                  <Briefcase size={24} />
+                  <span className="hidden md:inline">{selectedProject ? "GANTI PROYEK" : "PILIH PROYEK"}</span>
                </m.button>
-               {selectedProject && (
-                  <button
-                     onClick={handleEditProject}
-                     className="bg-primary text-white px-4 py-3 hover:bg-transparent hover:text-primary hover:border-primary border-2 border-transparent transition-all duration-300 flex items-center gap-2 cursor-pointer font-semibold uppercase tracking-wide"
-                  >
-                     <Edit size={24} />
-                     <span className="hidden md:inline">Edit Proyek</span>
-                  </button>
-               )}
             </div>
          </div>
 
@@ -294,6 +801,11 @@ export default function Dashboard() {
                      <p className="font-semibold text-lg text-primary">
                         {selectedProject ? selectedProject.kegiatan : "Pilih Proyek"}
                      </p>
+                     {selectedProject?.sub_kegiatan && (
+                        <p className="text-xs font-semibold text-secondary">
+                           {selectedProject.sub_kegiatan}
+                        </p>
+                     )}
                      <p className="text-sm text-gray-500 line-clamp-2">
                         {selectedProject ? selectedProject.pekerjaan : "Cari berdasarkan nama kegiatan"}
                      </p>
@@ -323,6 +835,9 @@ export default function Dashboard() {
                                     className="w-full px-4 py-3 text-left hover:bg-accent/20 transition-colors border-b border-muted-gray last:border-b-0 cursor-pointer"
                                  >
                                     <p className="font-bold text-primary">{project.kegiatan}</p>
+                                    {project.sub_kegiatan && (
+                                       <p className="text-xs font-semibold text-secondary">{project.sub_kegiatan}</p>
+                                    )}
                                     <p className="text-sm text-gray-600">{project.pekerjaan}</p>
                                     <div class="mt-2.5 flex items-center gap-2">
                                        <p className="text-xs text-gray-400">{project.lokasi}</p>
@@ -375,7 +890,7 @@ export default function Dashboard() {
                </div>
                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Progress Saat Ini</p>
                <h3 className="text-3xl font-black text-primary relative z-10">
-                  {chartData.length > 0 ? Math.round(chartData[chartData.length - 1]?.kum_real || 0) : 0}%
+                  {chartData.length > 0 ? Math.round(chartData[chartData.length - 1]?.real_kumulatif || 0) : 0}%
                </h3>
                <p className="text-xs text-gray-400 mt-2 font-medium relative z-10">Berdasarkan realisasi</p>
             </div>
@@ -387,7 +902,7 @@ export default function Dashboard() {
                </div>
                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 relative z-10">Deviasi Progress</p>
                <h3 className="text-3xl font-black text-primary relative z-10">
-                  {chartData.length > 0 ? Math.round((chartData[chartData.length - 1]?.kum_real || 0) - (chartData[chartData.length - 1]?.kum_rencana || 0)) : 0}%
+                  {chartData.length > 0 ? Math.round((chartData[chartData.length - 1]?.real_kumulatif || 0) - (chartData[chartData.length - 1]?.rencana_kumulatif || 0)) : 0}%
                </h3>
                <p className="text-xs text-warning mt-2 font-bold relative z-10">Real vs Rencana</p>
             </div>
@@ -415,6 +930,7 @@ export default function Dashboard() {
                      <div className="w-full grid grid-cols-3 gap-2">
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Kontraktor</p>
+<<<<<<< HEAD
                            <img src={activeProject.logo_kontraktor ? `${UPLOADS_BASE_URL}/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.kontraktor || "TBA"}</p>
                         </div>
@@ -427,6 +943,19 @@ export default function Dashboard() {
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
                            <img src={activeProject.logo_client ? `${UPLOADS_BASE_URL}/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.client || "TBA"}</p>
+=======
+                           <img src={activeProject.logo_kontraktor ? `http://localhost:3000/uploads/logos/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                         
+                        </div>
+                        <div className="w-full h-full">
+                           <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Konsultan</p>
+                           <img src={activeProject.logo_konsultan ? `http://localhost:3000/uploads/logos/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                        
+                        </div>
+                        <div className="w-full h-full">
+                           <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
+                           <img src={activeProject.logo_client ? `http://localhost:3000/uploads/logos/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
+>>>>>>> 750ea3601afc7e4e61ddfb1150bf4ca9def00c10
                         </div>
                      </div>
 
@@ -437,6 +966,12 @@ export default function Dashboard() {
                               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{activeProject.no_kontrak}</p>
                               <p className="text-lg font-black text-primary">{activeProject.kegiatan}</p>
                            </div>
+                           {activeProject.sub_kegiatan && (
+                              <div>
+                                 <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Sub Kegiatan</p>
+                                 <p className="text-base font-semibold text-gray-700">{activeProject.sub_kegiatan}</p>
+                              </div>
+                           )}
                            <div>
                               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pekerjaan</p>
                               <p className="text-base font-semibold text-gray-700">{activeProject.pekerjaan}</p>
@@ -542,6 +1077,94 @@ export default function Dashboard() {
             </div>
          </div>
 
+         {/* addendum projek crud */}
+         <div className="bg-neutral rounded-3xl shadow-sm border border-muted-gray p-8 mb-6">
+
+         {/* HEADER */}
+         <div className="flex items-center justify-between mb-5">
+
+            <div>
+
+               <h3 className="text-xl font-bold text-primary">
+               Addendum Project
+               </h3>
+
+               <p className="text-sm text-gray-500">
+               Management versi project
+               </p>
+
+            </div>
+
+            <button
+               onClick={() => {
+
+               setEditingVersion(null);
+
+               setVersionForm({
+                  effective_date: "",
+                  effective_week: "",
+                  description: ""
+               });
+
+               setShowVersionModal(true);
+
+               }}
+               className="bg-secondary text-white px-4 py-2 rounded-xl"
+            >
+               + Addendum
+            </button>
+         </div>
+
+         {/* LIST VERSION */}
+         <div className="space-y-3">
+            {versions.map((v) => (
+               <div
+               key={v.id}
+               className="border rounded-2xl p-4 flex justify-between items-center"
+               >
+               <div>
+
+                  <div className="flex items-center gap-3">
+                     <h4 className="font-bold text-lg">
+                     {v.code}
+                     </h4>
+
+                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                     Rev {v.revision}
+                     </span>
+                  </div>
+
+                  <p className="text-sm text-gray-500">
+                     Minggu Berlaku:
+                     {v.effective_week}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                     {v.description}
+                  </p>
+               </div>
+
+               <div className="flex gap-2">
+                  <button
+                     onClick={() => editVersion(v)}
+                     className="px-3 py-2 rounded-lg bg-yellow-100"
+                  >
+                     Edit
+                  </button>
+                  {v.revision !== 0 && (
+                     <button
+                     onClick={() => deleteVersion(v.id)}
+                     className="px-3 py-2 rounded-lg bg-red-100"
+                     >
+                     Hapus
+                     </button>
+                  )}
+               </div>
+               </div>
+            ))}
+         </div>
+         </div>
+
          {/* 🚀 QUICK ACTIONS */}
          <div className="bg-neutral rounded-3xl shadow-sm border border-muted-gray p-8 mb-8">
             <h3 className="text-xl font-bold text-primary mb-6 flex items-center gap-2">
@@ -611,6 +1234,87 @@ export default function Dashboard() {
             </div>
          </div>
 
+         
+         {showVersionModal && (
+
+         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+
+            <div className="bg-white rounded-3xl p-6 w-full max-w-lg">
+
+               <h2 className="text-2xl font-bold mb-5">
+
+               {editingVersion
+                  ? "Edit Addendum"
+                  : "Buat Addendum"}
+
+               </h2>
+
+               <div className="space-y-4">
+
+               <input
+                  type="date"
+                  value={versionForm.effective_date}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     effective_date: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3"
+               />
+
+               <input
+                  type="number"
+                  placeholder="Minggu Berlaku"
+                  value={versionForm.effective_week}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     effective_week: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3"
+               />
+
+               <textarea
+                  placeholder="Deskripsi"
+                  value={versionForm.description}
+                  onChange={(e) =>
+                     setVersionForm({
+                     ...versionForm,
+                     description: e.target.value
+                     })
+                  }
+                  className="w-full border rounded-xl p-3 h-28"
+               />
+
+               </div>
+
+               <div className="flex justify-end gap-3 mt-6">
+
+               <button
+                  onClick={() =>
+                     setShowVersionModal(false)
+                  }
+                  className="px-4 py-2 rounded-xl border"
+               >
+                  Batal
+               </button>
+
+               <button
+                  onClick={saveVersion}
+                  className="px-5 py-2 rounded-xl bg-secondary text-white"
+               >
+                  Simpan
+               </button>
+
+               </div>
+
+            </div>
+
+         </div>
+
+         )}
 
 
          {/* MODAL ADD/EDIT PROJECT */}
@@ -663,6 +1367,16 @@ export default function Dashboard() {
                                        onChange={handleChange}
                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
                                        required
+                                    />
+                                 </div>
+                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sub Kegiatan</label>
+                                    <input
+                                       type="text"
+                                       name="sub_kegiatan"
+                                       value={form.sub_kegiatan}
+                                       onChange={handleChange}
+                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
                                     />
                                  </div>
                                  <div>

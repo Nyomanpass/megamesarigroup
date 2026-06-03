@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
+import { getAccessToken, getCurrentUser } from "../utils/auth";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const token = localStorage.getItem("accessToken");
+  const token = getAccessToken();
 
   // ❌ belum login
   if (!token) {
@@ -10,7 +10,11 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   // 🔥 decode token
-  const decoded = jwtDecode(token);
+  const decoded = getCurrentUser();
+
+  if (!decoded) {
+    return <Navigate to="/" />;
+  }
 
   // 🔥 kalau ada role restriction
   if (allowedRoles && !allowedRoles.includes(decoded.role)) {

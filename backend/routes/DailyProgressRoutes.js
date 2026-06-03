@@ -5,7 +5,8 @@ import {
   getProgressSummary,
   getDailyProgressById,
   updateDailyProgress,
-  deleteDailyProgress
+  deleteDailyProgress,
+  createDailyProgressWeekly
 } from "../controllers/DailyProgressController.js";
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.get("/progress-summary/:boq_id", getProgressSummary);
 router.get("/daily-progress/:id", getDailyProgressById);
 router.put("/daily-progress/:id", updateDailyProgress);
 router.delete("/daily-progress/:id", deleteDailyProgress);
+router.post("/daily-progress/weekly", createDailyProgressWeekly);
 
 export default router;

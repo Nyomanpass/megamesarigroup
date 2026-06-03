@@ -5,18 +5,25 @@ import {
   getProjectById,
   createProject,
   updateProject,
-  deleteProject
+  deleteProject,
+  updateProjectWeekSetting,
+  createProjectVersion,
+  getProjectVersions,
+  getProjectVersionById,
+  updateProjectVersion,
+  deleteProjectVersion
+
 } from "../controllers/ProjectController.js";
 
 const router = express.Router();
 
-// 🔥 GET ALL (dashboard)
+//  GET ALL (dashboard)
 router.get("/projects", getProjects);
 
-// 🔥 GET DETAIL
+//  GET DETAIL
 router.get("/projects/:id", getProjectById);
 
-// 🔥 CREATE
+//  CREATE
 router.post(
   "/projects",
   upload.fields([
@@ -27,7 +34,7 @@ router.post(
   createProject
 );
 
-// 🔥 UPDATE
+//  UPDATE
 router.put(
   "/projects/:id",
   upload.fields([
@@ -38,7 +45,41 @@ router.put(
   updateProject
 );
 
-// 🔥 DELETE
+//  DELETE
 router.delete("/projects/:id", deleteProject);
+
+//ettng projek dailiplan
+router.put(
+  "/project-week-setting/:project_id",
+  updateProjectWeekSetting
+);
+
+
+router.post(
+  "/project-versions",
+  createProjectVersion
+);
+
+router.get(
+  "/project-versions/project/:project_id",
+  getProjectVersions
+);
+
+router.get(
+  "/project-versions/:id",
+  getProjectVersionById
+);
+
+router.put(
+  "/project-versions/:id",
+  updateProjectVersion
+);
+
+router.delete(
+  "/project-versions/:id",
+  deleteProjectVersion
+);
+
+
 
 export default router;

@@ -4,7 +4,9 @@ import { ProjectProvider } from "./context/ProjectContext";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Project from "./pages/Project";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Layout from "./components/layout/Layout";
 // import ProjectDetail removed; functionality moved to Dashboard
 import BoqPage from "./pages/BoqPage";
 import SchedulePage from "./pages/SchedulePage";
@@ -16,17 +18,14 @@ import DailyReportPage from "./pages/DailyReportPage";
 import MaterialPage from "./pages/MaterialPage";
 import PekerjaPage from "./pages/PekerjaPage";
 import PeralatanPage from "./pages/PeralatanPage";
-import Project from "./pages/Project";
 import ProjectAnalisaPage from "./pages/ProjekAnalisaPage";
 import ProjectAnalisaDetailPage from "./pages/ProjectAnalisaDetailPage";
-
 import MasterItemPage from "./pages/settings/MasterItemPage";
 import AnalisaMasterPage from "./pages/settings/AnalisaMasterPage";
 import AnalisaDetailPage from "./pages/settings/AnalisaDetailPage";
 import TtdTemplatePage from "./pages/TtdTemplatePage";
+import { getAccessToken } from "./utils/auth";
 
-
-// Error boundary component
 const ErrorPage = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-100">
     <div className="bg-white p-8 rounded-lg shadow-md text-center">
@@ -42,7 +41,6 @@ const ErrorPage = () => (
   </div>
 );
 
-// Loading component
 const LoadingPage = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-100">
     <div className="text-center">
@@ -52,25 +50,37 @@ const LoadingPage = () => (
   </div>
 );
 
-// Auth check loader
 const authLoader = async () => {
-  const token = localStorage.getItem("accessToken");
-  if (!token) {
-    return { authenticated: false };
-  }
-  return { authenticated: true };
+  return { authenticated: Boolean(getAccessToken()) };
 };
 
-// Protected route wrapper for router config
 const ProtectedElement = ({ element }) => (
   <ProtectedRoute>
     {element}
   </ProtectedRoute>
 );
 
-import Layout from "./components/layout/Layout";
+const protectedPageRoutes = [
+  { path: "/dashboard", element: <Dashboard /> },
+  { path: "/project", element: <Project /> },
+  { path: "/boq", element: <BoqPage /> },
+  { path: "/schedule", element: <SchedulePage /> },
+  { path: "/daily-plan", element: <DailyPlanPage /> },
+  { path: "/progress", element: <DailyProgressPage /> },
+  { path: "/laporan-mingguan", element: <WeeklyReportPage /> },
+  { path: "/laporan-bulanan", element: <MonthlyReportPage /> },
+  { path: "/laporan-harian", element: <DailyReportPage /> },
+  { path: "/material", element: <MaterialPage /> },
+  { path: "/tenaga", element: <PekerjaPage /> },
+  { path: "/peralatan", element: <PeralatanPage /> },
+  { path: "/analisa", element: <ProjectAnalisaPage /> },
+  { path: "/analisa/:analisaId", element: <ProjectAnalisaDetailPage /> },
+  { path: "/settings/masteritem", element: <MasterItemPage /> },
+  { path: "/settings/analisa", element: <AnalisaMasterPage /> },
+  { path: "/settings/analisa/:id", element: <AnalisaDetailPage /> },
+  { path: "/ttd-template", element: <TtdTemplatePage /> },
+];
 
-// Route configuration
 const router = createBrowserRouter([
   {
     path: "/",
@@ -86,86 +96,8 @@ const router = createBrowserRouter([
     element: <ProtectedElement element={<ProjectProvider><Layout /></ProjectProvider>} />,
     loader: authLoader,
     errorElement: <ErrorPage />,
-    children: [
-      {
-        path: "/dashboard",
-        element: <Dashboard />,
-      },
-      // Removed project list route; projects now managed via dashboard dropdown
-      {
-        path: "/project",
-        element: <Navigate to="/dashboard" replace />,
-      },
-      {
-        // Removed project detail route; functionality now on dashboard
-      },
-      {
-        path: "/boq",
-        element: <BoqPage />,
-      },
-      {
-        path: "/schedule",
-        element: <SchedulePage />,
-      },
-      {
-        path: "/daily-plan",
-        element: <DailyPlanPage />,
-      },
-      {
-        path: "/progress",
-        element: <DailyProgressPage />,
-      },
-      {
-        path: "/laporan-mingguan",
-        element: <WeeklyReportPage />,
-      },
-      {
-        path: "/laporan-bulanan",
-        element: <MonthlyReportPage />,
-      },
-      {
-        path: "/laporan-harian",
-        element: <DailyReportPage />,
-      },
-      {
-        path: "/material",
-        element: <MaterialPage />,
-      },
-      {
-        path: "/tenaga",
-        element: <PekerjaPage />,
-      },
-      {
-        path: "/peralatan",
-        element: <PeralatanPage />,
-      },
-      {
-        path: "/analisa",
-        element: <ProjectAnalisaPage />,
-      },
-      {
-        path: "/analisa/:analisaId",
-        element: <ProjectAnalisaDetailPage />,
-      },
-      {
-        path: "/settings/masteritem",
-        element: <MasterItemPage />,
-      },
-        {
-          path: "/settings/analisa",
-          element: <AnalisaMasterPage />,
-        },
-        {
-          path: "/settings/analisa/:id",
-          element: <AnalisaDetailPage />,
-        },
-        {
-          path: "/ttd-template",
-          element: <TtdTemplatePage />,
-        }
-      ]
+    children: protectedPageRoutes,
   },
-  // Catch all route - redirect to dashboard if authenticated, otherwise to login
   {
     path: "*",
     element: <Navigate to="/dashboard" replace />,

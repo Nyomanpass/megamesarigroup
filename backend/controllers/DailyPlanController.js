@@ -3,9 +3,137 @@ import { Schedule } from "../models/ScheduleModel.js";
 import { Project } from "../models/ProjectModel.js";
 import { ProjectPeriod } from "../models/ProjectPeriodModel.js";
 import { DailyProgress } from "../models/DailyProgressModel.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { ProjectWeek } from "../models/ProjectWeekModel.js";
+import { getBoqWithBobot } from "./BoqController.js";
 import { Boq } from "../models/BoqModel.js";
+import { Op } from "sequelize";
 import moment from "moment";
 import "moment/locale/id.js";
+import {
+  getScheduleChainByProject,
+  buildSchedulePlanTimeline
+} from "./ScheduleController.js";
+
+const getNamaHari = (date) => {
+
+  return moment(date)
+    .locale("id")
+    .format("dddd")
+    .toLowerCase();
+
+};
+
+
+
+const getRealCumulativeAtWeek = async (
+  project_id,
+  minggu_ke,
+  forcedVersionId = null
+) => {
+
+  if (Number(minggu_ke) <= 0) {
+    return 0;
+  }
+
+  const week =
+    await ProjectWeek.findOne({
+      where: {
+        project_id,
+        minggu_ke
+      }
+    });
+
+  if (!week) {
+    return 0;
+  }
+
+  let activeVersion = null;
+
+  if (forcedVersionId) {
+    activeVersion =
+      await ProjectVersionModel.findByPk(
+        forcedVersionId
+      );
+  } else {
+    const versions =
+      await ProjectVersionModel.findAll({
+        where: { project_id },
+        order: [["effective_week", "ASC"]]
+      });
+
+    for (const version of versions) {
+      if (
+        Number(minggu_ke) >=
+        Number(version.effective_week || 1)
+      ) {
+        activeVersion = version;
+      }
+    }
+  }
+
+  const boqs =
+    (
+      await getBoqWithBobot(
+        Number(project_id),
+        activeVersion?.id
+      )
+    ).filter(item => item.tipe === "item");
+
+  const progress =
+    await DailyProgress.findAll({
+      where: {
+        project_id: Number(project_id),
+        tanggal: {
+          [Op.lte]: week.end_date
+        }
+      }
+    });
+
+  const total =
+    boqs.reduce((sum, boq) => {
+      const boqId =
+        boq.boq_item_id || boq.id;
+      const volume =
+        Number(boq.volume || 0);
+      const bobot =
+        Number(boq.bobot || 0);
+
+      if (volume <= 0 || bobot <= 0) {
+        return sum;
+      }
+
+      const volumeTerpasang =
+        progress
+          .filter(
+            item =>
+              Number(item.boq_id) ===
+              Number(boqId)
+          )
+          .reduce(
+            (progressSum, item) =>
+              progressSum +
+              Number(item.volume || 0),
+            0
+          );
+
+      return sum +
+        Math.min(volumeTerpasang / volume, 1) *
+        bobot;
+    }, 0);
+
+  return Number(total.toFixed(3));
+};
+
+const normalizeAddendumWeeklyPlan = async (
+  project_id,
+  bobotPerMinggu
+) => {
+
+  return bobotPerMinggu;
+};
+
+
 
 export const generateDailyPlan = async (req, res) => {
   try {
@@ -14,7 +142,9 @@ export const generateDailyPlan = async (req, res) => {
     const project = await Project.findByPk(project_id);
 
     if (!project) {
-      return res.status(404).json({ message: "Project tidak ditemukan" });
+      return res.status(404).json({
+        message: "Project tidak ditemukan"
+      });
     }
 
     if (!project.tgl_spmk || !project.end_date) {
@@ -23,140 +153,190 @@ export const generateDailyPlan = async (req, res) => {
       });
     }
 
-    // 🔥 SAMA PERSIS SEPERTI generateWeeks
     let start = new Date(project.tgl_spmk.toISOString().split("T")[0]);
     let end = new Date(project.end_date.toISOString().split("T")[0]);
 
-    start.setHours(0,0,0,0);
-    end.setHours(0,0,0,0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
 
-    console.log("START:", start);
-    console.log("END:", end);
-
-    const schedules = await Schedule.findAll({
-      where: { project_id },
-      order: [["minggu_ke", "ASC"]],
-    });
+    const schedules = await getScheduleChainByProject(Number(project_id));
 
     const periods = await ProjectPeriod.findAll({
-      where: { project_id },
+      where: { project_id }
     });
 
-    await DailyPlan.destroy({ where: { project_id } });
+    const versions = await ProjectVersionModel.findAll({
+      where: { project_id },
+      order: [["revision", "ASC"]]
+    });
+
+    const planTimeline = await buildSchedulePlanTimeline(
+      Number(project_id),
+      schedules,
+      versions
+    );
+
+    await DailyPlan.destroy({
+      where: { project_id }
+    });
+
+    const bobotPerMinggu = planTimeline.perWeek || {};
+
+    console.log("PLAN PER WEEK:", planTimeline.perWeek);
+    console.log("PLAN WEEK START:", planTimeline.weekStart);
+    console.log("PLAN CUMULATIVE:", planTimeline.cumulative);
+
+    const hariPerMinggu = {};
+    let tempDate = new Date(start);
+    let tempHariKe = 1;
+    let tempMingguKe = 1;
+    let firstDay = true;
+
+    while (tempDate <= end) {
+      if (project.week_mode === "static") {
+        tempMingguKe = Math.ceil(tempHariKe / 7);
+      } else {
+        const namaHari = getNamaHari(tempDate);
+
+        if (
+          namaHari === project.week_start_day.toLowerCase() &&
+          !firstDay
+        ) {
+          tempMingguKe++;
+        }
+      }
+
+      if (!hariPerMinggu[tempMingguKe]) {
+        hariPerMinggu[tempMingguKe] = 0;
+      }
+
+      hariPerMinggu[tempMingguKe]++;
+
+      firstDay = false;
+      tempDate.setDate(tempDate.getDate() + 1);
+      tempHariKe++;
+    }
 
     let bulkData = [];
     let currentDate = new Date(start);
     let hariKe = 1;
-
-    // 🔥 hitung total bobot per minggu
-    const bobotPerMinggu = {};
-
-    schedules.forEach((s) => {
-    const minggu = Number(s.minggu_ke);
-
-    if (!bobotPerMinggu[minggu]) {
-        bobotPerMinggu[minggu] = 0;
-    }
-
-    bobotPerMinggu[minggu] += Number(s.bobot || 0);
-
-    // 🔥 pembulatan 3 desimal
-    bobotPerMinggu[minggu] = Number(
-        bobotPerMinggu[minggu].toFixed(3)
-    );
-    });
-
-    console.log("BOBOT PER MINGGU:", bobotPerMinggu);
-
-    const hariPerMinggu = {};
-
-    let tempDate = new Date(start);
-    let tempHariKe = 1;
-
-    while (tempDate <= end) {
-    let mingguKe = Math.ceil(tempHariKe / 7);
-
-    if (!hariPerMinggu[mingguKe]) {
-        hariPerMinggu[mingguKe] = 0;
-    }
-
-    hariPerMinggu[mingguKe]++;
-
-    tempDate.setDate(tempDate.getDate() + 1);
-    tempHariKe++;
-    }
-
-    console.log("HARI PER MINGGU:", hariPerMinggu);
-
-    let totalMinggu = 0;
+    let mingguKe = 1;
     let mingguSebelumnya = null;
-
+    let hariDalamMinggu = 0;
+    let totalMinggu = 0;
+    let weekStartKumulatif = 0;
+    let weekTargetKumulatif = 0;
+    let firstGenerateDay = true;
 
     while (currentDate <= end) {
+      if (project.week_mode === "static") {
+        mingguKe = Math.ceil(hariKe / 7);
+      } else {
+        const namaHari = getNamaHari(currentDate);
 
-    let mingguKe = Math.ceil(hariKe / 7);
-    const bobotMingguan = bobotPerMinggu[mingguKe] || 0;
-    const jumlahHariMinggu = hariPerMinggu[mingguKe] || 7;
+        if (
+          namaHari === project.week_start_day.toLowerCase() &&
+          !firstGenerateDay
+        ) {
+          mingguKe++;
+        }
+      }
 
-    // reset tiap minggu
-    if (mingguKe !== mingguSebelumnya) {
+      const bobotMingguan = Number(bobotPerMinggu[mingguKe] || 0);
+      const jumlahHariMinggu = hariPerMinggu[mingguKe] || 7;
+
+      if (mingguKe !== mingguSebelumnya) {
         totalMinggu = 0;
+        hariDalamMinggu = 0;
         mingguSebelumnya = mingguKe;
-    }
 
-    let nilaiHarian;
+        weekStartKumulatif = Number(
+          planTimeline.weekStart?.[mingguKe] ?? 0
+        );
 
-    // hari terakhir minggu
-    if (totalMinggu + (bobotMingguan / jumlahHariMinggu) > bobotMingguan) {
-        nilaiHarian = bobotMingguan - totalMinggu;
-    } else {
-        nilaiHarian = bobotMingguan / jumlahHariMinggu;
-        totalMinggu += nilaiHarian;
-    }
+        weekTargetKumulatif = Number(
+          planTimeline.cumulative?.[mingguKe] ??
+          Math.min(weekStartKumulatif + bobotMingguan, 100)
+        );
+      }
 
-    const yyyy = currentDate.getFullYear();
-    const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(currentDate.getDate()).padStart(2, "0");
-    const dateStr = `${yyyy}-${mm}-${dd}`;
+      hariDalamMinggu++;
 
-    const periodMatch = periods.find((p) => {
-    let pStart = new Date(p.start_date);
-    let pEnd = new Date(p.end_date);
+      const nilaiHarianDasar = Number(
+        (bobotMingguan / jumlahHariMinggu).toFixed(4)
+      );
 
-    pStart.setHours(0,0,0,0);
-    pEnd.setHours(0,0,0,0);
+      let nilaiHarian;
 
-    return currentDate >= pStart && currentDate <= pEnd;
-    });
+      if (
+        hariDalamMinggu >= jumlahHariMinggu ||
+        totalMinggu + nilaiHarianDasar > bobotMingguan
+      ) {
+        nilaiHarian = Number(
+          (bobotMingguan - totalMinggu).toFixed(4)
+        );
 
-    bulkData.push({
+        totalMinggu = Number(
+          (totalMinggu + nilaiHarian).toFixed(4)
+        );
+      } else {
+        nilaiHarian = nilaiHarianDasar;
+        totalMinggu = Number(
+          (totalMinggu + nilaiHarian).toFixed(4)
+        );
+      }
+
+      const rencanaKumulatif = Number(
+        Math.min(
+          weekStartKumulatif + totalMinggu,
+          weekTargetKumulatif,
+          100
+        ).toFixed(4)
+      );
+
+      const yyyy = currentDate.getFullYear();
+      const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(currentDate.getDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      const periodMatch = periods.find((p) => {
+        let pStart = new Date(p.start_date);
+        let pEnd = new Date(p.end_date);
+
+        pStart.setHours(0, 0, 0, 0);
+        pEnd.setHours(0, 0, 0, 0);
+
+        return currentDate >= pStart && currentDate <= pEnd;
+      });
+
+      bulkData.push({
         project_id,
         tanggal: dateStr,
         nama_hari: moment(dateStr).locale("id").format("dddd"),
         hari_ke: hariKe,
         minggu_ke: mingguKe,
         bulan_ke: periodMatch ? periodMatch.bulan_ke : null,
-
         bobot_mingguan: Number(bobotMingguan.toFixed(3)),
-        bobot_harian: Number(nilaiHarian.toFixed(2)),
-    });
+        bobot_harian: Number(nilaiHarian.toFixed(4)),
+        rencana_kumulatif: rencanaKumulatif
+      });
 
-    currentDate.setDate(currentDate.getDate() + 1);
-    hariKe++;
+      firstGenerateDay = false;
+      currentDate.setDate(currentDate.getDate() + 1);
+      hariKe++;
     }
-
 
     await DailyPlan.bulkCreate(bulkData);
 
     res.json({
-      message: "Daily Plan FIX (SAMA SEPERTI WEEKS) ✅",
-      total_data: bulkData.length,
+      message: "Daily Plan berhasil digenerate sesuai Schedule ✅",
+      total_data: bulkData.length
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Error generateDailyPlan:", error);
     res.status(500).json({
-      message: error.message,
+      message: error.message
     });
   }
 };
@@ -188,6 +368,36 @@ export const getWeeklyReport = async (req, res) => {
     const result = [];
     let kumulatif = 0;
 
+    const versions =
+      await ProjectVersionModel.findAll({
+        where: { project_id },
+        order: [["revision", "ASC"]]
+      });
+
+    const addendumVersions =
+      versions.filter(
+        version =>
+          Number(version.revision || 0) > 0
+      );
+
+    const getActiveAddendum = (weekNumber) => {
+      return addendumVersions.find((version, index) => {
+        const nextVersion =
+          addendumVersions[index + 1];
+        const startWeek =
+          Number(version.effective_week || 1);
+        const endWeek =
+          nextVersion
+            ? Number(nextVersion.effective_week || 1) - 1
+            : Infinity;
+
+        return (
+          weekNumber >= startWeek &&
+          weekNumber <= endWeek
+        );
+      });
+    };
+
     const group = {};
 
     // grouping per minggu
@@ -201,30 +411,61 @@ export const getWeeklyReport = async (req, res) => {
       group[minggu].push(item);
     });
 
-    Object.keys(group).forEach((minggu) => {
+    const schedules =
+      await getScheduleChainByProject(project_id);
+    const bobotPerMinggu = {};
+
+    schedules.forEach((schedule) => {
+      const minggu =
+        Number(schedule.minggu_ke);
+
+      bobotPerMinggu[minggu] =
+        Number(
+          (
+            Number(bobotPerMinggu[minggu] || 0) +
+            Number(schedule.bobot || 0)
+          ).toFixed(3)
+        );
+    });
+
+    for (const minggu of Object.keys(group)
+      .map(Number)
+      .sort((a, b) => a - b)) {
       const items = group[minggu];
+      const mingguNumber =
+        Number(minggu);
 
       const tglAwal = items[0].tanggal;
       const tglAkhir = items[items.length - 1].tanggal;
 
       // 🔥 FIX: ambil langsung bobot_mingguan
-      const total = Number(items[0].bobot_mingguan);
+      const total =
+        Number(
+          bobotPerMinggu[minggu] ??
+          items[0].bobot_mingguan
+        );
 
-      kumulatif += total;
-      kumulatif = Number(kumulatif.toFixed(3));
+      const activeAddendum =
+        getActiveAddendum(mingguNumber);
+
+      kumulatif =
+        Number(
+          Number(
+            items[items.length - 1]
+              ?.rencana_kumulatif ??
+            Math.min(kumulatif + total, 100)
+          ).toFixed(3)
+        );
 
       result.push({
-        minggu_ke: Number(minggu),
+        minggu_ke: mingguNumber,
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
         bobot_mingguan: Number(total.toFixed(3)),
         kumulatif,
+        is_addendum: Boolean(activeAddendum),
+        addendum_seed: null
       });
-    });
-
-    // 🔥 paksa 100% di akhir
-    if (result.length > 0) {
-      result[result.length - 1].kumulatif = 100;
     }
 
     res.json(result);
@@ -266,7 +507,10 @@ export const getMonthlyReport = async (req, res) => {
 
     const result = [];
 
-    Object.keys(group).forEach((bulan) => {
+    Object.keys(group)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .forEach((bulan) => {
       const dataBulan = group[bulan];
 
       const items = dataBulan.items;
@@ -284,22 +528,13 @@ export const getMonthlyReport = async (req, res) => {
         tgl_awal: tglAwal,
         tgl_akhir: tglAkhir,
         bobot_bulanan: Number(total.toFixed(3)),
+        kumulatif:
+          Number(
+            items[items.length - 1]
+              ?.rencana_kumulatif || 0
+          )
       });
     });
-
-    // 🔥 kumulatif
-    result.forEach((item, index) => {
-      let total = 0;
-
-      for (let i = 0; i <= index; i++) {
-        total += result[i].bobot_bulanan;
-      }
-
-      item.kumulatif = Number(total.toFixed(3));
-    });
-
-    // 🔥 paksa 100
-    result[result.length - 1].kumulatif = 100.00;
 
     res.json(result);
 
@@ -310,113 +545,401 @@ export const getMonthlyReport = async (req, res) => {
 
 export const getWeeklyChart = async (req, res) => {
   try {
+
     const { project_id } = req.params;
 
     const plans = await DailyPlan.findAll({
-      where: { project_id },
-      order: [["tanggal", "ASC"]],
+      where: {
+        project_id
+      },
+      order: [["tanggal", "ASC"]]
     });
 
     const progress = await DailyProgress.findAll({
-      where: { project_id },
-      order: [["tanggal", "ASC"]],
+      where: {
+        project_id
+      },
+      order: [["tanggal", "ASC"]]
     });
 
-    const boqs = await Boq.findAll({
-      where: { project_id }
-    });
+    const versions =
+      await ProjectVersionModel.findAll({
 
-    // =========================
-    // 🔥 GROUPING MINGGU
-    // =========================
+        where: {
+          project_id
+        },
+
+        order: [
+          ["effective_week", "ASC"]
+        ]
+
+      });
+
+    // =====================
+    // GROUP MINGGU
+    // =====================
+
     const group = {};
+
     plans.forEach((p) => {
-      if (!group[p.minggu_ke]) group[p.minggu_ke] = [];
+
+      if (!group[p.minggu_ke]) {
+        group[p.minggu_ke] = [];
+      }
+
       group[p.minggu_ke].push(p);
+
     });
 
     let kumulatifRencana = 0;
+
     const result = [];
 
-    // =========================
-    // 🔥 LOOP PER MINGGU
-    // =========================
+    // =====================
+    // LOOP MINGGU
+    // =====================
+
     for (const minggu in group) {
-      const items = group[minggu];
 
-      // pastikan urut
-      items.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+      const items =
+        group[minggu];
 
-      const tglAkhir = items[items.length - 1].tanggal;
-
-      // =========================
-      // 🔥 RENCANA
-      // =========================
-      const rencana = Number(items[0].bobot_mingguan || 0);
-      kumulatifRencana += rencana;
-
-      // =========================
-      // 🔥 PROGRESS SAMPAI TGL INI
-      // =========================
-      const progressSdIni = progress.filter(
-        (p) => new Date(p.tanggal) <= new Date(tglAkhir)
+      items.sort(
+        (a,b)=>
+        new Date(a.tanggal)
+        -
+        new Date(b.tanggal)
       );
 
-      // =========================
-      // 🔥 HITUNG REAL (FIX UTAMA)
-      // =========================
-      let totalProgress = 0;
+      const tglAkhir =
+      items[
+        items.length-1
+      ].tanggal;
 
-      for (const boq of boqs) {
+      // =====================
+      // CARI VERSION AKTIF
+      // =====================
 
-        const boqProgress = progressSdIni.filter(
-          p => p.boq_id === boq.id
+      let activeVersion = null;
+
+      for (
+        const version
+        of versions
+      ) {
+
+        if (
+          Number(minggu)
+          >=
+          Number(
+            version.effective_week
+          )
+        ) {
+
+          activeVersion =
+            version;
+
+        }
+
+      }
+
+      // =====================
+      // BOQ ADDENDUM
+      // =====================
+
+      const boqs =
+      (
+      await getBoqWithBobot(
+
+        Number(project_id),
+
+        activeVersion?.id
+
+      )
+      )
+      .filter(
+        b=>
+        b.tipe==="item"
+      );
+
+      // =====================
+      // RENCANA
+      // =====================
+
+      const rencana =
+      Number(
+        items[0]
+        ?.bobot_mingguan || 0
+      );
+
+      kumulatifRencana +=
+      rencana;
+
+      // =====================
+      // PROGRESS <= TANGGAL
+      // =====================
+
+      const progressSdIni =
+      progress.filter(
+
+        p=>
+
+        new Date(
+          p.tanggal
+        )
+
+        <=
+
+        new Date(
+          tglAkhir
+        )
+
+      );
+
+      // =====================
+      // HITUNG REAL
+      // =====================
+
+      let totalProgress=0;
+      let totalProgressMingguan=0;
+
+      for(
+      const boq
+      of boqs
+      ){
+
+        const boqId =
+        boq.boq_item_id ||
+        boq.id;
+
+        const boqProgress =
+        progressSdIni.filter(
+
+          p=>
+
+          Number(
+            p.boq_id
+          )
+
+          ===
+
+          Number(
+            boqId
+          )
+
         );
 
-        // ✅ FIX: SUM volume (BUKAN LAST)
-        const totalVolumeTerpasang = boqProgress.reduce(
-          (sum, p) => sum + Number(p.volume || 0),
+        const boqProgressMingguIni =
+        progress.filter(
+
+          p=>{
+
+            const progressDate =
+            new Date(
+              p.tanggal
+            );
+
+            return (
+              Number(
+                p.boq_id
+              )
+              ===
+              Number(
+                boqId
+              )
+              &&
+              progressDate <=
+              new Date(
+                tglAkhir
+              )
+              &&
+              progressDate >=
+              new Date(
+                items[0].tanggal
+              )
+            );
+
+          }
+
+        );
+
+        const totalVolumeTerpasang =
+        boqProgress.reduce(
+
+          (sum,p)=>
+
+          sum +
+
+          Number(
+            p.volume ||0
+          ),
+
+          0
+
+        );
+
+        const volumeMingguIni =
+        boqProgressMingguIni.reduce(
+
+          (sum,p)=>
+
+          sum +
+
+          Number(
+            p.volume ||0
+          ),
+
+          0
+
+        );
+
+        const totalVolume =
+        Number(
+          boq.volume ||0
+        );
+
+        const bobot =
+        Number(
+          boq.bobot ||0
+        );
+
+        const progressItem =
+
+        totalVolume>0
+
+        ?
+
+        Math.min(
+
+          (
+            totalVolumeTerpasang
+            /
+            totalVolume
+          )
+          *
+          bobot,
+
+          bobot
+
+        )
+
+        :
+
+        0;
+
+        totalProgress +=
+        progressItem;
+
+        const progressSebelumMingguIni =
+        totalVolume>0
+        ?
+        Math.min(
+          (
+            Math.max(
+              totalVolumeTerpasang -
+              volumeMingguIni,
+              0
+            )
+            /
+            totalVolume
+          )
+          *
+          bobot,
+          bobot
+        )
+        :
+        0;
+
+        const progressMingguanItem =
+        Math.max(
+          progressItem -
+          progressSebelumMingguIni,
           0
         );
 
-        const totalVolume = Number(boq.volume || 0);
-        const bobot = Number(boq.bobot || 0);
+        totalProgressMingguan +=
+        Math.max(
+          progressMingguanItem,
+          0
+        );
 
-        // ✅ RUMUS BENAR
-        const progressItem = totalVolume
-          ? (totalVolumeTerpasang / totalVolume) * bobot
-          : 0;
-
-        totalProgress += progressItem;
       }
 
-      // ✅ ini kumulatif proyek
-      const real = totalProgress;
+      const rawReal =
+      Number(
+        totalProgress
+        .toFixed(3)
+      );
 
-      // =========================
-      // 🔥 REAL MINGGUAN (DELTA)
-      // =========================
-      const prevKum = result.at(-1)?.kum_real || 0;
-      const realMingguan = real - prevKum;
+      const prevKum =
+      result.at(-1)
+      ?.kum_real ||0;
 
-      // =========================
-      // 🔥 PUSH
-      // =========================
+      const realMingguan =
+      Number(
+        totalProgressMingguan
+        .toFixed(3)
+      );
+
+      const penyesuaianAdendum =
+      Number(
+        (
+          rawReal -
+          prevKum -
+          realMingguan
+        )
+        .toFixed(3)
+      );
+
+      const real =
+      Number(
+        Math.min(
+          rawReal,
+          100
+        ).toFixed(3)
+      );
+
       result.push({
-        minggu_ke: Number(minggu),
 
-        rencana: Number(rencana.toFixed(3)),
-        real: Number(realMingguan.toFixed(3)),
+        minggu_ke:
+        Number(minggu),
 
-        kum_rencana: Number(kumulatifRencana.toFixed(3)),
-        kum_real: Number(real.toFixed(3)),
+        rencana:
+        Number(
+          rencana.toFixed(3)
+        ),
+
+        real:
+        realMingguan,
+
+        penyesuaian_adendum:
+        penyesuaianAdendum,
+
+        kum_rencana:
+        Number(
+          kumulatifRencana
+          .toFixed(3)
+        ),
+
+        kum_real:
+        real
+
       });
+
     }
 
     res.json(result);
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
+  }
+
+  catch(error){
+    console.log(
+      "ERROR CHART:",
+      error
+    );
+    res.status(500)
+    .json({
+      message:
+      error.message
+    });
   }
 };

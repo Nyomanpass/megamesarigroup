@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
@@ -14,24 +14,32 @@ export default function WeeklyReportPage() {
   const navigate = useNavigate();
 
   const [data, setData] = useState([]);
+  const [boqList, setBoqList] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState(null);
+  const [error, setError] = useState("");
 
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     try {
-      const res = await api.get(`/weekly-report/${id}`);
-      setData(res.data);
+      const [reportRes, boqRes] = await Promise.all([
+        api.get(`/weekly-report/${id}`),
+        api.get(`/boq/project/${id}/0`)
+      ]);
 
-      if (res.data.length > 0) {
-        setSelectedWeek(res.data[0].minggu_ke);
+      setData(reportRes.data);
+      setBoqList(boqRes.data.data || []);
+
+      if (reportRes.data.length > 0) {
+        setSelectedWeek(reportRes.data[0].minggu_ke);
       }
     } catch (err) {
       console.log(err);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReport();
-  }, [id]);
+  }, [fetchReport]);
 
   const handleExportWeeklyExcel = async () => {
   try {
@@ -67,7 +75,123 @@ export default function WeeklyReportPage() {
   }
 };
 
+const handleExportWeeklyPDF = async () => {
+  try {
+
+    if (!selectedWeek) {
+      setError("Pilih minggu dulu sebelum export!");
+      return;
+    }
+
+    const response = await api.get(
+      `/weekly-report-pdf/${id}?minggu=${selectedWeek}`,
+      {
+        responseType: "blob",
+      }
+    );
+
+    // 🔥 download file
+    const url = window.URL.createObjectURL(
+      new Blob([response.data])
+    );
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.setAttribute(
+      "download",
+      `laporan_mingguan_minggu_${selectedWeek}.pdf`
+    );
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+  } catch (error) {
+
+    console.log(error);
+
+    setError("Gagal export PDF");
+
+  }
+};
+
   const minggu = data.find((m) => m.minggu_ke === selectedWeek);
+
+  const groupedWeeklyRows = useMemo(() => {
+    if (!minggu?.data?.length) return [];
+
+    if (minggu.data.some((item) => item.tipe === "header" || item.tipe === "subheader")) {
+      return minggu.data;
+    }
+
+    const boqMap = {};
+    const printedHeaders = new Set();
+    const printedSubheaders = new Set();
+    const rows = [];
+
+    boqList.forEach((item) => {
+      boqMap[item.id] = item;
+    });
+
+    const getParents = (boq) => {
+      let header = null;
+      let subheader = null;
+      let current = boq;
+
+      while (current?.parent_id) {
+        current = boqMap[current.parent_id];
+
+        if (current?.tipe === "subheader") {
+          subheader = current;
+        }
+
+        if (current?.tipe === "header") {
+          header = current;
+        }
+      }
+
+      return { header, subheader };
+    };
+
+    minggu.data.forEach((reportItem) => {
+      const boq = boqMap[reportItem.boq_id];
+
+      if (!boq) {
+        rows.push(reportItem);
+        return;
+      }
+
+      const { header, subheader } = getParents(boq);
+
+      if (header && !printedHeaders.has(header.id)) {
+        rows.push({
+          ...header,
+          tipe: "header"
+        });
+        printedHeaders.add(header.id);
+      }
+
+      if (subheader && !printedSubheaders.has(subheader.id)) {
+        rows.push({
+          ...subheader,
+          tipe: "subheader"
+        });
+        printedSubheaders.add(subheader.id);
+      }
+
+      rows.push({
+        ...reportItem,
+        tipe: "item",
+        level: boq.level ?? reportItem.level ?? 0
+      });
+    });
+
+    return rows;
+  }, [minggu, boqList]);
 
   // Formatting helpers
   const format = (val) => Number(val || 0).toFixed(3);
@@ -100,7 +224,18 @@ export default function WeeklyReportPage() {
 
   return (
     <>
-      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6  mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {error && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={18} />
+              {error}
+            </span>
+            <button onClick={() => setError("")} className="text-red-500 hover:text-red-700">
+              Tutup
+            </button>
+          </div>
+        )}
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -136,12 +271,23 @@ export default function WeeklyReportPage() {
         </div>
 
 
-        <button
-        onClick={handleExportWeeklyExcel}
-        className="bg-green-600 mb-4 hover:bg-green-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
-      >
-        📊 Export Excel
-      </button>
+        <div className="flex items-center gap-3 mb-4">
+
+          <button
+            onClick={handleExportWeeklyExcel}
+            className="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export Excel
+          </button>
+
+          <button
+            onClick={handleExportWeeklyPDF}
+            className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export PDF
+          </button>
+
+        </div>
 
         {/* CONTENT */}
         {minggu ? (
@@ -294,13 +440,13 @@ export default function WeeklyReportPage() {
                   </thead>
                   
                   <tbody className="divide-y divide-gray-50">
-                    {minggu.data.map((item, i) => {
+                    {groupedWeeklyRows.map((item, i) => {
 
                       // HEADER GROUP
                     if (item.tipe === "header") {
                           return (
-                            <tr key={i} className="bg-gray-200 border-b">
-                              <td colSpan="9" className="p-4 font-black text-gray-900 uppercase text-sm">
+                            <tr key={`header-${item.id || i}`} className="bg-slate-800 border-b">
+                              <td colSpan="9" className="p-4 font-black text-white uppercase text-sm tracking-wide">
                                 {item.kode} - {item.uraian}
                               </td>
                             </tr>
@@ -309,7 +455,7 @@ export default function WeeklyReportPage() {
 
                         if (item.tipe === "subheader") {
                           return (
-                            <tr key={i} className="bg-gray-100 border-b">
+                            <tr key={`subheader-${item.id || i}`} className="bg-slate-100 border-b">
                               <td colSpan="9" className="p-3 pl-8 font-bold text-gray-700 text-xs">
                                 {item.kode} - {item.uraian}
                               </td>
@@ -319,16 +465,35 @@ export default function WeeklyReportPage() {
 
                       // ITEM ROW
                       return (
-                        <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-3 px-4 text-gray-700 font-semibold max-w-[200px] sm:max-w-xs">{item.uraian}</td>
+                        <tr key={`item-${item.boq_id || i}`} className="hover:bg-blue-50/30 transition-colors">
+                          <td
+                            className="p-3 px-4 text-gray-700 font-semibold max-w-[200px] sm:max-w-xs"
+                            style={{ paddingLeft: `${Number(item.level || 0) * 18 + 16}px` }}
+                          >
+                            {item.uraian}
+                          </td>
                           <td className="p-3 text-center text-gray-400 text-xs">{item.satuan}</td>
                           
-                          <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{item.total}</td>
+                          <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{format(item.total)}</td>
                           <td className="p-3 text-center bg-indigo-50/10 font-bold text-indigo-600">{Number(item.bobot).toFixed(3)}</td>
 
-                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">{Number(item.sd_lalu).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">{Number(item.minggu_ini).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
+                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">
+                            {Number(item.sd_lalu) === 0
+                              ? "-"
+                              : Number(item.sd_lalu).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">
+                            {Number(item.minggu_ini) === 0
+                              ? "-"
+                              : Number(item.minggu_ini).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">
+                            {Number(item.sd_ini) === 0
+                              ? "-"
+                              : Number(item.sd_ini).toFixed(3)}
+                          </td>
 
                          <td className="p-3 text-right">
                             <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
@@ -343,7 +508,7 @@ export default function WeeklyReportPage() {
                               <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
                                 item.progress_item >= 80
                                   ? "bg-green-100 text-green-700 border-green-200"
-                                  : item.progress_item >= 50
+                                  : item.progress_item >= 30
                                   ? "bg-yellow-100 text-yellow-700 border-yellow-200"
                                   : "bg-red-100 text-red-700 border-red-200"
                               }`}>

@@ -1,4 +1,12 @@
 import axios from "axios";
+import {
+   getAccessToken,
+   getRefreshToken,
+   logoutToLogin,
+   ACCESS_TOKEN_KEY,
+} from "./utils/auth";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 export const UPLOADS_BASE_URL = (import.meta.env.VITE_UPLOADS_URL || "/uploads").replace(/\/$/, "");
@@ -9,7 +17,7 @@ const api = axios.create({
 
 // 🔐 REQUEST → kirim access token
 api.interceptors.request.use((config) => {
-   const accessToken = localStorage.getItem("accessToken");
+   const accessToken = getAccessToken();
 
    if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
@@ -29,22 +37,21 @@ api.interceptors.response.use(
          originalRequest._retry = true;
 
          try {
-            const refreshToken = localStorage.getItem("refreshToken");
+            const refreshToken = getRefreshToken();
 
             const res = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
 
             const newAccessToken = res.data.accessToken;
 
             // simpan token baru
-            localStorage.setItem("accessToken", newAccessToken);
+            localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
 
             // ulang request sebelumnya
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
             return api(originalRequest);
-         } catch (err) {
+         } catch {
             // kalau refresh gagal → logout
-            localStorage.clear();
-            window.location.href = "/";
+            logoutToLogin();
          }
       }
 

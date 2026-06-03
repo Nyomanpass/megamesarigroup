@@ -2,7 +2,10 @@ import { Boq } from "../models/BoqModel.js";
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { ProjectItem } from "../models/ProjekItem.js";
-
+import { BoqVersionChange } from "../models/BoqVersionChangeModel.js";
+import { generateBobot } from "../utils/generateBobot.js";
+import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { Op } from "sequelize"; 
 
 // 🔥 ROMAWI → TEXT
 const toRoman = (num) => {
@@ -155,21 +158,33 @@ const buildFlatTree = (data, parentId = null, level = 0) => {
 // 🔥 TANPA req/res
 export const generateBobotInternal = async (project_id) => {
   try {
+
     const data = await Boq.findAll({
       where: { project_id }
     });
 
     let totalSemua = 0;
+
     const temp = [];
 
-    // 🔥 hitung jumlah semua item
-    for (let boq of data) {
-      if (boq.tipe === "item" && boq.analisa_id) {
-        const analisaResult = await hitungAnalisa(boq.analisa_id);
-        const harga_satuan = analisaResult.grandTotal;
+    // =========================
+    // HITUNG TOTAL
+    // =========================
+    for (const boq of data) {
 
-        const volume = Number(boq.volume) || 0;
-        const jumlah = harga_satuan * volume;
+      if (boq.tipe === "item" && boq.analisa_id) {
+
+        const analisaResult =
+          await hitungAnalisa(boq.analisa_id);
+
+        const harga_satuan =
+          Number(analisaResult.grandTotal || 0);
+
+        const volume =
+          Number(boq.volume || 0);
+
+        const jumlah =
+          harga_satuan * volume;
 
         temp.push({
           id: boq.id,
@@ -182,40 +197,44 @@ export const generateBobotInternal = async (project_id) => {
 
     if (totalSemua === 0) return;
 
-    let runningTotalBobot = 0;
+    // =========================
+    // GENERATE BOBOT
+    // =========================
+    const updates = temp.map((item) => {
 
-   const updates = temp.map((item, index) => {
-    let bobotFinal;
+      // FULL PRECISION
+      const bobot =
+        (item.jumlah / totalSemua) * 100;
 
-    if (index === temp.length - 1) {
-      // Item terakhir menanggung sisa selisih pembulatan
-      // Gunakan .toFixed(3) lagi agar hasilnya konsisten 3 desimal
-      bobotFinal = (100 - runningTotalBobot).toFixed(3);
-    } else {
-      // Hitung bobot normal
-      const hitungBobot = (item.jumlah / totalSemua) * 100;
-      bobotFinal = hitungBobot.toFixed(3);
-      runningTotalBobot += Number(bobotFinal);
-    }
-
-    return Boq.update(
-      { bobot: Number(bobotFinal) },
-      { where: { id: item.id } }
-    );
-  });
+      return Boq.update(
+        {
+          bobot: Number(
+            bobot.toFixed(8)
+          )
+        },
+        {
+          where: {
+            id: item.id
+          }
+        }
+      );
+    });
 
     await Promise.all(updates);
 
   } catch (error) {
-    console.error("ERROR generate:", error);
+
+    console.error(
+      "ERROR generate:",
+      error
+    );
   }
 };
-
 
 const round2 = (num) => Math.round(num * 100) / 100;
 
 
-const hitungAnalisa = async (analisa_id) => {
+export const hitungAnalisa = async (analisa_id) => {
   const analisa = await ProjectAnalisa.findByPk(analisa_id);
 
   const details = await ProjectAnalisaDetail.findAll({
@@ -252,6 +271,7 @@ const hitungAnalisa = async (analisa_id) => {
   };
 };
 
+
 export const createBulkBoq = async (req, res) => {
   try {
     const { project_id, parent_id, items } = req.body;
@@ -283,8 +303,15 @@ export const createBulkBoq = async (req, res) => {
       const vol = Number(volume) || 0;
       const persenPPN = Number(ppn) || 11;
 
-      const jumlah = harga_satuan * vol;
-      const jumlah_ppn = jumlah + (jumlah * persenPPN / 100);
+      const jumlah = Number(
+        (harga_satuan * vol).toFixed(2)
+      );
+
+      const jumlah_ppn = Number(
+        (
+          jumlah + (jumlah * persenPPN / 100)
+        ).toFixed(2)
+      );
 
       const newItem = await Boq.create({
         project_id,
@@ -376,38 +403,151 @@ export const createBoq = async (req, res) => {
 
 export const getBoqByProject = async (req, res) => {
   try {
-    const { project_id } = req.params;
+    const { project_id, version_id } = req.params;
 
-    const data = await Boq.findAll({
-      where: { project_id }
-    });
 
-    // 🔥 HITUNG DINAMIS
+    // ==========================================
+// 1. AMBIL DATA MASTER BOQ
+// ==========================================
+let data = await Boq.findAll({
+    where: { project_id },
+    order: [["id", "ASC"]]
+});
+
+let changeMap = {};
+const version =
+await ProjectVersionModel.findByPk(
+   version_id
+);
+
+const isMc0 =
+Number(
+   version?.revision || 0
+)===0;
+
+
+
+// ==========================================
+// MC0
+// ==========================================
+
+if(isMc0){
+
+   // ambil item addendum baru
+   const newItems =
+   await BoqVersionChange.findAll({
+
+      where:{
+         action:"new"
+      }
+
+   });
+
+
+   const hiddenIds =
+   newItems.map(
+      x=>Number(
+         x.boq_item_id
+      )
+   );
+
+
+   data=
+   data.filter(
+
+      item=>
+
+      !hiddenIds.includes(
+         Number(item.id)
+      )
+
+   );
+
+}
+
+
+// ==========================================
+// MC1 / MC2
+// ==========================================
+
+else{
+
+   const changes =
+   await BoqVersionChange.findAll({
+
+      where:{
+         version_id
+      }
+
+   });
+
+
+   changes.forEach(item=>{
+
+      changeMap[
+         item.boq_item_id
+      ]=item;
+
+   });
+
+
+   const deletedItems=
+   changes
+   .filter(
+      x=>x.action==="delete"
+   )
+   .map(
+      x=>Number(
+         x.boq_item_id
+      )
+   );
+
+
+   data=
+   data.filter(
+
+      item=>
+
+      !deletedItems.includes(
+         Number(item.id)
+      )
+
+   );
+
+}
+
+
+    // 3. Hitung Kalkulasi Dinamis per Item secara Async (Promise.all)
     const calculated = await Promise.all(
       data.map(async (boq) => {
-
         let harga_satuan = 0;
         let jumlah = 0;
         let jumlah_ppn = 0;
 
-        if (boq.tipe === "item" && boq.analisa_id) {
-         const analisaResult = await hitungAnalisa(boq.analisa_id);
-          harga_satuan = analisaResult.grandTotal;
+        const change = changeMap[boq.id];
+        const finalVolume = Number(change?.volume ?? boq.volume) || 0;
 
-          const volume = Number(boq.volume) || 0;
-          jumlah = harga_satuan * volume;
+        // Jika berupa item pekerjaan utama dan memiliki analisa harga satuan (AHS)
+        if (boq.tipe === "item" && boq.analisa_id) {
+          const analisaResult = await hitungAnalisa(boq.analisa_id);
+
+          harga_satuan = parseFloat(
+            Number(change?.harga_satuan ?? analisaResult.grandTotal ?? boq.harga_satuan ?? 0).toFixed(6)
+          );
+
+          jumlah = parseFloat((harga_satuan * finalVolume).toFixed(6));
 
           const ppn = Number(boq.ppn) || 0;
-          jumlah_ppn = jumlah + (jumlah * ppn / 100);
+          jumlah_ppn = parseFloat((jumlah + (jumlah * ppn) / 100).toFixed(6));
         }
 
         return {
           ...boq.toJSON(),
-
+          boq_item_id: boq.id,
+          volume: finalVolume,
           harga_satuan,
           jumlah,
           jumlah_ppn,
-
           harga_satuan_rp: formatRupiah(harga_satuan),
           jumlah_rp: formatRupiah(jumlah),
           jumlah_ppn_rp: formatRupiah(jumlah_ppn)
@@ -415,14 +555,47 @@ export const getBoqByProject = async (req, res) => {
       })
     );
 
-    // 🔥 INI KUNCINYA
-    const result = buildFlatTree(calculated);
+    // 4. Filter khusus tipe item untuk agregasi total proyek
+    const itemOnly = calculated.filter(item => item.tipe === "item");
+    const totalProject = itemOnly.reduce((sum, item) => sum + Number(item.jumlah || 0), 0);
 
-    res.json(result);
+    // 5. Generate Bobot Persentase
+    const withBobot = calculated.map((item) => {
+      const jumlah = Number(item.jumlah || 0);
+      const bobot = totalProject > 0 ? (jumlah / totalProject) * 100 : 0;
+
+      return {
+        ...item,
+        bobot: Number(bobot.toFixed(6))
+      };
+    });
+
+    // 6. Hitung Akumulasi Total untuk Ringkasan Ringkas (Summary Footer)
+    const totalHargaSatuan = parseFloat(itemOnly.reduce((acc, curr) => acc + Number(curr.harga_satuan || 0), 0).toFixed(2));
+    const totalJumlah = parseFloat(itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0).toFixed(2));
+    const totalGrandTotal = parseFloat(itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0).toFixed(3));
+    const totalBobot = withBobot.reduce((sum, item) => sum + Number(item.bobot || 0), 0).toFixed(3);
+
+    // 7. Konstruksi struktur pohon (Tree Node) untuk tampilan flat grid/table
+    const result = buildFlatTree(withBobot);
+
+    // 8. Kirim Response JSON
+    return res.json({
+      totalHargaSatuan,
+      totalJumlah,
+      totalGrandTotal,
+      totalBobot,
+      totalHargaSatuan_rp: formatRupiah(totalHargaSatuan),
+      totalJumlah_rp: formatRupiah(totalJumlah),
+      totalGrandTotal_rp: formatRupiah(totalGrandTotal),
+      data: result
+    });
 
   } catch (error) {
-    console.error("ERROR:", error);
-    res.status(500).json({ message: error.message });
+    console.error("ERROR in getBoqByProject:", error);
+    return res.status(500).json({
+      message: error.message || "Internal server error"
+    });
   }
 };
 
@@ -576,29 +749,48 @@ export const updateBoq = async (req, res) => {
 
 // 🔥 DELETE
 export const deleteBoq = async (req, res) => {
-  try {
-    const { id } = req.params;
+    try {
+        const { id } = req.params;
 
-    const item = await Boq.findByPk(id);
-    if (!item) {
-      return res.status(404).json({ message: "Data tidak ditemukan" });
+        const item = await Boq.findByPk(id);
+        if (!item) {
+            return res.status(404).json({ message: "Data tidak ditemukan" });
+        }
+
+        const project_id = item.project_id;
+
+        // ==========================================
+        // 1. CEK & HAPUS RIWAYAT ADDENDUM BARU
+        // ==========================================
+        const addendumItem = await BoqVersionChange.findOne({
+            where: {
+                boq_item_id: id,
+                action: "new"
+            }
+        });
+
+        if (addendumItem) {
+            await addendumItem.destroy();
+        }
+
+        // ==========================================
+        // 2. HAPUS DATA MASTER BOQ & RE-CALCULATE
+        // ==========================================
+        await item.destroy();
+
+        // Sinkronisasi ulang bobot internal proyek
+        await generateBobotInternal(project_id);
+
+        return res.json({ message: "Berhasil hapus" });
+
+    } catch (error) {
+        console.error("Error pada deleteBoq:", error);
+        return res.status(500).json({
+            message: error.message || "Terjadi kesalahan pada server"
+        });
     }
-
-    const project_id = item.project_id;
-
-    await item.destroy();
-
-    // 🔥 regenerate bobot setelah delete
-    await generateBobotInternal(project_id);
-
-    res.status(200).json({
-      message: "Berhasil hapus BOQ"
-    });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
+
 
 export const linkAnalisaBoq = async (req, res) => {
   try {
@@ -633,7 +825,6 @@ export const linkAnalisaBoq = async (req, res) => {
       jumlah_ppn
     });
 
-    await generateBobotInternal(item.project_id);
 
     res.json({
       message: "Berhasil link analisa",
@@ -644,4 +835,498 @@ export const linkAnalisaBoq = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: error.message });
   }
+};
+
+// =========================
+//boq version change controller
+// =========================
+
+export const createBoqVersionChange =
+  async (req, res) => {
+
+  try {
+
+    const {
+
+      version_id,
+      boq_item_id,
+
+      volume,
+      harga_satuan,
+
+      action
+
+    } = req.body;
+
+    // =========================
+    // VALIDASI
+    // =========================
+    if (!version_id) {
+
+      return res.status(400).json({
+        message:
+          "Version wajib dipilih"
+      });
+
+    }
+
+    if (!boq_item_id) {
+
+      return res.status(400).json({
+        message:
+          "BOQ item wajib dipilih"
+      });
+
+    }
+
+    // =========================
+    // CEK DUPLIKAT
+    // =========================
+    const existing =
+      await BoqVersionChange.findOne({
+
+        where: {
+
+          version_id,
+          boq_item_id
+
+        }
+
+      });
+
+    if (existing) {
+
+      return res.status(400).json({
+        message:
+          "Item sudah pernah diubah pada version ini"
+      });
+
+    }
+
+    // =========================
+    // CREATE
+    // =========================
+    const data =
+      await BoqVersionChange.create({
+
+        version_id,
+        boq_item_id,
+
+        volume,
+        harga_satuan,
+
+        action:
+          action || "update"
+
+      });
+
+    res.status(201).json({
+
+      message:
+        "Perubahan BOQ berhasil dibuat",
+
+      data
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+
+};
+
+export const getBoqVersionChanges =
+  async (req, res) => {
+
+  try {
+
+    const { version_id } =
+      req.params;
+
+    const data =
+      await BoqVersionChange.findAll({
+
+        where: {
+          version_id
+        },
+
+        include: [
+
+          {
+            model: Boq,
+            as: "boq"
+          }
+
+        ],
+
+        order: [
+          ["id", "ASC"]
+        ]
+
+      });
+
+    res.json({
+      data
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+
+};
+
+export const getBoqVersionChangeById =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const data =
+      await BoqVersionChange.findByPk(id);
+
+    if (!data) {
+
+      return res.status(404).json({
+        message:
+          "Data tidak ditemukan"
+      });
+
+    }
+
+    res.json({
+      data
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+
+};
+
+
+export const updateBoqVersionChange =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const data =
+      await BoqVersionChange.findByPk(id);
+
+    if (!data) {
+
+      return res.status(404).json({
+        message:
+          "Data tidak ditemukan"
+      });
+
+    }
+
+    await data.update({
+
+      volume:
+        req.body.volume,
+
+      harga_satuan:
+        req.body.harga_satuan,
+
+      action:
+        req.body.action
+
+    });
+
+    res.json({
+
+      message:
+        "Perubahan berhasil diupdate",
+
+      data
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+
+};
+
+
+export const deleteBoqVersionChange =
+  async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const data =
+      await BoqVersionChange.findByPk(id);
+
+    if (!data) {
+
+      return res.status(404).json({
+        message:
+          "Data tidak ditemukan"
+      });
+
+    }
+
+    await data.destroy();
+
+    res.json({
+      message:
+        "Perubahan berhasil dihapus"
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message:
+        error.message
+    });
+
+  }
+
+};
+
+
+export const createBoqAddendumItem = async (req, res) => {
+    try {
+        const {
+            version_id,
+            project_id,
+            parent_id,
+            uraian,
+            satuan,
+            volume,
+            analisa_id,
+            ppn
+        } = req.body;
+
+        // ==========================================
+        // 1. VALIDASI INPUT
+        // ==========================================
+        if (!version_id) {
+            return res.status(400).json({ message: "Version wajib dipilih" });
+        }
+
+        if (!parent_id) {
+            return res.status(400).json({ message: "Parent wajib dipilih" });
+        }
+
+        // ==========================================
+        // 2. GENERATE KODE & HITUNG ANALISA
+        // ==========================================
+        const kode = await generateKode(parent_id, "item");
+        
+        let harga_satuan = 0;
+        if (analisa_id) {
+            const analisaResult = await hitungAnalisa(analisa_id);
+            harga_satuan = analisaResult.grandTotal;
+        }
+
+        // Konversi tipe data & kalkulasi nilai
+        const vol = Number(volume) || 0;
+        const persenPPN = Number(ppn) || 11;
+        const jumlah = vol * harga_satuan;
+        const jumlah_ppn = jumlah + (jumlah * persenPPN / 100);
+
+        // ==========================================
+        // 3. PROSES SIMPAN DATA (DATABASE)
+        // ==========================================
+        const newBoq = await Boq.create({
+            project_id,
+            parent_id,
+            analisa_id,
+            kode,
+            uraian,
+            satuan,
+            volume: vol,
+            harga_satuan,
+            jumlah,
+            jumlah_ppn,
+            ppn: persenPPN,
+            tipe: "item"
+        });
+
+        // Catat riwayat perubahan versi BOQ
+        await BoqVersionChange.create({
+            version_id,
+            boq_item_id: newBoq.id,
+            volume: null,
+            harga_satuan: null,
+            action: "new"
+        });
+
+        // Sinkronisasi bobot internal proyek
+        await generateBobotInternal(project_id);
+
+        // ==========================================
+        // 4. RESPON BERHASIL
+        // ==========================================
+        return res.status(201).json({
+            message: "Item addendum berhasil ditambahkan",
+            data: newBoq
+        });
+
+    } catch (error) {
+        console.error("Error pada createBoqAddendumItem:", error);
+        return res.status(500).json({
+            message: error.message || "Terjadi kesalahan pada server"
+        });
+    }
+};
+
+
+export const getBoqWithBobot = async (project_id, version_id) => {
+    // 1. Ambil semua item master/baseline BOQ
+    const boqItems = await Boq.findAll({
+        where: { project_id },
+        order: [["id", "ASC"]]
+    });
+
+    // Kondisi MC0: Jika tidak ada version_id, langsung kalkulasi bobot baseline
+    if (!version_id) {
+        const newChanges = await BoqVersionChange.findAll({
+            where: { action: "new" }
+        });
+
+        const hiddenNewIds = new Set(
+            newChanges.map(item => Number(item.boq_item_id))
+        );
+
+        return generateBobot(
+            boqItems.filter(item => !hiddenNewIds.has(Number(item.id)))
+        );
+    }
+
+    const currentVersion = await ProjectVersionModel.findByPk(version_id);
+
+    if (!currentVersion) {
+        return generateBobot(boqItems);
+    }
+
+    if (Number(currentVersion.revision || 0) === 0) {
+        const newChanges = await BoqVersionChange.findAll({
+            where: { action: "new" }
+        });
+
+        const hiddenNewIds = new Set(
+            newChanges.map(item => Number(item.boq_item_id))
+        );
+
+        return generateBobot(
+            boqItems.filter(item => !hiddenNewIds.has(Number(item.id)))
+        );
+    }
+
+    const versionChain = await ProjectVersionModel.findAll({
+        where: {
+            project_id,
+            revision: {
+                [Op.lte]: currentVersion.revision
+            }
+        },
+        order: [["revision", "ASC"]]
+    });
+
+    const versionIds = versionChain.map(version => version.id);
+
+    // 2. Ambil semua data perubahan sampai versi aktif
+    const changes = await BoqVersionChange.findAll({
+        where: {
+            version_id: {
+                [Op.in]: versionIds
+            }
+        },
+        order: [["id", "ASC"]]
+    });
+
+    // Petakan perubahan ke bentuk Map Object agar pencarian O(1) cepat
+    const changeMap = {};
+    changes.forEach(item => {
+        changeMap[item.boq_item_id] = item;
+    });
+
+    const newItemIds = changes
+        .filter(x => x.action === "new")
+        .map(x => Number(x.boq_item_id));
+
+    const newItemIdSet = new Set(newItemIds);
+
+    // 3. Gabungkan perubahan (Merge Volume & Harga Satuan)
+    let merged = boqItems
+      .filter(item => !newItemIdSet.has(Number(item.id)))
+      .map(item => {
+        const change = changeMap[item.id];
+        return {
+            ...item.toJSON(),
+            volume: change?.volume ?? item.volume,
+            harga_satuan: change?.harga_satuan ?? item.harga_satuan
+        };
+    });
+
+    // 4. Saring/Hapus item yang berstatus 'delete' pada versi ini
+    merged = merged.filter(item => changeMap[item.id]?.action !== "delete");
+
+    // 5. Ambil dan tambahkan item baru hasil addendum secara efisien (Bulk Fetch)
+    if (newItemIds.length > 0) {
+        const newBoqItems = await Boq.findAll({
+            where: {
+                id: { [Op.in]: newItemIds }
+            }
+        });
+
+        // Masukkan item baru satu kali, lalu tetap pakai perubahan terakhir jika ada.
+        newBoqItems.forEach(boq => {
+            const change = changeMap[boq.id];
+
+            if (change?.action === "delete") {
+                return;
+            }
+
+            merged.push({
+                ...boq.toJSON(),
+                volume: change?.volume ?? boq.volume,
+                harga_satuan: change?.harga_satuan ?? boq.harga_satuan
+            });
+        });
+    }
+
+    // 6. Hitung total bobot akhir
+    return generateBobot(merged);
 };

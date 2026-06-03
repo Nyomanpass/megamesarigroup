@@ -13,6 +13,19 @@ export const Schedule = sequelize.define("Schedule", {
     }
   },
 
+    version_id: {
+
+      type: DataTypes.INTEGER,
+
+      allowNull: true,
+
+      references: {
+        model: "project_versions",
+        key: "id"
+      }
+    },
+
+
   boq_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -28,7 +41,7 @@ export const Schedule = sequelize.define("Schedule", {
   },
 
   bobot: {
-    type: DataTypes.DECIMAL(10, 4),
+    type: DataTypes.DECIMAL(18, 8),
     allowNull: true
   }
 

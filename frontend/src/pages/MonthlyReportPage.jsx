@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
@@ -14,26 +14,106 @@ export default function MonthlyReportPage() {
   const navigate = useNavigate();
 
   const [data, setData] = useState([]);
+  const [boqList, setBoqList] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [error, setError] = useState("");
 
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     try {
-      const res = await api.get(`/monthly-report/${id}`);
-      setData(res.data);
+      const [reportRes, boqRes] = await Promise.all([
+        api.get(`/monthly-report/${id}`),
+        api.get(`/boq/project/${id}/0`)
+      ]);
 
-      if (res.data.length > 0) {
-        setSelectedMonth(res.data[0].bulan_ke);
+      setData(reportRes.data);
+      setBoqList(boqRes.data.data || []);
+
+      if (reportRes.data.length > 0) {
+        setSelectedMonth(reportRes.data[0].bulan_ke);
       }
     } catch (err) {
       console.log(err);
     }
-  };
-
-  useEffect(() => {
-    fetchReport();
   }, [id]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchReport();
+  }, [fetchReport]);
+
   const bulan = data.find((b) => b.bulan_ke === selectedMonth);
+
+  const groupedMonthlyRows = useMemo(() => {
+    if (!bulan?.data?.length) return [];
+
+    if (bulan.data.some((item) => item.tipe === "header" || item.tipe === "subheader")) {
+      return bulan.data;
+    }
+
+    const boqMap = {};
+    const printedHeaders = new Set();
+    const printedSubheaders = new Set();
+    const rows = [];
+
+    boqList.forEach((item) => {
+      boqMap[item.id] = item;
+    });
+
+    const getParents = (boq) => {
+      let header = null;
+      let subheader = null;
+      let current = boq;
+
+      while (current?.parent_id) {
+        current = boqMap[current.parent_id];
+
+        if (current?.tipe === "subheader") {
+          subheader = current;
+        }
+
+        if (current?.tipe === "header") {
+          header = current;
+        }
+      }
+
+      return { header, subheader };
+    };
+
+    bulan.data.forEach((reportItem) => {
+      const boq = boqMap[reportItem.boq_id];
+
+      if (!boq) {
+        rows.push(reportItem);
+        return;
+      }
+
+      const { header, subheader } = getParents(boq);
+
+      if (header && !printedHeaders.has(header.id)) {
+        rows.push({
+          ...header,
+          tipe: "header"
+        });
+        printedHeaders.add(header.id);
+      }
+
+      if (subheader && !printedSubheaders.has(subheader.id)) {
+        rows.push({
+          ...subheader,
+          tipe: "subheader"
+        });
+        printedSubheaders.add(subheader.id);
+      }
+
+      rows.push({
+        ...reportItem,
+        tipe: "item",
+        level: boq.level ?? reportItem.level ?? 0
+      });
+    });
+
+    return rows;
+  }, [bulan, boqList]);
 
   // Formatting helpers
   const format = (val) => Number(val || 0).toFixed(3);
@@ -101,9 +181,66 @@ const handleExportMonthlyExcel = async () => {
   }
 };
 
+
+const handleExportMonthlyPDF = async () => {
+
+  try {
+
+    const response = await api.get(
+
+      `/monthly-report-pdf/${id}?bulan=${selectedMonth}`,
+
+      {
+        responseType: "blob"
+      }
+
+    );
+
+    const url =
+      window.URL.createObjectURL(
+        new Blob([response.data])
+      );
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.setAttribute(
+      "download",
+      `Laporan_Bulanan_${selectedMonth}.pdf`
+    );
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+  } catch (err) {
+
+    console.log(err);
+
+    alert("Gagal export PDF");
+
+  }
+
+};
+
   return (
     <>
-      <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {error && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={18} />
+              {error}
+            </span>
+            <button onClick={() => setError("")} className="text-red-500 hover:text-red-700">
+              Tutup
+            </button>
+          </div>
+        )}
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -138,12 +275,23 @@ const handleExportMonthlyExcel = async () => {
           </div>
         </div>
 
-        <button
-  onClick={handleExportMonthlyExcel}
-  className="bg-blue-600 mb-4 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md flex items-center gap-2"
->
-  📊 Export Bulanan
-</button>
+        <div className="flex items-center gap-3 mb-4">
+
+          <button
+            onClick={handleExportMonthlyExcel}
+            className="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export Excel
+          </button>
+
+          <button
+            onClick={handleExportMonthlyPDF}
+            className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-sm transition-all active:scale-95"
+          >
+            Export PDF
+          </button>
+
+        </div>
 
         {/* CONTENT */}
         {bulan ? (
@@ -286,7 +434,6 @@ const handleExportMonthlyExcel = async () => {
                     <tr className="border-b border-gray-100">
                        <th className="p-2 text-center text-orange-600 border-l border-gray-100 bg-orange-50/30">Total Vol</th>
                        <th className="p-2 text-center text-pink-600 bg-pink-50/30">Bobot</th>
-                       
                        <th className="p-2 text-center text-gray-500 border-l border-gray-100 bg-gray-50/50">s/d Lalu</th>
                        <th className="p-2 text-center text-blue-600 font-black bg-blue-50">BL INI</th>
                        <th className="p-2 text-center text-emerald-600 font-black bg-emerald-50">s/d Ini</th>
@@ -294,13 +441,13 @@ const handleExportMonthlyExcel = async () => {
                   </thead>
                   
                   <tbody className="divide-y divide-gray-50">
-                    {bulan.data.map((item, i) => {
+                    {groupedMonthlyRows.map((item, i) => {
 
                       // HEADER GROUP
                        if (item.tipe === "header") {
                           return (
-                            <tr key={i} className="bg-gray-200 border-b">
-                              <td colSpan="9" className="p-4 font-black text-gray-900 uppercase text-sm">
+                            <tr key={`header-${item.id || i}`} className="bg-slate-800 border-b">
+                              <td colSpan="9" className="p-4 font-black text-white uppercase text-sm tracking-wide">
                                 {item.kode} - {item.uraian}
                               </td>
                             </tr>
@@ -309,7 +456,7 @@ const handleExportMonthlyExcel = async () => {
 
                         if (item.tipe === "subheader") {
                           return (
-                            <tr key={i} className="bg-gray-100 border-b">
+                            <tr key={`subheader-${item.id || i}`} className="bg-slate-100 border-b">
                               <td colSpan="9" className="p-3 pl-8 font-bold text-gray-700 text-xs">
                                 {item.kode} - {item.uraian}
                               </td>
@@ -319,22 +466,45 @@ const handleExportMonthlyExcel = async () => {
 
                       // ITEM ROW
                       return (
-                        <tr key={i} className="hover:bg-pink-50/30 transition-colors">
-                          <td className="p-3 px-4 text-gray-700 font-semibold max-w-[200px] sm:max-w-xs">{item.uraian}</td>
+                        <tr key={`item-${item.boq_id || i}`} className="hover:bg-pink-50/30 transition-colors">
+                          <td
+                            className="p-3 px-4 text-gray-700 font-semibold max-w-[200px] sm:max-w-xs"
+                            style={{ paddingLeft: `${Number(item.level || 0) * 18 + 16}px` }}
+                          >
+                            {item.uraian}
+                          </td>
                           <td className="p-3 text-center text-gray-400 text-xs">{item.satuan}</td>
                           
-                          <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{item.total}</td>
+                          <td className="p-3 text-center bg-orange-50/10 font-bold text-gray-700">{format(item.total)}</td>
                           <td className="p-3 text-center bg-pink-50/10 font-bold text-pink-600">{Number(item.bobot).toFixed(3)}</td>
 
-                          <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">{Number(item.sd_lalu).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">{Number(item.bulan_ini).toFixed(3)}</td>
-                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">{Number(item.sd_ini).toFixed(3)}</td>
-
-                          <td className="p-3 text-right">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${item.progres_proyek > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                              {item.progres_proyek}%
-                            </span>
+                         <td className="p-3 text-center text-gray-500 font-mono text-xs bg-gray-50/20">
+                            {Number(item.sd_lalu) === 0
+                              ? "-"
+                              : Number(item.sd_lalu).toFixed(3)}
                           </td>
+
+                          <td className="p-3 text-center font-black text-blue-600 font-mono text-xs bg-blue-50/30">
+                            {Number(item.bulan_ini) === 0
+                              ? "-"
+                              : Number(item.bulan_ini).toFixed(3)}
+                          </td>
+
+                          <td className="p-3 text-center font-black text-emerald-600 font-mono text-xs bg-emerald-50/30">
+                            {Number(item.sd_ini) === 0
+                              ? "-"
+                              : Number(item.sd_ini).toFixed(3)}
+                          </td>
+
+                        <td className="p-3 text-right">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                            item.progres_proyek > 0
+                              ? 'bg-green-100 text-green-700 border-green-200'
+                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}>
+                            {Number(item.progres_proyek).toFixed(3)}%
+                          </span>
+                        </td>
                           {/* 🔥 PROGRESS ITEM */}
                         <td className="p-3 text-right">
                           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
