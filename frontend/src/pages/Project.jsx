@@ -1,7 +1,7 @@
 import { Search, Filter, ChevronDown, Check } from "lucide-react";
 import { Folder, FolderCheck, FolderClock, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import api from "../api";
+import api, { UPLOADS_BASE_URL } from "../api";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 export default function Project() {
@@ -428,8 +428,8 @@ export default function Project() {
                                                                         <img
                                                                               src={
                                                                                     typeof form.logo_kontraktor === "string"
-                                                                                          ? `http://localhost:3000/uploads/${form.logo_kontraktor}` // 🔥 lama
-                                                                                          : URL.createObjectURL(form.logo_kontraktor) // 🔥 baru
+                                                                                          ? `${UPLOADS_BASE_URL}/${form.logo_kontraktor}`
+                                                                                          : URL.createObjectURL(form.logo_kontraktor)
                                                                               }
                                                                               className="h-12 mt-2 object-contain"
                                                                         />
@@ -452,7 +452,7 @@ export default function Project() {
                                                                         <img
                                                                               src={
                                                                                     typeof form.logo_konsultan === "string"
-                                                                                          ? `http://localhost:3000/uploads/${form.logo_konsultan}`
+                                                                                          ? `${UPLOADS_BASE_URL}/${form.logo_konsultan}`
                                                                                           : URL.createObjectURL(form.logo_konsultan)
                                                                               }
                                                                               className="h-12 mt-2 object-contain"
@@ -476,7 +476,7 @@ export default function Project() {
                                                                         <img
                                                                               src={
                                                                                     typeof form.logo_client === "string"
-                                                                                          ? `http://localhost:3000/uploads/${form.logo_client}`
+                                                                                          ? `${UPLOADS_BASE_URL}/${form.logo_client}`
                                                                                           : URL.createObjectURL(form.logo_client)
                                                                               }
                                                                               className="h-12 mt-2 object-contain"

@@ -1,7 +1,10 @@
 import axios from "axios";
 
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+export const UPLOADS_BASE_URL = (import.meta.env.VITE_UPLOADS_URL || "/uploads").replace(/\/$/, "");
+
 const api = axios.create({
-   baseURL: "http://localhost:3000/api",
+   baseURL: API_BASE_URL,
 });
 
 // 🔐 REQUEST → kirim access token
@@ -28,7 +31,7 @@ api.interceptors.response.use(
          try {
             const refreshToken = localStorage.getItem("refreshToken");
 
-            const res = await axios.post("http://localhost:3000/api/auth/refresh", { refreshToken });
+            const res = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
 
             const newAccessToken = res.data.accessToken;
 

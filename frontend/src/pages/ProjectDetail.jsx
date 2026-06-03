@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import api from "../api";
+import api, { UPLOADS_BASE_URL } from "../api";
 import {
   MapPin, Calendar, Building2, Briefcase, FileText,
   CalendarDays, CalendarPlus, TrendingUp, FileCheck, BarChart as BarChartIcon,
@@ -141,7 +141,7 @@ export default function ProjectDetail() {
             
             <div className="flex flex-col items-center">
               <img
-                src={`http://localhost:3000/uploads/${project.logo_kontraktor}`}
+                src={`${UPLOADS_BASE_URL}/${project.logo_kontraktor}`}
                 className="h-14 object-contain"
               />
               <span className="text-xs text-gray-500 mt-1">Kontraktor</span>
@@ -152,7 +152,7 @@ export default function ProjectDetail() {
           {project?.logo_konsultan && (
             <div className="flex flex-col items-center">
               <img
-                src={`http://localhost:3000/uploads/${project.logo_konsultan}`}
+                src={`${UPLOADS_BASE_URL}/${project.logo_konsultan}`}
                 className="h-14 object-contain"
               />
               <span className="text-xs text-gray-500 mt-1">Konsultan</span>
@@ -162,7 +162,7 @@ export default function ProjectDetail() {
           {project?.logo_client && (
             <div className="flex flex-col items-center">
               <img
-                src={`http://localhost:3000/uploads/${project.logo_client}`}
+                src={`${UPLOADS_BASE_URL}/${project.logo_client}`}
                 className="h-14 object-contain"
               />
               <span className="text-xs text-gray-500 mt-1">Client</span>

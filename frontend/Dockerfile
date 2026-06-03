@@ -4,11 +4,16 @@ FROM node:22-alpine as build
 # Set working directory
 WORKDIR /app
 
+ARG VITE_API_URL=/api
+ARG VITE_UPLOADS_URL=/uploads
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_UPLOADS_URL=$VITE_UPLOADS_URL
+
 # Copy package.json dan package-lock.json
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .

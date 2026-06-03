@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useProject } from "../context/ProjectContext";
 import { m, AnimatePresence, spring, scale } from "motion/react";
-import api from "../api";
+import api, { UPLOADS_BASE_URL } from "../api";
 import {
    Building2, Briefcase, Wallet, TrendingUp, CheckCircle, Clock, PieChart as PieChartIcon, Target, Activity, HardHat, Calendar, Search, Plus, Edit, ChevronDown, Calculator, ClipboardList, X,
    Signature,
@@ -415,17 +415,17 @@ export default function Dashboard() {
                      <div className="w-full grid grid-cols-3 gap-2">
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Kontraktor</p>
-                           <img src={activeProject.logo_kontraktor ? `http://localhost:3000/uploads/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                           <img src={activeProject.logo_kontraktor ? `${UPLOADS_BASE_URL}/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.kontraktor || "TBA"}</p>
                         </div>
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Konsultan</p>
-                           <img src={activeProject.logo_konsultan ? `http://localhost:3000/uploads/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                           <img src={activeProject.logo_konsultan ? `${UPLOADS_BASE_URL}/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.konsultan || "TBA"}</p>
                         </div>
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
-                           <img src={activeProject.logo_client ? `http://localhost:3000/uploads/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
+                           <img src={activeProject.logo_client ? `${UPLOADS_BASE_URL}/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.client || "TBA"}</p>
                         </div>
                      </div>
@@ -819,7 +819,7 @@ export default function Dashboard() {
                                     />
                                     {form.logo_kontraktor && (
                                        <img
-                                          src={typeof form.logo_kontraktor === "string" ? `http://localhost:3000/uploads/${form.logo_kontraktor}` : URL.createObjectURL(form.logo_kontraktor)}
+                                          src={typeof form.logo_kontraktor === "string" ? `${UPLOADS_BASE_URL}/${form.logo_kontraktor}` : URL.createObjectURL(form.logo_kontraktor)}
                                           className="h-12 mt-2 object-contain"
                                           alt="Logo Kontraktor"
                                        />
@@ -836,7 +836,7 @@ export default function Dashboard() {
                                     />
                                     {form.logo_konsultan && (
                                        <img
-                                          src={typeof form.logo_konsultan === "string" ? `http://localhost:3000/uploads/${form.logo_konsultan}` : URL.createObjectURL(form.logo_konsultan)}
+                                          src={typeof form.logo_konsultan === "string" ? `${UPLOADS_BASE_URL}/${form.logo_konsultan}` : URL.createObjectURL(form.logo_konsultan)}
                                           className="h-12 mt-2 object-contain"
                                           alt="Logo Konsultan"
                                        />
@@ -853,7 +853,7 @@ export default function Dashboard() {
                                     />
                                     {form.logo_client && (
                                        <img
-                                          src={typeof form.logo_client === "string" ? `http://localhost:3000/uploads/${form.logo_client}` : URL.createObjectURL(form.logo_client)}
+                                          src={typeof form.logo_client === "string" ? `${UPLOADS_BASE_URL}/${form.logo_client}` : URL.createObjectURL(form.logo_client)}
                                           className="h-12 mt-2 object-contain"
                                           alt="Logo Client"
                                        />
