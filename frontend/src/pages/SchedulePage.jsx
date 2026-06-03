@@ -60,23 +60,28 @@ const fetchVersions = async () => {
 
   try {
 
+    if (!id) return;
+
     const res =
       await api.get(
         `/project-versions/project/${id}`
       );
 
-    setVersions(
-      res.data.data
-    );
+    const versionData = res.data.data || [];
+
+    setVersions(versionData);
 
     // 🔥 DEFAULT VERSION
     if (
-      res.data.data.length > 0
+      versionData.length > 0
     ) {
 
       setSelectedVersion(
-        res.data.data[0]
+        versionData[0]
       );
+    } else {
+      setSelectedVersion(null);
+      setError("Version project belum ada. Pastikan data project_versions sudah ikut di-import.");
     }
 
   } catch (error) {
@@ -129,6 +134,8 @@ const fetchVersions = async () => {
   }, [id]);
 
   useEffect(() => {
+    if (!id || !selectedVersion?.id) return;
+
     fetchAll();
     fetchChart();
   }, [id, selectedVersion]);
@@ -136,6 +143,11 @@ const fetchVersions = async () => {
 
   const fetchAll = async () => {
     try {
+      if (!selectedVersion?.id) {
+        setSchedule([]);
+        return;
+      }
+
       const baseBoqRes = await api.get(`/boq/project/${id}/0`);
       const boqRes = await api.get(`/boq/project/${id}/${selectedVersion?.id || 0}`);
       const weekRes = await api.get(`/schedule/weeks/${id}`);
