@@ -611,16 +611,21 @@ const handleSingleCellChange = (
   value.trim().toLowerCase().startsWith("s/")
 ) {
 
+  const pembagiText =
+    value
+      .toLowerCase()
+      .replace("s/", "")
+      .trim()
+      .replace(",", ".");
+
   const pembagi =
-    Number(
-      value
-        .toLowerCase()
-        .replace("s/", "")
+    new Decimal(
+      pembagiText || 0
     );
 
   if (
-    !isNaN(pembagi) &&
-    pembagi > 0
+    pembagi.isFinite() &&
+    pembagi.gt(0)
   ) {
 
     value =
@@ -2069,10 +2074,12 @@ weeks.flatMap((w)=>{
                     onChange={(e)=>{
 
                         const v=e.target.value;
+                        const trimmedValue =
+                          v.trim();
                         const isCommandInput =
-                          /^s(\/\d+)?$/i.test(v.trim()) ||
-                          /^\/\d+$/.test(v.trim()) ||
-                          /^=/.test(v.trim());
+                          /^s\/\d+(?:[\.,]\d+)?$/i.test(trimmedValue) ||
+                          /^\/\d+(?:[\.,]\d+)?$/.test(trimmedValue) ||
+                          /^=/.test(trimmedValue);
 
                         setInputMap(prev=>({
 
