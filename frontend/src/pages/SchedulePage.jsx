@@ -690,7 +690,7 @@ const handleSingleCellChange = (
   }
 
   // =========================
-  // SUPPORT /2 /3 /4
+  // SUPPORT /2 /3 /4 /1.5 /1,5
   // MC0: bagi bobot awal. Addendum: bagi sisa target addendum.
   // =========================
   if (
@@ -698,14 +698,20 @@ const handleSingleCellChange = (
     value.startsWith("/")
   ) {
 
+    const pembagiText =
+      value
+        .replace("/", "")
+        .trim()
+        .replace(",", ".");
+
     const pembagi =
-      Number(
-        value.replace("/", "")
+      new Decimal(
+        pembagiText || 0
       );
 
     if (
-      !isNaN(pembagi) &&
-      pembagi > 0
+      pembagi.isFinite() &&
+      pembagi.gt(0)
     ) {
 
       value =
