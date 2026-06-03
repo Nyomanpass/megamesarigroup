@@ -1068,11 +1068,25 @@ const handleSingleCellChange = (
       .toNumber();
   });
 
+  const normalizeNearHundred = value => {
+    const total =
+      new Decimal(value || 0);
+
+    return total
+      .minus(100)
+      .abs()
+      .lte(new Decimal("0.01"))
+        ? new Decimal(100)
+        : total;
+  };
+
   let akumulasi = new Decimal(0);
   rencanaPerMinggu.forEach(nilai => {
     akumulasi =
       akumulasi.plus(nilai);
   });
+  akumulasi =
+    normalizeNearHundred(akumulasi);
 
 // =========================
 // REALISASI FISIK
@@ -1392,7 +1406,9 @@ weeks.flatMap((w)=>{
       return "";
     }
 
-    return Number(value).toFixed(3);
+    return new Decimal(value || 0)
+      .toDecimalPlaces(3, Decimal.ROUND_DOWN)
+      .toFixed(3);
   };
 
   const getWeekIndex = mingguKe =>
@@ -1674,7 +1690,7 @@ weeks.flatMap((w)=>{
 
     if (finalPlan !== null) {
       scheduleTotal =
-        new Decimal(finalPlan);
+        normalizeNearHundred(finalPlan);
       isComplete =
         scheduleTotal.gt(99.9) &&
         scheduleTotal.lt(100.1);
