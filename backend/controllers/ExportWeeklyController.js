@@ -180,8 +180,16 @@ export const exportWeeklyReportExcel = async (req, res) => {
   const placeLogo = (logoPath, startCol, endCol) => {
     if (!logoPath) return;
 
+    const resolvedLogoPath =
+      path.join(process.cwd(), "uploads", "logos", logoPath);
+
+    if (!fs.existsSync(resolvedLogoPath)) {
+      console.warn(`Logo tidak ditemukan, dilewati: ${resolvedLogoPath}`);
+      return;
+    }
+
     const imageId = workbook.addImage({
-      filename: path.join("uploads/logos", logoPath),
+      filename: resolvedLogoPath,
       extension: "png"
     });
 
@@ -1105,12 +1113,20 @@ const ttdData = await TtdTemplate.findOne({
 });
 
 const template = ttdData?.layout;
+const safeTemplate =
+  template &&
+  Array.isArray(template.top) &&
+  Array.isArray(template.bottom)
+    ? template
+    : { top: [], bottom: [] };
 
 // =========================
 // 🔥 VALIDASI
 // =========================
-if (!template || !template.top || !template.bottom) {
-  throw new Error("Template TTD tidak ditemukan / tidak lengkap");
+if (!template || !Array.isArray(template.top) || !Array.isArray(template.bottom)) {
+  console.warn(
+    `Template TTD mingguan project ${project.id} tidak ditemukan / tidak lengkap, export dilanjutkan tanpa TTD.`
+  );
 }
 
 // =========================
@@ -1123,12 +1139,13 @@ let ttdStart = rowIndex + 5;
 // 🔥 TOP
 // =========================
 const maxHeaderTop = Math.max(
-  ...template.top.map(col => col.header?.length || 0)
+  0,
+  ...safeTemplate.top.map(col => col.header?.length || 0)
 );
 
 const namaTopRow = ttdStart + maxHeaderTop + 4;
 
-template.top.forEach((col) => {
+safeTemplate.top.forEach((col) => {
 
   const colCenter = col.range; // 🔥 langsung pakai dari DB
 
@@ -1162,12 +1179,13 @@ template.top.forEach((col) => {
 const bottomStart = namaTopRow + 4;
 
 const maxHeaderBottom = Math.max(
-  ...template.bottom.map(col => col.header?.length || 0)
+  0,
+  ...safeTemplate.bottom.map(col => col.header?.length || 0)
 );
 
 const namaBottomRow = bottomStart + maxHeaderBottom + 5;
 
-template.bottom.forEach((col) => {
+safeTemplate.bottom.forEach((col) => {
 
   const colCenter = col.range;
 
@@ -1627,8 +1645,16 @@ export const exportWeeklyReportPDF = async (req, res) => {
   const placeLogo = (logoPath, startCol, endCol) => {
     if (!logoPath) return;
 
+    const resolvedLogoPath =
+      path.join(process.cwd(), "uploads", "logos", logoPath);
+
+    if (!fs.existsSync(resolvedLogoPath)) {
+      console.warn(`Logo tidak ditemukan, dilewati: ${resolvedLogoPath}`);
+      return;
+    }
+
     const imageId = workbook.addImage({
-      filename: path.join("uploads/logos", logoPath),
+      filename: resolvedLogoPath,
       extension: "png"
     });
 
@@ -2512,12 +2538,20 @@ const ttdData = await TtdTemplate.findOne({
 });
 
 const template = ttdData?.layout;
+const safeTemplate =
+  template &&
+  Array.isArray(template.top) &&
+  Array.isArray(template.bottom)
+    ? template
+    : { top: [], bottom: [] };
 
 // =========================
 // 🔥 VALIDASI
 // =========================
-if (!template || !template.top || !template.bottom) {
-  throw new Error("Template TTD tidak ditemukan / tidak lengkap");
+if (!template || !Array.isArray(template.top) || !Array.isArray(template.bottom)) {
+  console.warn(
+    `Template TTD mingguan project ${project.id} tidak ditemukan / tidak lengkap, export PDF dilanjutkan tanpa TTD.`
+  );
 }
 
 // =========================
@@ -2530,12 +2564,13 @@ let ttdStart = rowIndex + 5;
 // 🔥 TOP
 // =========================
 const maxHeaderTop = Math.max(
-  ...template.top.map(col => col.header?.length || 0)
+  0,
+  ...safeTemplate.top.map(col => col.header?.length || 0)
 );
 
 const namaTopRow = ttdStart + maxHeaderTop + 4;
 
-template.top.forEach((col) => {
+safeTemplate.top.forEach((col) => {
 
   const colCenter = col.range; // 🔥 langsung pakai dari DB
 
@@ -2569,12 +2604,13 @@ template.top.forEach((col) => {
 const bottomStart = namaTopRow + 4;
 
 const maxHeaderBottom = Math.max(
-  ...template.bottom.map(col => col.header?.length || 0)
+  0,
+  ...safeTemplate.bottom.map(col => col.header?.length || 0)
 );
 
 const namaBottomRow = bottomStart + maxHeaderBottom + 5;
 
-template.bottom.forEach((col) => {
+safeTemplate.bottom.forEach((col) => {
 
   const colCenter = col.range;
 
