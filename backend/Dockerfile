@@ -18,7 +18,8 @@ RUN apk add --no-cache \
     freetype-dev \
     libpng-dev \
     libreoffice \
-    font-noto
+    font-noto \
+    py3-openpyxl
 
 # Copy package.json dan package-lock.json
 COPY package*.json ./

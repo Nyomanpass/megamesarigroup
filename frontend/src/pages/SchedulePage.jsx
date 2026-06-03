@@ -508,6 +508,24 @@ const calculateFormulaValue = (formula, boqId, sisa) => {
   return result.toDecimalPlaces(8).toNumber();
 };
 
+const normalizeScheduleNumberInput = value =>
+  typeof value === "string"
+    ? value.trim().replace(",", ".")
+    : value;
+
+const formatScheduleEditValue = value => {
+  if (value === "" || value === null || value === undefined) {
+    return "";
+  }
+
+  const decimalValue = new Decimal(value || 0)
+    .toDecimalPlaces(8)
+    .toFixed(8);
+
+  return decimalValue
+    .replace(/\.?0+$/, "");
+};
+
 
 const handleSingleCellChange = (
   boqId,
@@ -731,7 +749,9 @@ const handleSingleCellChange = (
   // INPUT VALUE
   // =========================
   const inputValue =
-    parseFloat(value);
+    parseFloat(
+      normalizeScheduleNumberInput(value)
+    );
 
   if (
     isNaN(inputValue) ||
@@ -2136,6 +2156,18 @@ weeks.flatMap((w)=>{
                     }
 
                     placeholder="0.000"
+
+                    onFocus={()=>{
+                        if (isLocked || val === "") {
+                          return;
+                        }
+
+                        setInputMap(prev=>({
+                          ...prev,
+                          [`${item.id}-${w.minggu_ke}`]:
+                            formatScheduleEditValue(val)
+                        }));
+                    }}
 
                     onChange={(e)=>{
 
