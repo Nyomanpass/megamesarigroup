@@ -11,6 +11,13 @@ import { motion, AnimatePresence } from "motion/react";
 import Decimal from "decimal.js";
 
 const MotionDiv = motion.div;
+const SCHEDULE_DECIMAL_PLACES = 4;
+const SCHEDULE_DECIMAL_TOLERANCE = new Decimal("0.0001");
+
+const roundScheduleValue = value =>
+  new Decimal(value || 0)
+    .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
+    .toNumber();
 
 const isPlainNumber = value =>
   /^-?\d+(\.\d+)?$/.test(String(value).trim());
@@ -266,11 +273,27 @@ const submitBagiRata = () => {
    let totalSementara = new Decimal(0);
 
    for (let i = start; i <= end; i++) {
-      let bobot = base;
+      const remaining = Decimal.max(
+        totalBobot.minus(totalSementara),
+        new Decimal(0)
+      );
+      let bobot = new Decimal(
+        roundScheduleValue(base)
+      );
 
       // Minggu terakhir menampung sisa selisih pembulatan
       if (i === end) {
-         bobot = totalBobot.minus(totalSementara);
+         bobot = new Decimal(
+           roundScheduleValue(
+             remaining
+           )
+         );
+      }
+
+      if (bobot.gt(remaining)) {
+        bobot = new Decimal(
+          roundScheduleValue(remaining)
+        );
       }
 
       totalSementara = totalSementara.plus(bobot);
@@ -280,7 +303,7 @@ const submitBagiRata = () => {
          version_id: selectedVersion?.id,
          boq_id: selectedItem.id,
          minggu_ke: i,
-         bobot: bobot.toDecimalPlaces(8).toNumber()
+         bobot: bobot.toNumber()
       });
    }
 
@@ -505,7 +528,7 @@ const calculateFormulaValue = (formula, boqId, sisa) => {
     return null;
   }
 
-  return result.toDecimalPlaces(8).toNumber();
+  return result.toDecimalPlaces(SCHEDULE_DECIMAL_PLACES).toNumber();
 };
 
 const normalizeScheduleNumberInput = value =>
@@ -519,8 +542,8 @@ const formatScheduleEditValue = value => {
   }
 
   const decimalValue = new Decimal(value || 0)
-    .toDecimalPlaces(8)
-    .toFixed(8);
+    .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
+    .toFixed(SCHEDULE_DECIMAL_PLACES);
 
   return decimalValue
     .replace(/\.?0+$/, "");
@@ -620,7 +643,7 @@ const handleSingleCellChange = (
 
    value =
     sisa
-      .toDecimalPlaces(8)
+      .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
       .toNumber();
     }
 
@@ -649,7 +672,7 @@ const handleSingleCellChange = (
     value =
       sisa
         .dividedBy(pembagi)
-        .toDecimalPlaces(8)
+        .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
         .toNumber();
   }
 }
@@ -689,10 +712,8 @@ const handleSingleCellChange = (
         if (sourceData) {
 
           value =
-            Number(
-              Number(
-                sourceData.bobot || 0
-              ).toFixed(8)
+            roundScheduleValue(
+              sourceData.bobot || 0
             );
         }
       }
@@ -740,7 +761,7 @@ const handleSingleCellChange = (
       value =
         divideTarget
           .dividedBy(pembagi)
-          .toDecimalPlaces(8)
+          .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
           .toNumber();
     }
   }
@@ -773,9 +794,7 @@ const handleSingleCellChange = (
   if (index >= 0) {
 
     newSchedule[index].bobot =
-      Number(
-        inputValue.toFixed(8)
-      );
+      roundScheduleValue(inputValue);
     newSchedule[index].version_id =
       selectedVersion?.id;
 
@@ -792,9 +811,7 @@ const handleSingleCellChange = (
 
       minggu_ke: mingguKe,
 
-      bobot: Number(
-        inputValue.toFixed(8)
-      )
+      bobot: roundScheduleValue(inputValue)
     });
   }
 
@@ -832,7 +849,7 @@ const handleSingleCellChange = (
       Number(
         (
           total - scheduleTarget
-        ).toFixed(8)
+        ).toFixed(SCHEDULE_DECIMAL_PLACES)
       );
 
     if (selisih !== 0) {
@@ -863,11 +880,10 @@ const handleSingleCellChange = (
           const adjust =
             selisih * proporsi;
 
-          w.bobot = Number(
-            (
+          w.bobot =
+            roundScheduleValue(
               w.bobot - adjust
-            ).toFixed(8)
-          );
+            );
 
           if (w.bobot < 0)
             w.bobot = 0;
@@ -889,7 +905,7 @@ const handleSingleCellChange = (
       Number(
         (
           fixTotal - scheduleTarget
-        ).toFixed(8)
+        ).toFixed(SCHEDULE_DECIMAL_PLACES)
       );
 
     if (
@@ -902,11 +918,10 @@ const handleSingleCellChange = (
           itemWeeks.length - 1
         ];
 
-      last.bobot = Number(
-        (
+      last.bobot =
+        roundScheduleValue(
           last.bobot - diff
-        ).toFixed(8)
-      );
+        );
     }
   }
 
@@ -937,11 +952,11 @@ const handleSingleCellChange = (
 
  const totalRounded =
   totalFinal
-    .toDecimalPlaces(8)
+    .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES)
     .toNumber();
 
   const tolerance =
-  new Decimal("0.00000001");
+  SCHEDULE_DECIMAL_TOLERANCE;
 
     const diff =
       totalFinal
@@ -991,7 +1006,7 @@ const handleSingleCellChange = (
       const normalized =
         items.map(item => ({
           ...item,
-          bobot: Number(item.bobot || 0)
+          bobot: roundScheduleValue(item.bobot || 0)
         }));
 
       const total =
@@ -1029,13 +1044,13 @@ const handleSingleCellChange = (
       }
 
       normalized[adjustIndex].bobot =
-        Decimal.max(
+        roundScheduleValue(
+          Decimal.max(
           new Decimal(normalized[adjustIndex].bobot || 0)
             .minus(diff),
           new Decimal(0)
         )
-          .toDecimalPlaces(8)
-          .toNumber();
+        );
 
       return normalized;
     };
@@ -1058,6 +1073,12 @@ const handleSingleCellChange = (
           100
         );
     }
+
+    itemsToSave =
+      itemsToSave.map(item => ({
+        ...item,
+        bobot: roundScheduleValue(item.bobot || 0)
+      }));
 
     await api.post(
       `/schedule/bulk-save/${id}`,
@@ -1275,7 +1296,7 @@ weeks.map((w)=>{
 
     return progressRatio
       .times(mcBobot)
-      .toDecimalPlaces(8);
+      .toDecimalPlaces(SCHEDULE_DECIMAL_PLACES);
   };
 
   const getRawAddendumRemaining = (item) => {
@@ -1369,7 +1390,7 @@ weeks.map((w)=>{
       getRawAddendumRemaining(item);
 
     const remaining =
-      rawRemaining.toDecimalPlaces(8);
+      rawRemaining.toDecimalPlaces(SCHEDULE_DECIMAL_PLACES);
 
     return {
       mc0Volume,

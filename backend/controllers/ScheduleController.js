@@ -18,7 +18,7 @@ const getNamaHari = (date) => {
 };
 
 const roundScheduleBobot = (value) =>
-  Number(Number(value || 0).toFixed(8));
+  Number(Number(value || 0).toFixed(4));
 
 const isAddendumVersion = version =>
   Number(version?.revision || 0) > 0 ||
@@ -695,7 +695,7 @@ async (req, res) => {
             item.minggu_ke,
 
           bobot:
-            item.bobot
+            roundScheduleBobot(item.bobot)
         }));
 
       await Schedule.bulkCreate(
@@ -731,7 +731,12 @@ export const updateBulkSchedule = async (req, res) => {
 
     // 2. Simpan data baru (termasuk yang sudah dirubah bobotnya)
     if (items && items.length > 0) {
-      await Schedule.bulkCreate(items);
+      await Schedule.bulkCreate(
+        items.map(item => ({
+          ...item,
+          bobot: roundScheduleBobot(item.bobot)
+        }))
+      );
     }
 
     res.json({ message: "Jadwal Berhasil Diperbarui!" });
