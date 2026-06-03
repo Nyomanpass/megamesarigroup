@@ -2076,9 +2076,9 @@ weeks.flatMap((w)=>{
                         const v=e.target.value;
                         const trimmedValue =
                           v.trim();
-                        const isCommandInput =
-                          /^s\/\d+(?:[\.,]\d+)?$/i.test(trimmedValue) ||
-                          /^\/\d+(?:[\.,]\d+)?$/.test(trimmedValue) ||
+                        const isCommandLikeInput =
+                          /^s/i.test(trimmedValue) ||
+                          /^\//.test(trimmedValue) ||
                           /^=/.test(trimmedValue);
 
                         setInputMap(prev=>({
@@ -2090,6 +2090,10 @@ weeks.flatMap((w)=>{
 
                         }));
 
+                        if (isCommandLikeInput) {
+                          return;
+                        }
+
                         const calculatedValue =
                         handleSingleCellChange(
                         item.id,
@@ -2097,21 +2101,24 @@ weeks.flatMap((w)=>{
                         v
                         );
 
-                        if (
-                          isCommandInput &&
-                          calculatedValue !== null &&
-                          calculatedValue !== undefined
-                        ) {
-                          setInputMap(prev=>({
-                            ...prev,
-                            [`${item.id}-${w.minggu_ke}`]:
-                            Number(calculatedValue).toFixed(3)
-                          }));
-                        }
-
                     }}
 
                     onBlur={()=>{
+
+                        const inputKey =
+                          `${item.id}-${w.minggu_ke}`;
+                        const pendingValue =
+                          inputMap[inputKey];
+
+                        if (
+                          pendingValue !== undefined
+                        ) {
+                          handleSingleCellChange(
+                            item.id,
+                            w.minggu_ke,
+                            pendingValue
+                          );
+                        }
 
                         setInputMap(prev=>{
 
@@ -2120,7 +2127,7 @@ weeks.flatMap((w)=>{
                         };
 
                         delete copy[
-                          `${item.id}-${w.minggu_ke}`
+                          inputKey
                         ];
 
                         return copy;
