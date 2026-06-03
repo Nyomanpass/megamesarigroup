@@ -592,6 +592,9 @@ const handleSingleCellChange = (
       totalExisting
     );
 
+  const divideTarget =
+    scheduleTarget;
+
     if (
     typeof value === "string" &&
     value.trim().toLowerCase() === "s"
@@ -688,7 +691,7 @@ const handleSingleCellChange = (
 
   // =========================
   // SUPPORT /2 /3 /4
-  // BAGI SISA
+  // MC0: bagi bobot awal. Addendum: bagi sisa target addendum.
   // =========================
   if (
     typeof value === "string" &&
@@ -705,11 +708,11 @@ const handleSingleCellChange = (
       pembagi > 0
     ) {
 
-    value =
-    sisa
-      .dividedBy(pembagi)
-      .toDecimalPlaces(8)
-      .toNumber();
+      value =
+        divideTarget
+          .dividedBy(pembagi)
+          .toDecimalPlaces(8)
+          .toNumber();
     }
   }
 
