@@ -964,16 +964,80 @@ const handleSingleCellChange = (
       return alert("Jadwal masih kosong!");
     }
 
+    const normalizeItemsTotal = (
+      items,
+      target = 100
+    ) => {
+      const normalized =
+        items.map(item => ({
+          ...item,
+          bobot: Number(item.bobot || 0)
+        }));
+
+      const total =
+        normalized.reduce(
+          (sum, item) =>
+            sum.plus(item.bobot || 0),
+          new Decimal(0)
+        );
+
+      const diff =
+        total.minus(target);
+
+      if (
+        diff.abs().gt(new Decimal("0.05"))
+      ) {
+        return normalized;
+      }
+
+      const adjustIndex =
+        [...normalized]
+          .map((item, index) => ({
+            ...item,
+            index
+          }))
+          .reverse()
+          .find(item =>
+            Number(item.bobot || 0) > 0
+          )
+          ?.index;
+
+      if (
+        adjustIndex === undefined
+      ) {
+        return normalized;
+      }
+
+      normalized[adjustIndex].bobot =
+        Decimal.max(
+          new Decimal(normalized[adjustIndex].bobot || 0)
+            .minus(diff),
+          new Decimal(0)
+        )
+          .toDecimalPlaces(8)
+          .toNumber();
+
+      return normalized;
+    };
+
     const effectiveWeek =
       Number(selectedVersion?.effective_week || 1);
 
-    const itemsToSave =
+    let itemsToSave =
       selectedVersion?.revision > 0
         ? schedule.filter(item =>
             Number(item.version_id) === Number(selectedVersion.id) &&
             Number(item.minggu_ke) >= effectiveWeek
           )
         : schedule;
+
+    if (!(selectedVersion?.revision > 0)) {
+      itemsToSave =
+        normalizeItemsTotal(
+          itemsToSave,
+          100
+        );
+    }
 
     await api.post(
       `/schedule/bulk-save/${id}`,
@@ -1068,25 +1132,11 @@ const handleSingleCellChange = (
       .toNumber();
   });
 
-  const normalizeNearHundred = value => {
-    const total =
-      new Decimal(value || 0);
-
-    return total
-      .minus(100)
-      .abs()
-      .lte(new Decimal("0.01"))
-        ? new Decimal(100)
-        : total;
-  };
-
   let akumulasi = new Decimal(0);
   rencanaPerMinggu.forEach(nilai => {
     akumulasi =
       akumulasi.plus(nilai);
   });
-  akumulasi =
-    normalizeNearHundred(akumulasi);
 
 // =========================
 // REALISASI FISIK
@@ -1690,7 +1740,7 @@ weeks.flatMap((w)=>{
 
     if (finalPlan !== null) {
       scheduleTotal =
-        normalizeNearHundred(finalPlan);
+        new Decimal(finalPlan);
       isComplete =
         scheduleTotal.gt(99.9) &&
         scheduleTotal.lt(100.1);
