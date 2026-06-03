@@ -6,8 +6,6 @@ import {
    ACCESS_TOKEN_KEY,
 } from "./utils/auth";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
-
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 export const UPLOADS_BASE_URL = (import.meta.env.VITE_UPLOADS_URL || "/uploads").replace(/\/$/, "");
 

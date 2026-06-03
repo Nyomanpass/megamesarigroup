@@ -930,7 +930,6 @@ export default function Dashboard() {
                      <div className="w-full grid grid-cols-3 gap-2">
                         <div className="w-full h-full">
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Kontraktor</p>
-<<<<<<< HEAD
                            <img src={activeProject.logo_kontraktor ? `${UPLOADS_BASE_URL}/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.kontraktor || "TBA"}</p>
                         </div>
@@ -943,19 +942,6 @@ export default function Dashboard() {
                            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
                            <img src={activeProject.logo_client ? `${UPLOADS_BASE_URL}/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
                            <p className="text-base font-semibold text-gray-700">{activeProject.client || "TBA"}</p>
-=======
-                           <img src={activeProject.logo_kontraktor ? `http://localhost:3000/uploads/logos/${activeProject.logo_kontraktor}` : "/placeholder.png"} alt="" className="w-[70%]" />
-                         
-                        </div>
-                        <div className="w-full h-full">
-                           <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Konsultan</p>
-                           <img src={activeProject.logo_konsultan ? `http://localhost:3000/uploads/logos/${activeProject.logo_konsultan}` : "/placeholder.png"} alt="" className="w-[70%]" />
-                        
-                        </div>
-                        <div className="w-full h-full">
-                           <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Logo Client</p>
-                           <img src={activeProject.logo_client ? `http://localhost:3000/uploads/logos/${activeProject.logo_client}` : "/placeholder.png"} alt="" className="w-[70%]" />
->>>>>>> 750ea3601afc7e4e61ddfb1150bf4ca9def00c10
                         </div>
                      </div>
 
