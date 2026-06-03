@@ -10,6 +10,9 @@ import axios from "axios";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { PythonShell } from "python-shell";
 import { Op } from "sequelize";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 
 export const exportTimeSchedule = async (req, res) => {
   try {
@@ -2422,19 +2425,42 @@ chartSheet.getCell(`C${r}`).numFmt =
     // 🔥 EXPORT
     // =========================
 
-    await workbook.xlsx.writeFile("temp_schedule.xlsx");
+    const exportId =
+      `${project_id}-${version_id || "all"}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+    const tempSchedulePath =
+      path.join(os.tmpdir(), `temp_schedule_${exportId}.xlsx`);
+    const finalSchedulePath =
+      path.join(os.tmpdir(), `final_schedule_${exportId}.xlsx`);
+
+    await workbook.xlsx.writeFile(tempSchedulePath);
 
     // =========================
     // 🔥 JALANKAN PYTHON
     // =========================
-    await PythonShell.run("./python/generate_chart.py");
+    await PythonShell.run(
+      path.join(process.cwd(), "python", "generate_chart.py"),
+      {
+        args: [
+          tempSchedulePath,
+          finalSchedulePath
+        ]
+      }
+    );
 
     // =========================
     // 🔥 DOWNLOAD FINAL FILE
     // =========================
     return res.download(
-      "final_schedule.xlsx",
-      "Time_Schedule.xlsx"
+      finalSchedulePath,
+      "Time_Schedule.xlsx",
+      async () => {
+        await Promise.allSettled([
+          fs.unlink(tempSchedulePath),
+          fs.unlink(finalSchedulePath)
+        ]);
+      }
     );
   } catch (error) {
 

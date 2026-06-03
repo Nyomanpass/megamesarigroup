@@ -4,11 +4,15 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.utils import get_column_letter
 from openpyxl.chart.text import RichText
+import sys
+
+input_file = sys.argv[1] if len(sys.argv) > 1 else "temp_schedule.xlsx"
+output_file = sys.argv[2] if len(sys.argv) > 2 else "final_schedule.xlsx"
 
 # =========================
 # LOAD FILE
 # =========================
-wb = load_workbook("temp_schedule.xlsx")
+wb = load_workbook(input_file)
 
 # sheet data chart
 ws = wb["CHART_DATA"]
@@ -288,4 +292,4 @@ target_sheet.add_chart(
 # =========================
 # SAVE
 # =========================
-wb.save("final_schedule.xlsx")
+wb.save(output_file)
