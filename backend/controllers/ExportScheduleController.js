@@ -5,6 +5,7 @@ import { ProjectWeek } from "../models/ProjectWeekModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import { getBoqWithBobot } from "./BoqController.js";
+import { buildWeeklyReport } from "./ReportController.js";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 import axios from "axios";
 import ChartDataLabels from "chartjs-plugin-datalabels";
@@ -111,11 +112,7 @@ export const exportTimeSchedule = async (req, res) => {
 
     const weeklyReports =
       isAddendumExport
-        ? (
-            await axios.get(
-              `http://localhost:3000/api/weekly-report/${project_id}`
-            )
-          ).data || []
+        ? await buildWeeklyReport(project_id)
         : [];
 
     const boqMapByRevision = new Map();

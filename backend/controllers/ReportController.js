@@ -296,11 +296,7 @@ const buildAddendumPlanTimeline = async (
   };
 };
 
-export const getWeeklyReport = async (req, res) => {
-  try {
-
-    const { project_id } = req.params;
-
+export const buildWeeklyReport = async (project_id) => {
     // =========================
     // 🔥 DATA
     // =========================
@@ -314,7 +310,7 @@ export const getWeeklyReport = async (req, res) => {
     });
 
     if (plans.length === 0) {
-      return res.json([]);
+      return [];
     }
 
     const versions = await ProjectVersionModel.findAll({
@@ -528,6 +524,17 @@ export const getWeeklyReport = async (req, res) => {
         data: laporan
     });
 }
+
+    return result;
+};
+
+export const getWeeklyReport = async (req, res) => {
+  try {
+
+    const { project_id } = req.params;
+
+    const result =
+      await buildWeeklyReport(project_id);
 
     res.json(result);
 
