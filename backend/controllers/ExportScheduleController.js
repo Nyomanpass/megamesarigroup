@@ -1440,7 +1440,7 @@ let realData = [];
 
 if (includeProgressChart) {
   const chartResponse = await axios.get(
-    `http://localhost:3000/api/daily-plan/weekly-chart/${project_id}`
+    `http://localhost:5000/api/daily-plan/weekly-chart/${project_id}`
   );
 
   realData = chartResponse.data;
