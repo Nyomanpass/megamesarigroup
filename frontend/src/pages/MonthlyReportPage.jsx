@@ -332,8 +332,8 @@ const handleExportMonthlyPDF = async () => {
                   </div>
                   
                   {/* MINI CHART */}
-                  <div className="w-full md:w-48 h-32 shrink-0 bg-white/60 rounded-2xl p-2 border border-white/50 shadow-inner">
-                      <ResponsiveContainer width="100%" height="100%">
+                  <div className="w-full min-w-0 md:w-48 h-32 shrink-0 bg-white/60 rounded-2xl p-2 border border-white/50 shadow-inner">
+                      <ResponsiveContainer width="100%" height={112} minWidth={0}>
                         <BarChart data={chartData} layout="vertical" margin={{top: 5, right: 30, left: -20, bottom: 5}}>
                            <XAxis type="number" hide />
                            <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />

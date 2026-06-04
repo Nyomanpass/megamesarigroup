@@ -15,6 +15,10 @@ export const exportDailyReportExcel = async (req, res) => {
     const { day } = req.query;
     const project = await Project.findByPk(req.params.project_id);
 
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
     // =========================
     // 🔥 AMBIL DATA DARI API KAMU
     // =========================
@@ -37,6 +41,10 @@ export const exportDailyReportExcel = async (req, res) => {
 
     await getDailyReport(req, fakeRes);
     const report = fakeRes.jsonData;
+    const reportData = Array.isArray(report?.data) ? report.data : [];
+    const totalPekerja = Array.isArray(report?.total_pekerja) ? report.total_pekerja : [];
+    const totalPeralatan = Array.isArray(report?.total_peralatan) ? report.total_peralatan : [];
+    const totalMaterial = Array.isArray(report?.total_material) ? report.total_material : [];
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
@@ -44,7 +52,7 @@ export const exportDailyReportExcel = async (req, res) => {
 // 🔥 HEADER ATAS
 // =========================
 
-const info = report.data[0] || {};
+const info = reportData[0] || {};
 let row = 2;
 
 // =========================
@@ -653,10 +661,10 @@ for (let j = 10; j <= 21; j++) {
 
     // 🔥 hitung kebutuhan data real
     const totalRowsNeeded = Math.max(
-      report.total_pekerja.length,
-      report.total_peralatan.length,
-      report.total_material.length,
-      report.data.length
+      totalPekerja.length,
+      totalPeralatan.length,
+      totalMaterial.length,
+      reportData.length
     );
     
   const minRows = 30;
@@ -675,10 +683,10 @@ for (let j = 10; j <= 21; j++) {
     let isFirstGroup = true;
 
     for (let i = 0; i < maxRows; i++) {
-      const pekerja = report.total_pekerja[i];
-      const alat = report.total_peralatan[i];
-      const material = report.total_material[i];
-      const pekerjaan = report.data[i];
+      const pekerja = totalPekerja[i];
+      const alat = totalPeralatan[i];
+      const material = totalMaterial[i];
+      const pekerjaan = reportData[i];
 
       sheet.getCell(`A${rowIndex}`).value = i + 1;
       sheet.mergeCells(`B${rowIndex}:D${rowIndex}`);
@@ -1303,6 +1311,10 @@ export const exportDailyReportPdf = async (req, res) => {
     const { day } = req.query;
     const project = await Project.findByPk(req.params.project_id);
 
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
     // =========================
     // 🔥 AMBIL DATA DARI API KAMU
     // =========================
@@ -1325,6 +1337,10 @@ export const exportDailyReportPdf = async (req, res) => {
 
     await getDailyReport(req, fakeRes);
     const report = fakeRes.jsonData;
+    const reportData = Array.isArray(report?.data) ? report.data : [];
+    const totalPekerja = Array.isArray(report?.total_pekerja) ? report.total_pekerja : [];
+    const totalPeralatan = Array.isArray(report?.total_peralatan) ? report.total_peralatan : [];
+    const totalMaterial = Array.isArray(report?.total_material) ? report.total_material : [];
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
@@ -1332,7 +1348,7 @@ export const exportDailyReportPdf = async (req, res) => {
 // 🔥 HEADER ATAS
 // =========================
 
-const info = report.data[0] || {};
+const info = reportData[0] || {};
 let row = 2;
 
 // =========================
@@ -1935,10 +1951,10 @@ for (let j = 10; j <= 21; j++) {
 
     // 🔥 hitung kebutuhan data real
     const totalRowsNeeded = Math.max(
-      report.total_pekerja.length,
-      report.total_peralatan.length,
-      report.total_material.length,
-      report.data.length
+      totalPekerja.length,
+      totalPeralatan.length,
+      totalMaterial.length,
+      reportData.length
     );
     
   const minRows = 30;
@@ -1957,10 +1973,10 @@ for (let j = 10; j <= 21; j++) {
     let isFirstGroup = true;
 
     for (let i = 0; i < maxRows; i++) {
-      const pekerja = report.total_pekerja[i];
-      const alat = report.total_peralatan[i];
-      const material = report.total_material[i];
-      const pekerjaan = report.data[i];
+      const pekerja = totalPekerja[i];
+      const alat = totalPeralatan[i];
+      const material = totalMaterial[i];
+      const pekerjaan = reportData[i];
 
       sheet.getCell(`A${rowIndex}`).value = i + 1;
       sheet.mergeCells(`B${rowIndex}:D${rowIndex}`);

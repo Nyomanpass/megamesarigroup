@@ -93,6 +93,10 @@ export const exportMonthlyReportExcel = async (req, res) => {
     // =========================
     const project = await Project.findByPk(project_id);
 
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
     let fakeRes = {
       jsonData: null,
       json(data) {
@@ -101,7 +105,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     };
 
     await getMonthlyReport(req, fakeRes);
-    const monthly = fakeRes.jsonData;
+    const monthly = Array.isArray(fakeRes.jsonData) ? fakeRes.jsonData : [];
 
     const dataBulan = monthly.find(b => b.bulan_ke == bulan);
 
@@ -114,7 +118,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
       order: [["id", "ASC"]]
     });
     const groupedMonthlyData =
-      buildMonthlyGroupedRows(dataBulan.data, boqRows);
+      buildMonthlyGroupedRows(dataBulan.data || [], boqRows);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Bulanan");
@@ -187,8 +191,16 @@ export const exportMonthlyReportExcel = async (req, res) => {
   const placeLogo = (logoPath, startCol, endCol) => {
     if (!logoPath) return;
 
+    const resolvedLogoPath =
+      path.join(process.cwd(), "uploads", "logos", logoPath);
+
+    if (!fs.existsSync(resolvedLogoPath)) {
+      console.warn(`Logo tidak ditemukan, dilewati: ${resolvedLogoPath}`);
+      return;
+    }
+
     const imageId = workbook.addImage({
-      filename: path.join(process.cwd(), "uploads", "logos", logoPath),
+      filename: resolvedLogoPath,
       extension: "png"
     });
 
@@ -1248,6 +1260,10 @@ export const exportMonthlyReportPDF = async (req, res) => {
     // =========================
     const project = await Project.findByPk(project_id);
 
+    if (!project) {
+      return res.status(404).json({ message: "Project tidak ditemukan" });
+    }
+
     let fakeRes = {
       jsonData: null,
       json(data) {
@@ -1256,7 +1272,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
     };
 
     await getMonthlyReport(req, fakeRes);
-    const monthly = fakeRes.jsonData;
+    const monthly = Array.isArray(fakeRes.jsonData) ? fakeRes.jsonData : [];
 
     const dataBulan = monthly.find(b => b.bulan_ke == bulan);
 
@@ -1269,7 +1285,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
       order: [["id", "ASC"]]
     });
     const groupedMonthlyData =
-      buildMonthlyGroupedRows(dataBulan.data, boqRows);
+      buildMonthlyGroupedRows(dataBulan.data || [], boqRows);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Bulanan");
@@ -1362,13 +1378,21 @@ export const exportMonthlyReportPDF = async (req, res) => {
       return total;
     };
 
-      const placeLogo = (logoPath, startCol, endCol) => {
-        if (!logoPath) return;
-    
-        const imageId = workbook.addImage({
-          filename: path.join(process.cwd(), "uploads", "logos", logoPath),
-          extension: "png"
-        });
+  const placeLogo = (logoPath, startCol, endCol) => {
+    if (!logoPath) return;
+
+    const resolvedLogoPath =
+      path.join(process.cwd(), "uploads", "logos", logoPath);
+
+    if (!fs.existsSync(resolvedLogoPath)) {
+      console.warn(`Logo tidak ditemukan, dilewati: ${resolvedLogoPath}`);
+      return;
+    }
+
+    const imageId = workbook.addImage({
+      filename: resolvedLogoPath,
+      extension: "png"
+    });
     
         const startRow = 2;
         const endRow = 6;
