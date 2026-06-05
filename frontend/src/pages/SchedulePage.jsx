@@ -164,41 +164,19 @@ const fetchVersions = async () => {
         schRes.data || [];
 
       if (selectedVersion?.revision > 0) {
-        const savedKey =
-          `schedule-addendum-saved-v2:${id}:${selectedVersion.id}`;
-        const alreadySavedAfterReset =
-          window.localStorage.getItem(savedKey) === "1";
         const selectedEffectiveWeek =
           Number(
             selectedVersion.effective_week || 1
           );
 
-        if (!alreadySavedAfterReset) {
-          await api.post(
-            `/schedule/bulk-save/${id}`,
-            {
-              version_id:
-                selectedVersion.id,
-              items: []
-            }
+        scheduleData =
+          scheduleData.filter(
+            item =>
+              Number(item.minggu_ke) <
+                selectedEffectiveWeek ||
+              Number(item.version_id) ===
+                Number(selectedVersion.id)
           );
-
-          scheduleData =
-            scheduleData.filter(
-              item =>
-                Number(item.minggu_ke) <
-                selectedEffectiveWeek
-            );
-        } else {
-          scheduleData =
-            scheduleData.filter(
-              item =>
-                Number(item.minggu_ke) <
-                  selectedEffectiveWeek ||
-                Number(item.version_id) ===
-                  Number(selectedVersion.id)
-            );
-        }
       }
 
       setBaseBoq(baseBoqRes.data.data || []);
@@ -1124,7 +1102,8 @@ const handleSingleCellChange = (
         {
           version_id:
             selectedVersion.id,
-          items: []
+          items: [],
+          reset: true
         }
       );
 

@@ -625,7 +625,9 @@ async (req, res) => {
 
     items,
 
-    version_id
+    version_id,
+
+    reset = false
 
   } = req.body;
 
@@ -646,6 +648,26 @@ async (req, res) => {
     // VERSION INI SAJA
     // ==========================
 
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({
+        message: "Items schedule tidak valid"
+      });
+    }
+
+    const isExplicitReset =
+      reset === true ||
+      reset === "true";
+
+    if (
+      items.length === 0 &&
+      !isExplicitReset
+    ) {
+      return res.status(400).json({
+        message:
+          "Items schedule kosong. Gunakan reset=true untuk mengosongkan jadwal."
+      });
+    }
+
     await Schedule.destroy({
 
       where: {
@@ -661,7 +683,6 @@ async (req, res) => {
     // ==========================
 
     if (
-      items &&
       items.length > 0
     ) {
 
