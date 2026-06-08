@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
+import { buildDownloadFilename } from "../utils/downloadFilename";
 import { ArrowLeft, BarChart3, Calendar, TrendingUp, TrendingDown, CheckCircle, AlertTriangle } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell
@@ -168,7 +169,7 @@ const handleExportMonthlyExcel = async () => {
     link.href = url;
     link.setAttribute(
       "download",
-      `laporan_bulanan_bulan_${selectedMonth}.xlsx`
+      buildDownloadFilename(`laporan_bulanan_bulan_${selectedMonth}`, selectedProject, "xlsx")
     );
 
     document.body.appendChild(link);
@@ -208,7 +209,7 @@ const handleExportMonthlyPDF = async () => {
 
     link.setAttribute(
       "download",
-      `Laporan_Bulanan_${selectedMonth}.pdf`
+      buildDownloadFilename(`Laporan_Bulanan_${selectedMonth}`, selectedProject, "pdf")
     );
 
     document.body.appendChild(link);

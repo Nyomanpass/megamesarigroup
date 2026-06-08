@@ -32,7 +32,8 @@ CREATE TABLE `analisa_master` (
   `kode` varchar(255) NOT NULL,
   `nama` varchar(255) NOT NULL,
   `satuan` varchar(255) NOT NULL,
-  `overhead_persen` float DEFAULT '10',
+  `overhead_persen` decimal(10,8) DEFAULT '10.00000000',
+  `use_pembulatan` tinyint(1) NOT NULL DEFAULT '1',
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -47,7 +48,8 @@ CREATE TABLE `analisa_master_detail` (
   `id` int NOT NULL,
   `analisa_id` int NOT NULL,
   `item_id` int NOT NULL,
-  `koefisien` float NOT NULL,
+  `koefisien` decimal(20,8) NOT NULL,
+  `rumus_harga` varchar(255) DEFAULT NULL,
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1102,7 +1104,7 @@ CREATE TABLE `master_items` (
   `terbilang` int DEFAULT NULL,
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL,
-  `harga` decimal(15,2) NOT NULL,
+  `harga` decimal(15,8) NOT NULL,
   `category` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1310,6 +1312,7 @@ CREATE TABLE `projects` (
   `id` int NOT NULL,
   `kegiatan` varchar(255) DEFAULT NULL,
   `pekerjaan` varchar(255) DEFAULT NULL,
+  `nama_import` varchar(255) DEFAULT NULL,
   `no_kontrak` varchar(255) DEFAULT NULL,
   `tgl_kontrak` datetime DEFAULT NULL,
   `no_spmk` varchar(255) DEFAULT NULL,
@@ -1318,7 +1321,7 @@ CREATE TABLE `projects` (
   `kontraktor` varchar(255) DEFAULT NULL,
   `konsultan` varchar(255) DEFAULT NULL,
   `waktu_pelaksanaan` int DEFAULT NULL,
-  `nilai_kontrak` float DEFAULT NULL,
+  `nilai_kontrak` decimal(15,2) DEFAULT NULL,
   `lokasi` text,
   `tahun` int DEFAULT NULL,
   `status_pengerjaan` enum('berjalan','selesai') DEFAULT 'berjalan',
@@ -1349,7 +1352,8 @@ CREATE TABLE `project_analisa` (
   `kode` varchar(255) NOT NULL,
   `nama` varchar(255) NOT NULL,
   `satuan` varchar(255) NOT NULL,
-  `overhead_persen` float DEFAULT '10',
+  `overhead_persen` decimal(10,8) DEFAULT '10.00000000',
+  `use_pembulatan` tinyint(1) NOT NULL DEFAULT '1',
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1394,7 +1398,8 @@ CREATE TABLE `project_analisa_detail` (
   `id` int NOT NULL,
   `project_analisa_id` int NOT NULL,
   `item_id` int NOT NULL,
-  `koefisien` float NOT NULL,
+  `koefisien` decimal(20,8) NOT NULL,
+  `rumus_harga` varchar(255) DEFAULT NULL,
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1518,7 +1523,7 @@ CREATE TABLE `project_items` (
   `nama` varchar(255) NOT NULL,
   `tipe` enum('TENAGA','BAHAN','ALAT') NOT NULL,
   `satuan` varchar(255) NOT NULL,
-  `harga` decimal(15,2) NOT NULL,
+  `harga` decimal(15,8) NOT NULL,
   `terbilang` int DEFAULT NULL,
   `createdAt` datetime NOT NULL,
   `updatedAt` datetime NOT NULL,

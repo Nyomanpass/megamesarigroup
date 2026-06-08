@@ -24,7 +24,7 @@ export const MasterItem = sequelize.define("MasterItem", {
   },
 
     harga: {
-      type: DataTypes.DECIMAL(15, 2),
+      type: DataTypes.DECIMAL(15, 8),
       allowNull: false
     },
 

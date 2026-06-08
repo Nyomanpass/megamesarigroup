@@ -29,7 +29,7 @@ export const ProjectItem = sequelize.define("ProjectItem", {
   },
 
   harga: {
-    type: DataTypes.DECIMAL(15, 2),
+    type: DataTypes.DECIMAL(15, 8),
     allowNull: false
   },
 

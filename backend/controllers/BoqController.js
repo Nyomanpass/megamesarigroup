@@ -6,6 +6,8 @@ import { BoqVersionChange } from "../models/BoqVersionChangeModel.js";
 import { generateBobot } from "../utils/generateBobot.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import { Op } from "sequelize"; 
+import Decimal from "decimal.js";
+import { applyPriceFormula } from "../utils/priceFormula.js";
 
 // 🔥 ROMAWI → TEXT
 const toRoman = (num) => {
@@ -36,7 +38,30 @@ const toRoman = (num) => {
 };
 
 const formatRupiah = (num) => {
-  return "Rp " + Number(Math.floor(num || 0)).toLocaleString("id-ID") + ",00";
+  return "Rp " + Number(num || 0).toLocaleString("id-ID", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+const getHargaSatuanFromAnalisa = (analisaResult) => {
+  return Number(analisaResult?.harga_satuan_pekerjaan ?? analisaResult?.pembulatan ?? analisaResult?.grandTotal ?? 0);
+};
+
+const shouldUsePembulatan = (value) => value !== false && value !== 0 && value !== "0";
+
+const calculateBoqAmounts = ({ harga_satuan, volume, ppn }) => {
+  const jumlahRaw = Number(harga_satuan || 0) * Number(volume || 0);
+  const jumlah = Math.floor(jumlahRaw);
+  const jumlahPpnRaw = jumlah + (jumlah * Number(ppn || 0) / 100);
+  const jumlah_ppn = Math.floor(jumlahPpnRaw);
+
+  return {
+    jumlah,
+    jumlah_ppn,
+    jumlah_raw: jumlahRaw,
+    jumlah_ppn_raw: jumlahRaw + (jumlahRaw * Number(ppn || 0) / 100)
+  };
 };
 
 // 🔥 ROMAWI → ANGKA
@@ -177,18 +202,22 @@ export const generateBobotInternal = async (project_id) => {
         const analisaResult =
           await hitungAnalisa(boq.analisa_id);
 
-        const harga_satuan =
-          Number(analisaResult.grandTotal || 0);
+        const harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
 
         const volume =
           Number(boq.volume || 0);
 
-        const jumlah =
-          harga_satuan * volume;
+        const { jumlah, jumlah_ppn } = calculateBoqAmounts({
+          harga_satuan,
+          volume,
+          ppn: boq.ppn
+        });
 
         temp.push({
           id: boq.id,
-          jumlah
+          harga_satuan,
+          jumlah,
+          jumlah_ppn
         });
 
         totalSemua += jumlah;
@@ -208,6 +237,9 @@ export const generateBobotInternal = async (project_id) => {
 
       return Boq.update(
         {
+          harga_satuan: item.harga_satuan,
+          jumlah: item.jumlah,
+          jumlah_ppn: item.jumlah_ppn,
           bobot: Number(
             bobot.toFixed(8)
           )
@@ -231,9 +263,6 @@ export const generateBobotInternal = async (project_id) => {
   }
 };
 
-const round2 = (num) => Math.round(num * 100) / 100;
-
-
 export const hitungAnalisa = async (analisa_id) => {
   const analisa = await ProjectAnalisa.findByPk(analisa_id);
 
@@ -247,27 +276,30 @@ export const hitungAnalisa = async (analisa_id) => {
     ]
   });
 
-  let total = 0;
+  let total = new Decimal(0);
 
   details.forEach((d) => {
-    const harga = round2(Number(d.item?.harga || 0));
-    const koef = Number(d.koefisien) || 0;
+    const harga = applyPriceFormula(d.item?.harga || 0, d.rumus_harga);
+    const koef = new Decimal(d.koefisien || 0);
 
-    const subtotal = round2(koef * harga);
-    total = round2(total + subtotal);
+    total = total.plus(koef.mul(harga));
   });
 
-  const totalFix = round2(total);
+  const persen = new Decimal(analisa?.overhead_persen || 0);
+  const overhead = total.mul(persen).div(100);
 
-  const persen = Number(analisa.overhead_persen) || 0;
-  const overhead = round2((persen / 100) * totalFix);
-
-  const grandTotal = Math.floor(totalFix + overhead);
+  const grandTotal = total.plus(overhead);
+  const pembulatan = Number(grandTotal.floor().toString());
+  const usePembulatan = shouldUsePembulatan(analisa?.use_pembulatan);
+  const hargaSatuanPekerjaan = usePembulatan ? pembulatan : Number(grandTotal.toString());
 
   return {
-    total: totalFix,
-    overhead,
-    grandTotal
+    total: Number(total.toString()),
+    overhead: Number(overhead.toString()),
+    grandTotal: Number(grandTotal.toString()),
+    pembulatan,
+    use_pembulatan: usePembulatan,
+    harga_satuan_pekerjaan: hargaSatuanPekerjaan
   };
 };
 
@@ -298,20 +330,16 @@ export const createBulkBoq = async (req, res) => {
       // 🔥 AMBIL HASIL ANALISA
       const analisaResult = await hitungAnalisa(analisa_id);
 
-      const harga_satuan = analisaResult.grandTotal; // 🔥 INI KUNCI
+      const harga_satuan = getHargaSatuanFromAnalisa(analisaResult); // 🔥 INI KUNCI
 
       const vol = Number(volume) || 0;
       const persenPPN = Number(ppn) || 11;
 
-      const jumlah = Number(
-        (harga_satuan * vol).toFixed(2)
-      );
-
-      const jumlah_ppn = Number(
-        (
-          jumlah + (jumlah * persenPPN / 100)
-        ).toFixed(2)
-      );
+      const { jumlah, jumlah_ppn } = calculateBoqAmounts({
+        harga_satuan,
+        volume: vol,
+        ppn: persenPPN
+      });
 
       const newItem = await Boq.create({
         project_id,
@@ -374,8 +402,13 @@ export const createBoq = async (req, res) => {
       
       // Hitung otomatis jumlah harga
       if (volume && harga_satuan) {
-        jumlah = parseFloat(volume) * parseFloat(harga_satuan);
-        jumlah_ppn = jumlah + (jumlah * ppn / 100);
+        const calculatedAmount = calculateBoqAmounts({
+          harga_satuan,
+          volume,
+          ppn
+        });
+        jumlah = calculatedAmount.jumlah;
+        jumlah_ppn = calculatedAmount.jumlah_ppn;
       }
     }
 
@@ -523,6 +556,8 @@ else{
         let harga_satuan = 0;
         let jumlah = 0;
         let jumlah_ppn = 0;
+        let jumlah_raw = 0;
+        let jumlah_ppn_raw = 0;
 
         const change = changeMap[boq.id];
         const finalVolume = Number(change?.volume ?? boq.volume) || 0;
@@ -532,13 +567,31 @@ else{
           const analisaResult = await hitungAnalisa(boq.analisa_id);
 
           harga_satuan = parseFloat(
-            Number(change?.harga_satuan ?? analisaResult.grandTotal ?? boq.harga_satuan ?? 0).toFixed(6)
+            Number(change?.harga_satuan ?? getHargaSatuanFromAnalisa(analisaResult) ?? boq.harga_satuan ?? 0).toFixed(6)
           );
 
-          jumlah = parseFloat((harga_satuan * finalVolume).toFixed(6));
-
           const ppn = Number(boq.ppn) || 0;
-          jumlah_ppn = parseFloat((jumlah + (jumlah * ppn) / 100).toFixed(6));
+          const calculatedAmount = calculateBoqAmounts({
+            harga_satuan,
+            volume: finalVolume,
+            ppn
+          });
+          jumlah = calculatedAmount.jumlah;
+          jumlah_ppn = calculatedAmount.jumlah_ppn;
+          jumlah_raw = calculatedAmount.jumlah_raw;
+          jumlah_ppn_raw = calculatedAmount.jumlah_ppn_raw;
+
+          if (!change && (
+            Number(boq.harga_satuan || 0) !== Number(harga_satuan || 0) ||
+            Number(boq.jumlah || 0) !== Number(jumlah || 0) ||
+            Number(boq.jumlah_ppn || 0) !== Number(jumlah_ppn || 0)
+          )) {
+            await boq.update({
+              harga_satuan,
+              jumlah,
+              jumlah_ppn
+            });
+          }
         }
 
         return {
@@ -548,6 +601,8 @@ else{
           harga_satuan,
           jumlah,
           jumlah_ppn,
+          jumlah_raw,
+          jumlah_ppn_raw,
           harga_satuan_rp: formatRupiah(harga_satuan),
           jumlah_rp: formatRupiah(jumlah),
           jumlah_ppn_rp: formatRupiah(jumlah_ppn)
@@ -614,13 +669,17 @@ export const getBoqStructured = async (project_id) => {
       if (boq.tipe === "item" && boq.analisa_id) {
         const analisaResult = await hitungAnalisa(boq.analisa_id);
 
-        harga_satuan = analisaResult.grandTotal;
+        harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
 
         const volume = Number(boq.volume) || 0;
-        jumlah = harga_satuan * volume;
-
         const ppn = Number(boq.ppn) || 0;
-        jumlah_ppn = jumlah + (jumlah * ppn / 100);
+        const calculatedAmount = calculateBoqAmounts({
+          harga_satuan,
+          volume,
+          ppn
+        });
+        jumlah = calculatedAmount.jumlah;
+        jumlah_ppn = calculatedAmount.jumlah_ppn;
       }
 
       return {
@@ -707,12 +766,17 @@ export const updateBoq = async (req, res) => {
       if (analisa_id) {
           const analisaResult = await hitungAnalisa(analisa_id);
 
-          harga_satuan = analisaResult.grandTotal; // 🔥 ambil dari analisa
+          harga_satuan = getHargaSatuanFromAnalisa(analisaResult); // 🔥 ambil dari analisa
         }
 
         if (volume && harga_satuan) {
-          jumlah = Math.floor(parseFloat(volume) * parseFloat(harga_satuan));
-          jumlah_ppn = Math.floor(jumlah + (jumlah * (ppn || 11) / 100));
+          const calculatedAmount = calculateBoqAmounts({
+            harga_satuan,
+            volume,
+            ppn: ppn || 11
+          });
+          jumlah = calculatedAmount.jumlah;
+          jumlah_ppn = calculatedAmount.jumlah_ppn;
         }
     }
 
@@ -810,13 +874,16 @@ export const linkAnalisaBoq = async (req, res) => {
     // 🔥 pakai 1 sumber perhitungan
     const analisaResult = await hitungAnalisa(analisa_id);
 
-    const harga_satuan = analisaResult.grandTotal;
+    const harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
 
     const volume = Number(item.volume) || 0;
     const ppn = Number(item.ppn) || 11;
 
-    const jumlah = harga_satuan * volume;
-    const jumlah_ppn = jumlah + (jumlah * ppn / 100);
+    const { jumlah, jumlah_ppn } = calculateBoqAmounts({
+      harga_satuan,
+      volume,
+      ppn
+    });
 
     await item.update({
       analisa_id,
@@ -1156,14 +1223,17 @@ export const createBoqAddendumItem = async (req, res) => {
         let harga_satuan = 0;
         if (analisa_id) {
             const analisaResult = await hitungAnalisa(analisa_id);
-            harga_satuan = analisaResult.grandTotal;
+            harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
         }
 
         // Konversi tipe data & kalkulasi nilai
         const vol = Number(volume) || 0;
         const persenPPN = Number(ppn) || 11;
-        const jumlah = vol * harga_satuan;
-        const jumlah_ppn = jumlah + (jumlah * persenPPN / 100);
+        const { jumlah, jumlah_ppn } = calculateBoqAmounts({
+            harga_satuan,
+            volume: vol,
+            ppn: persenPPN
+        });
 
         // ==========================================
         // 3. PROSES SIMPAN DATA (DATABASE)

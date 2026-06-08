@@ -1,8 +1,13 @@
 import { AnalisaMasterDetail } from "../models/AnalisaMasterDetail.js";
 import { MasterItem } from "../models/MasterItem.js";
 import { AnalisaMaster } from "../models/AnalisaMaster.js";
+import Decimal from "decimal.js";
+import { applyPriceFormula } from "../utils/priceFormula.js";
 
-const round2 = (num) => Number(num.toFixed(2));
+const toDecimal = (value) => new Decimal(value || 0);
+const toNumber = (value) => Number(value.toString());
+const toPembulatan = (value) => Number(value.floor().toString());
+const shouldUsePembulatan = (value) => value !== false && value !== 0 && value !== "0";
 
 export const getAnalisaDetail = async (req, res) => {
   try {
@@ -26,18 +31,17 @@ export const getAnalisaDetail = async (req, res) => {
     let bahan = [];
     let alat = [];
 
-    let totalTenaga = 0;
-    let totalBahan = 0;
-    let totalAlat = 0;
+    let totalTenaga = new Decimal(0);
+    let totalBahan = new Decimal(0);
+    let totalAlat = new Decimal(0);
 
     details.forEach((d) => {
       if (!d.item) return;
 
-      const harga = round2(Number(d.item.harga) || 0);
-      const koef = Number(d.koefisien) || 0;
-
-      // 🔥 ROUND DI SINI
-      const jumlah = round2(koef * harga);
+      const hargaDasar = toDecimal(d.item.harga);
+      const harga = applyPriceFormula(hargaDasar, d.rumus_harga);
+      const koef = toDecimal(d.koefisien);
+      const jumlah = koef.mul(harga);
 
       const item = {
         id: d.id,
@@ -45,63 +49,83 @@ export const getAnalisaDetail = async (req, res) => {
         nama: d.item.nama,
         tipe: d.item.tipe,
         satuan: d.item.satuan,
-        koefisien: koef,
-        harga,
-        jumlah
+        koefisien: toNumber(koef),
+        rumus_harga: d.rumus_harga || "",
+        harga_dasar: toNumber(hargaDasar),
+        harga: toNumber(harga),
+        jumlah: toNumber(jumlah)
       };
 
       if (d.item.tipe === "TENAGA") {
         tenaga.push(item);
-        totalTenaga = round2(totalTenaga + jumlah);
+        totalTenaga = totalTenaga.plus(jumlah);
       } else if (d.item.tipe === "BAHAN") {
         bahan.push(item);
-        totalBahan = round2(totalBahan + jumlah);
+        totalBahan = totalBahan.plus(jumlah);
       } else {
         alat.push(item);
-        totalAlat = round2(totalAlat + jumlah);
+        totalAlat = totalAlat.plus(jumlah);
       }
     });
 
-    // 🔥 TOTAL (WAJIB ROUND)
-    const total = round2(totalTenaga + totalBahan + totalAlat);
+    const total = totalTenaga.plus(totalBahan).plus(totalAlat);
 
-    // 🔥 OVERHEAD (WAJIB ROUND)
-    const persen = Number(analisa.overhead_persen) || 0;
-    const overhead = round2((persen / 100) * total);
+    const persen = toDecimal(analisa?.overhead_persen);
+    const overhead = total.mul(persen).div(100);
 
-    // 🔥 GRAND TOTAL (WAJIB ROUND)
-    const grandTotal = round2(total + overhead);
+    const grandTotal = total.plus(overhead);
+    const pembulatan = toPembulatan(grandTotal);
+    const usePembulatan = shouldUsePembulatan(analisa?.use_pembulatan);
+    const hargaSatuanPekerjaan = usePembulatan ? pembulatan : toNumber(grandTotal);
 
     res.json({
+      analisa_id: analisa?.id,
+      kode: analisa?.kode,
+      nama: analisa?.nama,
+      satuan: analisa?.satuan,
+      overhead_persen: toNumber(persen),
       tenaga,
       bahan,
       alat,
-      totalTenaga,
-      totalBahan,
-      totalAlat,
-      total,
-      overhead,
-      grandTotal
+      totalTenaga: toNumber(totalTenaga),
+      totalBahan: toNumber(totalBahan),
+      totalAlat: toNumber(totalAlat),
+      total: toNumber(total),
+      overhead: toNumber(overhead),
+      grandTotal: toNumber(grandTotal),
+      pembulatan,
+      use_pembulatan: usePembulatan,
+      harga_satuan_pekerjaan: hargaSatuanPekerjaan
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const status = error.message?.includes("Rumus harga") ? 400 : 500;
+    res.status(status).json({ message: error.message });
   }
 };
 
 export const createAnalisaDetail = async (req, res) => {
   try {
-    const { analisa_id, item_id, koefisien } = req.body;
+    const { analisa_id, item_id, koefisien, rumus_harga } = req.body;
+    const item = await MasterItem.findByPk(item_id);
+
+    if (!item) {
+      return res.status(404).json({ message: "Item tidak ditemukan" });
+    }
+
+    applyPriceFormula(item.harga, rumus_harga);
 
     const data = await AnalisaMasterDetail.create({
       analisa_id,
       item_id,
-      koefisien
+      koefisien,
+      rumus_harga: rumus_harga || null
     });
 
     res.status(201).json(data);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const status = error.message?.includes("Rumus harga") ? 400 : 500;
+    res.status(status).json({ message: error.message });
   }
 };
 
@@ -113,7 +137,22 @@ export const updateAnalisaDetail = async (req, res) => {
       return res.status(404).json({ message: "Data tidak ditemukan" });
     }
 
-    await data.update(req.body);
+    const itemId = req.body.item_id ?? data.item_id;
+    const rumusHarga = req.body.rumus_harga ?? data.rumus_harga;
+    const item = await MasterItem.findByPk(itemId);
+
+    if (!item) {
+      return res.status(404).json({ message: "Item tidak ditemukan" });
+    }
+
+    applyPriceFormula(item.harga, rumusHarga);
+
+    const updatePayload = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(req.body, "rumus_harga")) {
+      updatePayload.rumus_harga = req.body.rumus_harga || null;
+    }
+
+    await data.update(updatePayload);
 
     res.json({ message: "Berhasil update" });
   } catch (error) {

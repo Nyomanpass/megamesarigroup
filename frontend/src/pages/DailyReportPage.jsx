@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
+import { buildDownloadFilename } from "../utils/downloadFilename";
 import { ArrowLeft, CalendarDays, Search, Package, Users, Wrench, FileCheck, Info } from "lucide-react";
 
 export default function DailyReportPage() {
@@ -82,7 +83,7 @@ const handleExportExcel = async () => {
 
     link.setAttribute(
       "download",
-      `laporan_harian_hari_${hariKe}.xlsx`
+      buildDownloadFilename(`laporan_harian_hari_${hariKe}`, selectedProject, "xlsx")
     );
 
     document.body.appendChild(link);
@@ -344,7 +345,7 @@ const handleExportPDF = async () => {
 
     link.setAttribute(
       "download",
-      `laporan_harian_${hariKe}.pdf`
+      buildDownloadFilename(`laporan_harian_${hariKe}`, selectedProject, "pdf")
     );
 
     document.body.appendChild(link);

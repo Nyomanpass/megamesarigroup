@@ -4,6 +4,8 @@ import { Project } from "../models/ProjectModel.js";
 import libre from "libreoffice-convert";
 import fs from "fs";
 import path from "path";
+import { buildExportFilename } from "../utils/exportFilename.js";
+import { applyTtdCellText } from "../utils/ttdStyle.js";
 import { ProjectItem } from "../models/ProjekItem.js";
 import { Boq } from "../models/BoqModel.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
@@ -1204,16 +1206,19 @@ template.columns.forEach((col) => {
   // header
   col.header.forEach((text, i) => {
     sheet.mergeCells(`${startCol}${ttdTop + i}:${endCol}${ttdTop + i}`);
-    sheet.getCell(`${startCol}${ttdTop + i}`).value = text;
+    applyTtdCellText(sheet.getCell(`${startCol}${ttdTop + i}`), text);
   });
 
   // nama
   sheet.mergeCells(`${startCol}${namaRow}:${endCol}${namaRow}`);
-  sheet.getCell(`${startCol}${namaRow}`).value = col.nama;
+  applyTtdCellText(sheet.getCell(`${startCol}${namaRow}`), col.nama, {
+    bold: true,
+    underline: true
+  });
 
   // jabatan
   sheet.mergeCells(`${startCol}${namaRow + 1}:${endCol}${namaRow + 1}`);
-  sheet.getCell(`${startCol}${namaRow + 1}`).value = col.jabatan;
+  applyTtdCellText(sheet.getCell(`${startCol}${namaRow + 1}`), col.jabatan);
 });
 
 
@@ -1231,6 +1236,7 @@ for (let i = ttdTop; i <= namaRow + 1; i++) {
     };
 
     cell.font = {
+      ...(cell.font || {}),
       name: "Times New Roman",
       size: 10
     };
@@ -1294,7 +1300,7 @@ res.setHeader(
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=laporan_harian_${day}.xlsx`
+      `attachment; filename=${buildExportFilename(`laporan_harian_${day}`, project, "xlsx")}`
     );
 
     await workbook.xlsx.write(res);
@@ -2494,16 +2500,19 @@ template.columns.forEach((col) => {
   // header
   col.header.forEach((text, i) => {
     sheet.mergeCells(`${startCol}${ttdTop + i}:${endCol}${ttdTop + i}`);
-    sheet.getCell(`${startCol}${ttdTop + i}`).value = text;
+    applyTtdCellText(sheet.getCell(`${startCol}${ttdTop + i}`), text);
   });
 
   // nama
   sheet.mergeCells(`${startCol}${namaRow}:${endCol}${namaRow}`);
-  sheet.getCell(`${startCol}${namaRow}`).value = col.nama;
+  applyTtdCellText(sheet.getCell(`${startCol}${namaRow}`), col.nama, {
+    bold: true,
+    underline: true
+  });
 
   // jabatan
   sheet.mergeCells(`${startCol}${namaRow + 1}:${endCol}${namaRow + 1}`);
-  sheet.getCell(`${startCol}${namaRow + 1}`).value = col.jabatan;
+  applyTtdCellText(sheet.getCell(`${startCol}${namaRow + 1}`), col.jabatan);
 });
 
 
@@ -2521,6 +2530,7 @@ for (let i = ttdTop; i <= namaRow + 1; i++) {
     };
 
     cell.font = {
+      ...(cell.font || {}),
       name: "Times New Roman",
       size: 10
     };
@@ -2595,12 +2605,12 @@ if (!fs.existsSync(tempDir)) {
 // =========================
 const excelPath = path.join(
   tempDir,
-  `laporan_harian_${day}.xlsx`
+  buildExportFilename(`laporan_harian_${day}`, project, "xlsx")
 );
 
 const pdfPath = path.join(
   tempDir,
-  `laporan_harian_${day}.pdf`
+  buildExportFilename(`laporan_harian_${day}`, project, "pdf")
 );
 
 // =========================
@@ -2690,7 +2700,7 @@ libre.convert(
 
       pdfPath,
 
-      `laporan_harian_${day}.pdf`,
+      buildExportFilename(`laporan_harian_${day}`, project, "pdf"),
 
       () => {
 

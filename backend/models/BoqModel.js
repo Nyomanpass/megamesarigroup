@@ -56,13 +56,23 @@ export const Boq = sequelize.define(
 
     // 🔥 BASELINE MC0
     volume: {
-      type: DataTypes.DECIMAL(20,7),
+      type: DataTypes.DECIMAL(20,8),
       allowNull: true
     },
 
     // 🔥 dari analisa awal
     harga_satuan: {
       type: DataTypes.DECIMAL(20,2),
+      allowNull: true
+    },
+
+    jumlah: {
+      type: DataTypes.DECIMAL(20,6),
+      allowNull: true
+    },
+
+    jumlah_ppn: {
+      type: DataTypes.DECIMAL(20,6),
       allowNull: true
     },
 

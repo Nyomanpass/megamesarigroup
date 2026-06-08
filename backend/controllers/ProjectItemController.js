@@ -3,6 +3,42 @@ import { ItemCategory } from "../models/ItemCategory.js";
 import { generateBobotInternal } from "./BoqController.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { Boq } from "../models/BoqModel.js";
+import { DailyProgressItem } from "../models/DailyProgresItem.js";
+import { Op } from "sequelize";
+
+const getUsedProjectItems = async (ids = []) => {
+  if (!ids.length) return [];
+
+  const [analisaDetails, progressItems] = await Promise.all([
+    ProjectAnalisaDetail.findAll({
+      where: { item_id: ids },
+      attributes: ["item_id"]
+    }),
+    DailyProgressItem.findAll({
+      where: { item_id: ids },
+      attributes: ["item_id"]
+    })
+  ]);
+
+  return [
+    ...new Set([
+      ...analisaDetails.map(item => Number(item.item_id)),
+      ...progressItems.map(item => Number(item.item_id))
+    ])
+  ];
+};
+
+const sendUsedItemsError = async (res, usedIds = []) => {
+  const usedItems = await ProjectItem.findAll({
+    where: { id: usedIds },
+    attributes: ["id", "nama"]
+  });
+
+  return res.status(409).json({
+    message: `Data tidak bisa dihapus karena sudah digunakan di data lain: ${usedItems.map(item => item.nama).join(", ")}`,
+    used_ids: usedIds
+  });
+};
 
 // 🔹 GET ALL (khusus BAHAN per project)
 export const getProjectItems = async (req, res) => {
@@ -200,6 +236,11 @@ export const deleteProjectItem = async (req, res) => {
       return res.status(404).json({ message: "Data tidak ditemukan" });
     }
 
+    const usedIds = await getUsedProjectItems([data.id]);
+    if (usedIds.length > 0) {
+      return sendUsedItemsError(res, usedIds);
+    }
+
     await data.destroy();
 
     res.json({ message: "Berhasil hapus" });
@@ -207,4 +248,63 @@ export const deleteProjectItem = async (req, res) => {
   console.error("DELETE PROJECT ERROR:", error);
   res.status(500).json({ message: error.message });
 }
+};
+
+export const bulkDeleteProjectItems = async (req, res) => {
+  try {
+    const { project_id, tipe, ids = [], delete_all = false } = req.body;
+
+    if (!project_id || !tipe) {
+      return res.status(400).json({
+        message: "Project dan tipe data wajib dikirim"
+      });
+    }
+
+    const where = {
+      project_id: Number(project_id),
+      tipe
+    };
+
+    if (!delete_all) {
+      const normalizedIds = [...new Set(ids.map(id => Number(id)).filter(Boolean))];
+
+      if (normalizedIds.length === 0) {
+        return res.status(400).json({
+          message: "Pilih minimal 1 data untuk dihapus"
+        });
+      }
+
+      where.id = { [Op.in]: normalizedIds };
+    }
+
+    const items = await ProjectItem.findAll({
+      where,
+      attributes: ["id", "nama"]
+    });
+
+    if (items.length === 0) {
+      return res.status(404).json({
+        message: "Data tidak ditemukan"
+      });
+    }
+
+    const itemIds = items.map(item => Number(item.id));
+    const usedIds = await getUsedProjectItems(itemIds);
+
+    if (usedIds.length > 0) {
+      return sendUsedItemsError(res, usedIds);
+    }
+
+    await ProjectItem.destroy({
+      where: { id: { [Op.in]: itemIds } }
+    });
+
+    res.json({
+      message: `${items.length} data berhasil dihapus`,
+      deleted_count: items.length
+    });
+  } catch (error) {
+    console.error("BULK DELETE PROJECT ITEMS ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
 };

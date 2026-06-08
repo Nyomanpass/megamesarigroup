@@ -27,8 +27,13 @@ export const ProjectAnalisaDetail = sequelize.define("ProjectAnalisaDetail", {
   },
 
   koefisien: { 
-    type: DataTypes.FLOAT, 
+    type: DataTypes.DECIMAL(20, 8),
     allowNull: false 
+  },
+
+  rumus_harga: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
 
 

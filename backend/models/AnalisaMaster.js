@@ -24,8 +24,14 @@ export const AnalisaMaster = sequelize.define("AnalisaMaster", {
   },
 
   overhead_persen: { 
-    type: DataTypes.FLOAT, 
+    type: DataTypes.DECIMAL(10, 8),
     defaultValue: 10 
+  },
+
+  use_pembulatan: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true
   }
 
 }, {

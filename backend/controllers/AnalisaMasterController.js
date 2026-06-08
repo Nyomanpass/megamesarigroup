@@ -10,7 +10,7 @@ import { AnalisaMasterDetail } from "../models/AnalisaMasterDetail.js";
 // 🔹 CREATE
 export const createAnalisa = async (req, res) => {
   try {
-    const { kode, nama, satuan, overhead_persen } = req.body;
+    const { kode, nama, satuan, overhead_persen, use_pembulatan } = req.body;
 
     if (!kode || !nama || !satuan) {
       return res.status(400).json({ message: "Field wajib diisi!" });
@@ -20,7 +20,8 @@ export const createAnalisa = async (req, res) => {
       kode,
       nama,
       satuan,
-      overhead_persen
+      overhead_persen,
+      use_pembulatan: use_pembulatan ?? true
     });
 
     res.status(201).json(data);
@@ -62,7 +63,7 @@ export const getAnalisaById = async (req, res) => {
 // 🔹 UPDATE
 export const updateAnalisa = async (req, res) => {
   try {
-    const { kode, nama, satuan, overhead_persen } = req.body;
+    const { kode, nama, satuan, overhead_persen, use_pembulatan } = req.body;
 
     const data = await AnalisaMaster.findOne({
       where: { id: req.params.id }
@@ -72,12 +73,14 @@ export const updateAnalisa = async (req, res) => {
       return res.status(404).json({ message: "Data tidak ditemukan" });
     }
 
-    await data.update({
-      kode,
-      nama,
-      satuan,
-      overhead_persen
-    });
+    const updatePayload = {};
+    if (kode !== undefined) updatePayload.kode = kode;
+    if (nama !== undefined) updatePayload.nama = nama;
+    if (satuan !== undefined) updatePayload.satuan = satuan;
+    if (overhead_persen !== undefined) updatePayload.overhead_persen = overhead_persen;
+    if (use_pembulatan !== undefined) updatePayload.use_pembulatan = use_pembulatan;
+
+    await data.update(updatePayload);
 
     res.json({ message: "Berhasil update" });
   } catch (error) {
@@ -161,7 +164,8 @@ export const importAnalisaToProject = async (req, res) => {
         kode: a.kode,
         nama: a.nama,
         satuan: a.satuan,
-        overhead_persen: a.overhead_persen
+        overhead_persen: a.overhead_persen,
+        use_pembulatan: a.use_pembulatan
       })),
       { returning: true }
     );
@@ -185,6 +189,7 @@ export const importAnalisaToProject = async (req, res) => {
           project_analisa_id: projectAnalisa.id,
           item_id: projectItem.id,
           koefisien: d.koefisien,
+          rumus_harga: d.rumus_harga || null,
           harga: 0,
           jumlah: 0
         };

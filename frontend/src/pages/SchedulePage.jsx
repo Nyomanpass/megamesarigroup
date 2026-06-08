@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
+import { buildDownloadFilename } from "../utils/downloadFilename";
 import { ArrowLeft, CalendarDays, Zap, Save, AlertCircle, FileText } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area
@@ -115,7 +116,10 @@ const fetchVersions = async () => {
       const link = document.createElement("a");
 
       link.href = url;
-      link.setAttribute("download", "time_schedule.xlsx");
+      link.setAttribute(
+        "download",
+        buildDownloadFilename("time_schedule", selectedProject, "xlsx")
+      );
 
       document.body.appendChild(link);
       link.click();

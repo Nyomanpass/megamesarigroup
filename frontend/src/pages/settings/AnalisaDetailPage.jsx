@@ -3,6 +3,22 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Plus, Trash2, Edit2, ArrowLeft, FileSpreadsheet, AlertTriangle, X, Users, Blocks, Wrench, Calculator } from "lucide-react";
 import api from "../../api";
 
+const formatDecimal = (value, maximumFractionDigits = 8) => {
+  const number = Number(value || 0);
+  return number.toLocaleString("id-ID", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits
+  });
+};
+
+const formatMoney = (value) => {
+  const number = Number(value || 0);
+  return number.toLocaleString("id-ID", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
 const AnalisaDetailPage = () => {
   const { id } = useParams(); // analisa_id
   const navigate = useNavigate();
@@ -20,7 +36,8 @@ const AnalisaDetailPage = () => {
 
   const [form, setForm] = useState({
     item_id: "",
-    koefisien: ""
+    koefisien: "",
+    rumus_harga: ""
   });
 
   const [searchItemQuery, setSearchItemQuery] = useState("");
@@ -57,13 +74,14 @@ const AnalisaDetailPage = () => {
     if (item) {
       setForm({
         item_id: item.item_id || item.id, // Pastikan id item benar dari respons API
-        koefisien: item.koefisien
+        koefisien: item.koefisien,
+        rumus_harga: item.rumus_harga || ""
       });
       setEditId(item.detail_id || item.id); // Tergantung struktur ID dari backend untuk row analisa-detail
       setSearchItemQuery(item.nama || "");
       setIsEdit(true);
     } else {
-      setForm({ item_id: "", koefisien: "" });
+      setForm({ item_id: "", koefisien: "", rumus_harga: "" });
       setEditId(null);
       setSearchItemQuery("");
       setIsEdit(false);
@@ -87,6 +105,18 @@ const AnalisaDetailPage = () => {
     });
   };
 
+  const handleTogglePembulatan = async () => {
+    try {
+      await api.put(`/master/analisa/${id}`, {
+        use_pembulatan: !data.use_pembulatan
+      });
+      fetchDetail();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mengubah pilihan pembulatan analisa.");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.item_id || !form.koefisien) {
@@ -100,13 +130,15 @@ const AnalisaDetailPage = () => {
         // Asumsi edit mengupdate baris detail menggunakan PUT
         await api.put(`/master/analisa-detail/${editId}`, {
           item_id: form.item_id,
-          koefisien: form.koefisien
+          koefisien: form.koefisien,
+          rumus_harga: form.rumus_harga
         });
       } else {
         await api.post("/master/analisa-detail", {
           analisa_id: id,
           item_id: form.item_id,
-          koefisien: form.koefisien
+          koefisien: form.koefisien,
+          rumus_harga: form.rumus_harga
         });
       }
 
@@ -114,7 +146,7 @@ const AnalisaDetailPage = () => {
       fetchDetail();
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan saat menyimpan detail.");
+      alert(err.response?.data?.message || "Terjadi kesalahan saat menyimpan detail.");
     }
   };
 
@@ -205,11 +237,18 @@ const AnalisaDetailPage = () => {
 
               {data.tenaga?.map((item) => (
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
-                  <td className="p-4 pl-10 font-medium text-gray-800">{item.nama}</td>
+                  <td className="p-4 pl-10 font-medium text-gray-800">
+                    <div>{item.nama}</div>
+                    {item.rumus_harga && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
-                  <td className="p-4 text-center font-bold text-gray-700">{item.koefisien}</td>
-                  <td className="p-4 text-right">{item.harga?.toLocaleString('id-ID')}</td>
-                  <td className="p-4 text-right font-medium">{item.jumlah?.toLocaleString('id-ID')}</td>
+                  <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
+                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
+                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("TENAGA", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Tenaga"><Edit2 className="w-4 h-4" /></button>
@@ -225,7 +264,7 @@ const AnalisaDetailPage = () => {
               )}
               <tr className="bg-blue-50/50">
                 <td colSpan="4" className="p-3 pr-4 text-right font-bold text-blue-900 border-t border-blue-100 uppercase text-xs">Jumlah Harga Tenaga (A)</td>
-                <td className="p-3 text-right font-bold text-blue-700 border-t border-blue-100 text-[15px]">{data.totalTenaga?.toLocaleString('id-ID')}</td>
+                <td className="p-3 text-right font-bold text-blue-700 border-t border-blue-100 text-[15px]">{formatMoney(data.totalTenaga)}</td>
                 <td className="border-t border-blue-100"></td>
               </tr>
 
@@ -252,11 +291,18 @@ const AnalisaDetailPage = () => {
 
               {data.bahan?.map((item) => (
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
-                  <td className="p-4 pl-10 font-medium text-gray-800">{item.nama}</td>
+                  <td className="p-4 pl-10 font-medium text-gray-800">
+                    <div>{item.nama}</div>
+                    {item.rumus_harga && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
-                  <td className="p-4 text-center font-bold text-gray-700">{item.koefisien}</td>
-                  <td className="p-4 text-right">{item.harga?.toLocaleString('id-ID')}</td>
-                  <td className="p-4 text-right font-medium">{item.jumlah?.toLocaleString('id-ID')}</td>
+                  <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
+                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
+                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("BAHAN", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Bahan"><Edit2 className="w-4 h-4" /></button>
@@ -272,7 +318,7 @@ const AnalisaDetailPage = () => {
               )}
               <tr className="bg-green-50/50">
                 <td colSpan="4" className="p-3 pr-4 text-right font-bold text-green-900 border-t border-green-100 uppercase text-xs">Jumlah Harga Bahan (B)</td>
-                <td className="p-3 text-right font-bold text-green-700 border-t border-green-100 text-[15px]">{data.totalBahan?.toLocaleString('id-ID')}</td>
+                <td className="p-3 text-right font-bold text-green-700 border-t border-green-100 text-[15px]">{formatMoney(data.totalBahan)}</td>
                 <td className="border-t border-green-100"></td>
               </tr>
 
@@ -299,11 +345,18 @@ const AnalisaDetailPage = () => {
 
               {data.alat?.map((item) => (
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
-                  <td className="p-4 pl-10 font-medium text-gray-800">{item.nama}</td>
+                  <td className="p-4 pl-10 font-medium text-gray-800">
+                    <div>{item.nama}</div>
+                    {item.rumus_harga && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
-                  <td className="p-4 text-center font-bold text-gray-700">{item.koefisien}</td>
-                  <td className="p-4 text-right">{item.harga?.toLocaleString('id-ID')}</td>
-                  <td className="p-4 text-right font-medium">{item.jumlah?.toLocaleString('id-ID')}</td>
+                  <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
+                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
+                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("ALAT", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Alat"><Edit2 className="w-4 h-4" /></button>
@@ -319,7 +372,7 @@ const AnalisaDetailPage = () => {
               )}
               <tr className="bg-yellow-50/50">
                 <td colSpan="4" className="p-3 pr-4 text-right font-bold text-yellow-900 border-t border-yellow-200 uppercase text-xs">Jumlah Harga Alat (C)</td>
-                <td className="p-3 text-right font-bold text-yellow-700 border-t border-yellow-200 text-[15px]">{data.totalAlat?.toLocaleString('id-ID')}</td>
+                <td className="p-3 text-right font-bold text-yellow-700 border-t border-yellow-200 text-[15px]">{formatMoney(data.totalAlat)}</td>
                 <td className="border-t border-yellow-200"></td>
               </tr>
 
@@ -327,18 +380,43 @@ const AnalisaDetailPage = () => {
               {/* ================= SUMMARY SECTION ================= */}
               <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                 <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Jumlah Harga Tenaga, Bahan dan Alat (A + B + C)</td>
-                <td className="p-4 text-right text-[15px] text-gray-800">{data.total?.toLocaleString('id-ID')}</td>
+                <td className="p-4 text-right text-[15px] text-gray-800">{formatMoney(data.total)}</td>
                 <td></td>
               </tr>
               <tr className="bg-gray-50 font-bold border-t border-gray-200">
                 <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Overhead & Profit</td>
-                <td className="p-4 text-right text-[15px] text-gray-800">{data.overhead?.toLocaleString('id-ID')}</td>
+                <td className="p-4 text-right text-[15px] text-gray-800">{formatMoney(data.overhead)}</td>
                 {/* <td></td> */}
               </tr>
               <tr className="bg-primary text-white font-bold border-t-2 border-primary">
                 <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">F. Harga Satuan Pekerjaan (D + E)</td>
-                <td className="p-4 text-right text-lg">{data.grandTotal?.toLocaleString('id-ID')}</td>
+                <td className="p-4 text-right text-lg">{formatMoney(data.grandTotal)}</td>
                 <td></td>
+              </tr>
+              <tr className="bg-primary text-white font-bold border-t border-primary/70">
+                <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">Pembulatan</td>
+                <td className="p-4 text-right text-lg">{formatMoney(data.pembulatan)}</td>
+                <td></td>
+              </tr>
+              <tr className="bg-gray-900 text-white font-bold">
+                <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">
+                  Harga Satuan Dipakai
+                </td>
+                <td className="p-4 text-right text-lg">
+                  {formatMoney(data.harga_satuan_pekerjaan)}
+                  <div className="text-[11px] font-semibold text-gray-300">
+                    {data.use_pembulatan ? "Menggunakan pembulatan" : "Menggunakan nilai asli D + E"}
+                  </div>
+                </td>
+                <td className="p-4 text-center">
+                  <button
+                    type="button"
+                    onClick={handleTogglePembulatan}
+                    className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/20"
+                  >
+                    {data.use_pembulatan ? "Pakai Asli" : "Pakai Pembulatan"}
+                  </button>
+                </td>
               </tr>
 
             </tbody>
@@ -405,7 +483,7 @@ const AnalisaDetailPage = () => {
                           <div className="font-bold text-gray-800 text-sm">{item.nama}</div>
                           <div className="text-xs text-gray-500 mt-1 flex gap-2">
                             <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">Satuan: {item.satuan}</span>
-                            <span className="text-gray-400 font-medium">Rp {item.harga_default?.toLocaleString('id-ID')}</span>
+                            <span className="text-gray-400 font-medium">Rp {formatMoney(item.harga_default)}</span>
                           </div>
                         </div>
                       ))}
@@ -437,11 +515,23 @@ const AnalisaDetailPage = () => {
                   <label className="block text-sm font-bold text-gray-700 mb-2">Koefisien / Indeks Pekerjaan</label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.00000001"
                     min="0"
                     name="koefisien"
                     placeholder="Contoh: 0.15"
                     value={form.koefisien}
+                    onChange={handleChange}
+                    className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Rumus Harga Satuan</label>
+                  <input
+                    type="text"
+                    name="rumus_harga"
+                    placeholder="Kosong = harga asli, contoh: /2 atau 300/40"
+                    value={form.rumus_harga}
                     onChange={handleChange}
                     className="w-full border border-gray-200 bg-gray-50 p-3.5 rounded-xl focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all font-medium"
                   />

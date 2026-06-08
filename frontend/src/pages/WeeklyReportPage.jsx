@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
+import { buildDownloadFilename } from "../utils/downloadFilename";
 import { ArrowLeft, BarChart as BarChartIcon, Calendar, TrendingUp, TrendingDown, CheckCircle, AlertTriangle } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell
@@ -62,7 +63,7 @@ export default function WeeklyReportPage() {
     link.href = url;
     link.setAttribute(
       "download",
-      `laporan_mingguan_minggu_${selectedWeek}.xlsx`
+      buildDownloadFilename(`laporan_mingguan_minggu_${selectedWeek}`, selectedProject, "xlsx")
     );
 
     document.body.appendChild(link);
@@ -101,7 +102,7 @@ const handleExportWeeklyPDF = async () => {
 
     link.setAttribute(
       "download",
-      `laporan_mingguan_minggu_${selectedWeek}.pdf`
+      buildDownloadFilename(`laporan_mingguan_minggu_${selectedWeek}`, selectedProject, "pdf")
     );
 
     document.body.appendChild(link);

@@ -7,6 +7,7 @@ export const Project = sequelize.define("Project", {
   kegiatan: DataTypes.STRING,
   sub_kegiatan: DataTypes.STRING,
   pekerjaan: DataTypes.STRING,
+  nama_import: DataTypes.STRING,
   no_kontrak: DataTypes.STRING,
   tgl_kontrak: DataTypes.DATE,
   no_spmk: DataTypes.STRING,
@@ -18,7 +19,7 @@ export const Project = sequelize.define("Project", {
   kontraktor: DataTypes.STRING,
   konsultan: DataTypes.STRING,
   waktu_pelaksanaan: DataTypes.INTEGER,
-  nilai_kontrak: DataTypes.FLOAT,
+  nilai_kontrak: DataTypes.DECIMAL(15, 2),
   lokasi: DataTypes.TEXT,
   tahun: DataTypes.INTEGER,
   status_pengerjaan: {

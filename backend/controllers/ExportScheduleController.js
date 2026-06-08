@@ -14,6 +14,8 @@ import { Op } from "sequelize";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+import { buildExportFilename } from "../utils/exportFilename.js";
+import { applyTtdCellText } from "../utils/ttdStyle.js";
 
 export const exportTimeSchedule = async (req, res) => {
   try {
@@ -950,7 +952,7 @@ boq.forEach((item) => {
       const writeNumberCell = (
         value,
         numFmt =
-          '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-',
+          '#,##0.000;-#,##0.000;"-"',
         fill = null
       ) => {
         const cell =
@@ -959,6 +961,10 @@ boq.forEach((item) => {
         cell.value =
           Number(value || 0);
         cell.numFmt = numFmt;
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle"
+        };
 
         if (fill) {
           cell.fill = {
@@ -1004,7 +1010,7 @@ boq.forEach((item) => {
             addendumInfo[column.type],
             column.currency
               ? '"Rp" * #,##0.00'
-              : '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-'
+              : '#,##0.000;-#,##0.000;"-"'
           );
         });
       } else {
@@ -1050,8 +1056,11 @@ boq.forEach((item) => {
 
         const cell = sheet.getCell(row, c++);
         cell.value = val;
-        cell.numFmt =
-          '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
+        cell.numFmt = '#,##0.000;-#,##0.000;"-"';
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle"
+        };
 
         if (val > 0) {
           cell.fill = {
@@ -2251,7 +2260,7 @@ template.top.forEach((col) => {
   // 🔹 HEADER
   (col.header || []).forEach((text, i) => {
     const cell = sheet.getCell(`${colCenter}${ttdStart + i}`);
-    cell.value = text || "";
+    applyTtdCellText(cell, text);
     cell.alignment = {
       horizontal: "center",
       vertical: "middle",
@@ -2261,13 +2270,12 @@ template.top.forEach((col) => {
 
   // 🔹 NAMA
   const namaCell = sheet.getCell(`${colCenter}${namaRow}`);
-  namaCell.value = col.nama || "";
-  namaCell.font = { bold: true };
+  applyTtdCellText(namaCell, col.nama, { bold: true, underline: true });
   namaCell.alignment = { horizontal: "center" };
 
   // 🔹 JABATAN
   const jabCell = sheet.getCell(`${colCenter}${namaRow + 1}`);
-  jabCell.value = col.jabatan || "";
+  applyTtdCellText(jabCell, col.jabatan);
   jabCell.alignment = { horizontal: "center" };
 });
 
@@ -2451,7 +2459,7 @@ chartSheet.getCell(`C${r}`).numFmt =
     // =========================
     return res.download(
       finalSchedulePath,
-      "Time_Schedule.xlsx",
+      buildExportFilename("Time_Schedule", project, "xlsx"),
       async () => {
         await Promise.allSettled([
           fs.unlink(tempSchedulePath),

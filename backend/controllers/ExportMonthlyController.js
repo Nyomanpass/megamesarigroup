@@ -6,6 +6,8 @@ import { getMonthlyReport } from "./ReportController.js";
 import { Project } from "../models/ProjectModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
 import { Boq } from "../models/BoqModel.js";
+import { buildExportFilename } from "../utils/exportFilename.js";
+import { applyTtdCellText } from "../utils/ttdStyle.js";
 
 const buildMonthlyGroupedRows = (reportRows = [], boqRows = []) => {
   if (
@@ -898,8 +900,9 @@ for (let r = startRow + 3; r < rowIndex; r++) {
     if (!val || val === 0) {
       cell.value = null;
     } else {
-      cell.value = val;
-      cell.numFmt = "0.000"; // 🔥 3 angka belakang
+      cell.value = Number(val);
+      cell.numFmt =
+      '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
     }
   };
 
@@ -920,17 +923,28 @@ for (let r = startRow + 3; r < rowIndex; r++) {
     }
   };
 
+  const setCenteredNumber = (cell, val) => {
+    setNumber(cell, val);
+    cell.numFmt = '#,##0.000;-#,##0.000;"-"';
+    cell.alignment = {
+      ...(cell.alignment || {}),
+      horizontal: "center",
+      vertical: "middle"
+    };
+  };
+
   // =========================
   // 🔥 APPLY FORMAT
   // =========================
 
-  setNumber(row.getCell(8), row.getCell(8).value);   // bobot
-  setNumber(row.getCell(9), row.getCell(9).value);   // sd lalu
-  setNumber(row.getCell(10), row.getCell(10).value); // bulan ini
-  setNumber(row.getCell(11), row.getCell(11).value); // sd ini
+  setCenteredNumber(row.getCell(7), row.getCell(7).value);   // volume
+  setCenteredNumber(row.getCell(8), row.getCell(8).value);   // bobot
+  setCenteredNumber(row.getCell(9), row.getCell(9).value);   // sd lalu
+  setCenteredNumber(row.getCell(10), row.getCell(10).value); // bulan ini
+  setCenteredNumber(row.getCell(11), row.getCell(11).value); // sd ini
 
   setPercent(row.getCell(12), row.getCell(12).value); // progress_item
-  setNumber(row.getCell(13), row.getCell(13).value);  // progres_proyek (bukan persen!)
+  setCenteredNumber(row.getCell(13), row.getCell(13).value);  // progres_proyek (bukan persen!)
 }
 
 
@@ -1107,7 +1121,7 @@ template.top.forEach((col) => {
   // HEADER
   (col.header || []).forEach((text, i) => {
     const cell = sheet.getCell(`${colCenter}${ttdStart + i}`);
-    cell.value = text || "";
+    applyTtdCellText(cell, text);
     cell.alignment = {
       horizontal: "center",
       vertical: "middle",
@@ -1117,12 +1131,11 @@ template.top.forEach((col) => {
 
   // NAMA
   const namaCell = sheet.getCell(`${colCenter}${namaTopRow}`);
-  namaCell.value = col.nama || "";
-  namaCell.font = { bold: true };
+  applyTtdCellText(namaCell, col.nama, { bold: true, underline: true });
   namaCell.alignment = { horizontal: "center" };
   // JABATAN
   const jabCell = sheet.getCell(`${colCenter}${namaTopRow + 1}`);
-  jabCell.value = col.jabatan || "";
+  applyTtdCellText(jabCell, col.jabatan);
   jabCell.alignment = { horizontal: "center" };
 });
 
@@ -1146,7 +1159,7 @@ template.bottom.forEach((col) => {
   // HEADER
   (col.header || []).forEach((text, i) => {
     const cell = sheet.getCell(`${colCenter}${bottomStart + i}`);
-    cell.value = text || "";
+    applyTtdCellText(cell, text);
     cell.alignment = {
       horizontal: "center",
       vertical: "middle",
@@ -1156,13 +1169,12 @@ template.bottom.forEach((col) => {
 
   // NAMA
   const namaCell = sheet.getCell(`${colCenter}${namaBottomRow}`);
-  namaCell.value = col.nama || "";
-  namaCell.font = { bold: true };
+  applyTtdCellText(namaCell, col.nama, { bold: true, underline: true });
   namaCell.alignment = { horizontal: "center" };
 
   // JABATAN
   const jabCell = sheet.getCell(`${colCenter}${namaBottomRow + 1}`);
-  jabCell.value = col.jabatan || "";
+  applyTtdCellText(jabCell, col.jabatan);
   jabCell.alignment = { horizontal: "center" };
 });
 
@@ -1237,7 +1249,7 @@ for (let col = 1; col <= 14; col++) {
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Laporan_Bulanan_${bulan}.xlsx`
+      `attachment; filename=${buildExportFilename(`Laporan_Bulanan_${bulan}`, project, "xlsx")}`
     );
 
     await workbook.xlsx.write(res);
@@ -2088,8 +2100,9 @@ for (let r = startRow + 3; r < rowIndex; r++) {
     if (!val || val === 0) {
       cell.value = null;
     } else {
-      cell.value = val;
-      cell.numFmt = "0.000"; // 🔥 3 angka belakang
+      cell.value = Number(val);
+      cell.numFmt =
+      '_-* #,##0.000_-;-* #,##0.000_-;_-* "-"??_-;_-@_-';
     }
   };
 
@@ -2110,17 +2123,28 @@ for (let r = startRow + 3; r < rowIndex; r++) {
     }
   };
 
+  const setCenteredNumber = (cell, val) => {
+    setNumber(cell, val);
+    cell.numFmt = '#,##0.000;-#,##0.000;"-"';
+    cell.alignment = {
+      ...(cell.alignment || {}),
+      horizontal: "center",
+      vertical: "middle"
+    };
+  };
+
   // =========================
   // 🔥 APPLY FORMAT
   // =========================
 
-  setNumber(row.getCell(8), row.getCell(8).value);   // bobot
-  setNumber(row.getCell(9), row.getCell(9).value);   // sd lalu
-  setNumber(row.getCell(10), row.getCell(10).value); // bulan ini
-  setNumber(row.getCell(11), row.getCell(11).value); // sd ini
+  setCenteredNumber(row.getCell(7), row.getCell(7).value);   // volume
+  setCenteredNumber(row.getCell(8), row.getCell(8).value);   // bobot
+  setCenteredNumber(row.getCell(9), row.getCell(9).value);   // sd lalu
+  setCenteredNumber(row.getCell(10), row.getCell(10).value); // bulan ini
+  setCenteredNumber(row.getCell(11), row.getCell(11).value); // sd ini
 
   setPercent(row.getCell(12), row.getCell(12).value); // progress_item
-  setNumber(row.getCell(13), row.getCell(13).value);  // progres_proyek (bukan persen!)
+  setCenteredNumber(row.getCell(13), row.getCell(13).value);  // progres_proyek (bukan persen!)
 }
 
 
@@ -2297,7 +2321,7 @@ template.top.forEach((col) => {
   // HEADER
   (col.header || []).forEach((text, i) => {
     const cell = sheet.getCell(`${colCenter}${ttdStart + i}`);
-    cell.value = text || "";
+    applyTtdCellText(cell, text);
     cell.alignment = {
       horizontal: "center",
       vertical: "middle",
@@ -2307,12 +2331,11 @@ template.top.forEach((col) => {
 
   // NAMA
   const namaCell = sheet.getCell(`${colCenter}${namaTopRow}`);
-  namaCell.value = col.nama || "";
-  namaCell.font = { bold: true };
+  applyTtdCellText(namaCell, col.nama, { bold: true, underline: true });
   namaCell.alignment = { horizontal: "center" };
   // JABATAN
   const jabCell = sheet.getCell(`${colCenter}${namaTopRow + 1}`);
-  jabCell.value = col.jabatan || "";
+  applyTtdCellText(jabCell, col.jabatan);
   jabCell.alignment = { horizontal: "center" };
 });
 
@@ -2336,7 +2359,7 @@ template.bottom.forEach((col) => {
   // HEADER
   (col.header || []).forEach((text, i) => {
     const cell = sheet.getCell(`${colCenter}${bottomStart + i}`);
-    cell.value = text || "";
+    applyTtdCellText(cell, text);
     cell.alignment = {
       horizontal: "center",
       vertical: "middle",
@@ -2346,13 +2369,12 @@ template.bottom.forEach((col) => {
 
   // NAMA
   const namaCell = sheet.getCell(`${colCenter}${namaBottomRow}`);
-  namaCell.value = col.nama || "";
-  namaCell.font = { bold: true };
+  applyTtdCellText(namaCell, col.nama, { bold: true, underline: true });
   namaCell.alignment = { horizontal: "center" };
 
   // JABATAN
   const jabCell = sheet.getCell(`${colCenter}${namaBottomRow + 1}`);
-  jabCell.value = col.jabatan || "";
+  applyTtdCellText(jabCell, col.jabatan);
   jabCell.alignment = { horizontal: "center" };
 });
 
@@ -2439,12 +2461,12 @@ if (!fs.existsSync(tempDir)) {
 // =========================
 const excelPath = path.join(
   tempDir,
-  `Laporan_Bulanan_${bulan}.xlsx`
+  buildExportFilename(`Laporan_Bulanan_${bulan}`, project, "xlsx")
 );
 
 const pdfPath = path.join(
   tempDir,
-  `Laporan_Bulanan_${bulan}.pdf`
+  buildExportFilename(`Laporan_Bulanan_${bulan}`, project, "pdf")
 );
 
 // =========================
@@ -2531,7 +2553,7 @@ libre.convert(
 
       pdfPath,
 
-      `Laporan_Bulanan_${bulan}.pdf`,
+      buildExportFilename(`Laporan_Bulanan_${bulan}`, project, "pdf"),
 
       () => {
 

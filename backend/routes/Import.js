@@ -11,6 +11,7 @@ import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { parseNumber } from "../utils/parseNumber.js";
 import { generateBobotInternal } from "../controllers/BoqController.js";
 import { hitungAnalisa } from "../controllers/BoqController.js";
+import { applyPriceFormula } from "../utils/priceFormula.js";
 
 const router = express.Router();
 
@@ -44,6 +45,75 @@ const normalizeKey = (obj) => {
     newObj[key.trim().toLowerCase()] = obj[key];
   });
   return newObj;
+};
+
+const parsePercentValue = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  let clean = String(value).trim();
+  if (!clean) return null;
+
+  clean = clean.replace(/%/g, "").trim();
+
+  const matches = clean.match(/-?\d+(?:[.,]\d+)?/g);
+  if (matches?.length) {
+    clean = matches[matches.length - 1];
+  }
+
+  if (clean.includes(",") && clean.includes(".")) {
+    clean = clean.indexOf(",") > clean.indexOf(".")
+      ? clean.replace(/\./g, "").replace(",", ".")
+      : clean.replace(/,/g, "");
+  } else if (clean.includes(",")) {
+    clean = clean.replace(",", ".");
+  }
+
+  const number = Number(clean);
+  return Number.isFinite(number) ? number : null;
+};
+
+const isValidPercent = (value) => value !== null && value >= 0 && value <= 100;
+
+const hasOverheadLabel = (value) => {
+  const text = String(value || "").toLowerCase();
+  return (
+    text.includes("overhead") ||
+    text.includes("over head") ||
+    text.includes("profit") ||
+    /\boh\b/.test(text) ||
+    /\bo\/h\b/.test(text)
+  );
+};
+
+const getOverheadFromRow = (row) => {
+  const overheadIndex = row.findIndex(hasOverheadLabel);
+
+  if (overheadIndex === -1) return null;
+
+  for (let i = overheadIndex + 1; i < row.length; i++) {
+    const value = parsePercentValue(row[i]);
+    if (isValidPercent(value)) return value;
+  }
+
+  for (const cell of row) {
+    const value = parsePercentValue(cell);
+    if (isValidPercent(value)) return value;
+  }
+
+  return null;
+};
+
+const getHeaderOverheadFromRow = (row) => {
+  const explicitOverhead = getOverheadFromRow(row);
+  if (explicitOverhead !== null) return explicitOverhead;
+
+  for (let i = 5; i < row.length; i++) {
+    const value = parsePercentValue(row[i]);
+    if (isValidPercent(value)) return value;
+  }
+
+  return 10;
 };
 
 router.post("/import-boq", upload.single("file"), async (req, res) => {
@@ -140,15 +210,15 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
           const analisaResult = analisaCache[analisa_id];
 
           harga_satuan =
-            Number(analisaResult.grandTotal) || 0;
+            Number(analisaResult.harga_satuan_pekerjaan ?? analisaResult.pembulatan ?? analisaResult.grandTotal) || 0;
 
           const vol = Number(volume) || 0;
 
         jumlah =
-          Number(harga_satuan) * vol;
+          Math.floor(Number(harga_satuan) * vol);
 
         jumlah_ppn =
-          jumlah + (jumlah * ppn / 100);
+          Math.floor(jumlah + (jumlah * ppn / 100));
 
         } catch (err) {
           console.error("Gagal hitung analisa:", err.message);
@@ -276,10 +346,6 @@ router.post("/import", upload.single("file"), async (req, res) => {
       // ❌ VALIDASI
       if (!nama || !satuan || !hargaRaw) {
         throw new Error(`Data tidak lengkap di baris ${index + 2}`);
-      }
-
-      if (tipe === "BAHAN" && !kategori) {
-        throw new Error(`Kategori wajib di baris ${index + 2}`);
       }
 
       // 🔥 FORMAT HARGA
@@ -440,6 +506,7 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
     const analisaList = {};
     const detailBuffer = [];
     const errors = [];
+    let overheadImportedCount = 0;
 
     const normalizeText = (text) =>
       String(text || "").toLowerCase().trim();
@@ -464,6 +531,7 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       const colA = row[0] || "";
       const colB = row[1] || "";
       const colC = row[2] || "";
+      const colD = row[3] || "";
       const colE = row[4] || "";
 
       console.log("ROW:", colA, colB, colC);
@@ -478,19 +546,37 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       if (textAnalisa) {
         const kode = textAnalisa.split(" ")[0];
         const nama = textAnalisa.replace(kode, "").trim();
+        const overheadPersen = getHeaderOverheadFromRow(row);
+
+        if (overheadPersen !== 10) {
+          overheadImportedCount++;
+        }
 
         currentAnalisa = {
           project_id,
           kode,
           nama,
           satuan: colE || "",
-          overhead_persen: 10
+          overhead_persen: overheadPersen
         };
 
         analisaList[kode] = { ...currentAnalisa };
         currentTipe = null;
 
         console.log("SET ANALISA:", kode);
+        continue;
+      }
+
+      // =========================
+      // 🔥 DETEKSI OVERHEAD / PROFIT
+      // =========================
+      const overheadPersen = getOverheadFromRow(row);
+      if (currentAnalisa && overheadPersen !== null) {
+        currentAnalisa.overhead_persen = overheadPersen;
+        analisaList[currentAnalisa.kode].overhead_persen = overheadPersen;
+        overheadImportedCount++;
+
+        console.log("SET OVERHEAD:", currentAnalisa.kode, overheadPersen);
         continue;
       }
 
@@ -536,10 +622,21 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
 
       console.log("✅ ITEM:", item.nama);
 
+      const rumusHarga = colD ? String(colD).trim() : null;
+      if (rumusHarga) {
+        try {
+          applyPriceFormula(item.harga, rumusHarga);
+        } catch (error) {
+          errors.push(`${itemName} rumus harga tidak valid: ${error.message}`);
+          continue;
+        }
+      }
+
       detailBuffer.push({
         kode: currentAnalisa.kode,
         item_id: item.id,
-        koefisien: koef
+        koefisien: koef,
+        rumus_harga: rumusHarga
       });
     }
 
@@ -575,7 +672,8 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       await ProjectAnalisaDetail.create({
         project_analisa_id: analisaMap[row.kode],
         item_id: row.item_id,
-        koefisien: row.koefisien
+        koefisien: row.koefisien,
+        rumus_harga: row.rumus_harga
       });
     }
 
@@ -585,7 +683,8 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
     res.json({
       message: "Import berhasil!",
       total_analisa: Object.keys(analisaList).length,
-      total_detail: detailBuffer.length
+      total_detail: detailBuffer.length,
+      total_overhead_import: overheadImportedCount
     });
 
   } catch (err) {

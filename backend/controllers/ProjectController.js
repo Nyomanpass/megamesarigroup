@@ -4,6 +4,27 @@ import fs from "fs";
 import path from "path";
 // 🔥 GET ALL PROJECT (Dashboard)
 
+const normalizeRupiahValue = (value) => {
+  if (value === undefined || value === null || value === "") return value;
+  if (typeof value === "number") return value;
+
+  const rawValue = String(value)
+    .replace(/[^\d.,-]/g, "")
+    .trim();
+
+  if (!rawValue) return null;
+
+  const dotCount = (rawValue.match(/\./g) || []).length;
+  const normalized = rawValue.includes(",")
+    ? rawValue.replace(/\./g, "").replace(",", ".")
+    : dotCount > 1
+      ? rawValue.replace(/\./g, "")
+      : rawValue;
+
+  const numberValue = Number(normalized);
+  return Number.isNaN(numberValue) ? null : numberValue;
+};
+
 export const getProjects = async (req, res) => {
   try {
     const data = await Project.findAll({
@@ -36,6 +57,7 @@ export const createProject = async (req, res) => {
   try {
     const data = {
       ...req.body,
+      nilai_kontrak: normalizeRupiahValue(req.body.nilai_kontrak),
 
       // 🔥 ambil file dari multer
       logo_kontraktor: req.files?.logo_kontraktor?.[0]?.filename || null,
@@ -93,7 +115,10 @@ export const updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project tidak ditemukan" });
     }
 
-    const data = { ...req.body };
+    const data = {
+      ...req.body,
+      nilai_kontrak: normalizeRupiahValue(req.body.nilai_kontrak)
+    };
 
     // 🔥 HANDLE LOGO KONTRAKTOR
     if (req.files?.logo_kontraktor) {

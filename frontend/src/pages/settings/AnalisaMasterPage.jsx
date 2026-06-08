@@ -20,7 +20,8 @@ const AnalisaMasterPage = () => {
     kode: "",
     nama: "",
     satuan: "",
-    overhead_persen: 0
+    overhead_persen: 0,
+    use_pembulatan: true
   });
 
   const fetchData = async () => {
@@ -49,9 +50,10 @@ const AnalisaMasterPage = () => {
   }, [searchTerm, data]);
 
   const handleChangeMaster = (e) => {
+    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setFormMaster({
       ...formMaster,
-      [e.target.name]: e.target.value
+      [e.target.name]: value
     });
   };
 
@@ -61,7 +63,8 @@ const AnalisaMasterPage = () => {
         kode: item.kode,
         nama: item.nama,
         satuan: item.satuan,
-        overhead_persen: item.overhead_persen
+        overhead_persen: item.overhead_persen,
+        use_pembulatan: item.use_pembulatan ?? true
       });
       setEditId(item.id);
       setIsEdit(true);
@@ -70,7 +73,8 @@ const AnalisaMasterPage = () => {
         kode: "",
         nama: "",
         satuan: "",
-        overhead_persen: 0
+        overhead_persen: 0,
+        use_pembulatan: true
       });
       setEditId(null);
       setIsEdit(false);
@@ -179,6 +183,7 @@ const AnalisaMasterPage = () => {
                 <th className="p-5 font-bold">Nama Pekerjaan</th>
                 <th className="p-5 font-bold w-32">Satuan</th>
                 <th className="p-5 font-bold w-32 text-center">Overhead (%)</th>
+                <th className="p-5 font-bold w-36 text-center">Harga Dipakai</th>
                 <th className="p-5 font-bold text-center w-64">Aksi</th>
               </tr>
             </thead>
@@ -200,6 +205,11 @@ const AnalisaMasterPage = () => {
                   <td className="p-5 text-center text-gray-600 font-medium">
                     <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
                       {a.overhead_persen}%
+                    </span>
+                  </td>
+                  <td className="p-5 text-center text-gray-600 font-medium">
+                    <span className={`px-2.5 py-1 rounded-md font-bold border ${a.use_pembulatan ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
+                      {a.use_pembulatan ? "Pembulatan" : "Asli"}
                     </span>
                   </td>
                   <td className="p-5">
@@ -321,6 +331,22 @@ const AnalisaMasterPage = () => {
                   />
                   <p className="text-xs text-gray-500 mt-2">Masukan persentase tambahan (Overhead, Jasa, Profit, dll) yang dibebankan pada master analisa ini.</p>
                 </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="use_pembulatan"
+                    checked={Boolean(formMaster.use_pembulatan)}
+                    onChange={handleChangeMaster}
+                    className="mt-1 h-4 w-4 accent-secondary"
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-gray-700">Gunakan harga pembulatan</span>
+                    <span className="block text-xs text-gray-500 mt-1">
+                      Jika aktif, analisa hasil import ke proyek akan memakai Pembulatan. Jika mati, memakai Harga Satuan Pekerjaan (D + E) asli.
+                    </span>
+                  </span>
+                </label>
 
               </div>
 

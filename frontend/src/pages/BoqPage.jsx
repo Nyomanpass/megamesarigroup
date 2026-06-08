@@ -17,7 +17,6 @@ export default function BoqPage() {
   const id = selectedProject?.id || paramId;
   const navigate = useNavigate();
   const [analisaList, setAnalisaList] = useState([]);
-  const [rounding, setRounding] = useState(-3);
   const [bulkItems, setBulkItems] = useState([
     { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
   ]);
@@ -304,7 +303,7 @@ export default function BoqPage() {
 
       if (item.analisa_id) {
         const analisaRes = await api.get(`/project-analisa-detail/${item.analisa_id}`);
-        harga_preview = analisaRes.data.grandTotal;
+        harga_preview = analisaRes.data.harga_satuan_pekerjaan ?? analisaRes.data.pembulatan ?? analisaRes.data.grandTotal;
       }
 
       setForm({
@@ -483,7 +482,7 @@ const fetchBoq =
 
     const updated = [...bulkItems];
     updated[index].analisa_id = analisa_id;
-    updated[index].harga_preview = res.data.grandTotal; // 🔥 hanya preview
+    updated[index].harga_preview = res.data.harga_satuan_pekerjaan ?? res.data.pembulatan ?? res.data.grandTotal; // 🔥 hanya preview
 
     setBulkItems(updated);
   };
@@ -511,20 +510,41 @@ const fetchBoq =
   const totalGrandTotal = itemOnly.reduce((acc, curr) => acc + Number(curr.jumlah_ppn || 0), 0);
   const totalBobot = itemOnly.reduce((sum, item) => sum + Number(item.bobot || 0), 0);
 
-  const applyRounding = (value, digit) => {
-    if (!digit) return value;
+  const formatBoqMoney = (value) => Number(value || 0).toLocaleString("id-ID", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 
-    const factor = Math.pow(10, Math.abs(digit));
-    return Math.round(value / factor) * factor;
-  };
+  const getDisplayJumlah = (item) => Number(item.jumlah_raw ?? item.jumlah ?? 0);
 
+  const getDisplayGrandTotal = (item) => Number(item.jumlah_ppn_raw ?? item.jumlah_ppn ?? 0);
 
-  const totalAsli = itemOnly.reduce(
-    (acc, curr) => acc + Number(curr.jumlah_ppn || 0),
+  const totalJumlahTampil = itemOnly.reduce(
+    (acc, curr) => acc + getDisplayJumlah(curr),
     0
   );
 
-  const totalBulat = applyRounding(totalAsli, rounding);
+  const totalGrandTotalTampil = itemOnly.reduce(
+    (acc, curr) => acc + getDisplayGrandTotal(curr),
+    0
+  );
+
+
+  const totalBulat = totalGrandTotalTampil;
+  const nilaiKontrak = Number(project?.nilai_kontrak || 0);
+  const selisihKontrak = nilaiKontrak - totalBulat;
+  const absSelisihKontrak = Math.abs(selisihKontrak);
+  const candidateItems = itemOnly.filter(item => Number(item.jumlah_ppn_raw ?? item.jumlah_ppn ?? 0) > 0);
+  const recommendedBySmallestBobot = [...candidateItems].sort((a, b) => {
+    const bobotA = Number(a.bobot || 0);
+    const bobotB = Number(b.bobot || 0);
+    if (bobotA !== bobotB) return bobotA - bobotB;
+    return getDisplayGrandTotal(a) - getDisplayGrandTotal(b);
+  })[0];
+  const recommendedByLargestValue = [...candidateItems].sort(
+    (a, b) => getDisplayGrandTotal(b) - getDisplayGrandTotal(a)
+  )[0];
+  const getAdjustedGrandTotal = (item) => getDisplayGrandTotal(item) + selisihKontrak;
 
   // Pie Chart Data: Top 5 Items by Bobot
   const pieChartData = useMemo(() => {
@@ -874,11 +894,58 @@ const handleAddendumItem = async () => {
             </div>
             <p className="text-blue-100 uppercase tracking-widest text-xs font-bold mb-2">Total Estimasi Harga (+PPN)</p>
             <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight mb-2">
-              Rp {totalBulat.toLocaleString("id-ID")}
+              Rp {formatBoqMoney(totalBulat)}
             </h2>
             <div className="flex items-center gap-2 mt-4 text-sm bg-black/20 w-max px-3 py-1.5 rounded-full backdrop-blur-sm">
-              <Calculator size={16} /> Base: Rp {totalJumlah.toLocaleString("id-ID")}
+              <Calculator size={16} /> Base: Rp {formatBoqMoney(totalJumlahTampil)}
             </div>
+            
+            {nilaiKontrak > 0 && (
+              <div className="mt-4 rounded-2xl bg-white/15 border border-white/20 p-4 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-blue-100">Nilai Kontrak</span>
+                  <span className="font-extrabold">Rp {formatBoqMoney(nilaiKontrak)}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-blue-100">Selisih</span>
+                  <span className={`font-extrabold ${selisihKontrak === 0 ? "text-emerald-100" : "text-yellow-100"}`}>
+                    {selisihKontrak > 0 ? "+" : selisihKontrak < 0 ? "-" : ""}
+                    Rp {formatBoqMoney(absSelisihKontrak)}
+                  </span>
+                </div>
+
+                {selisihKontrak === 0 ? (
+                  <div className="mt-3 rounded-xl bg-emerald-400/20 px-3 py-2 text-xs font-bold text-emerald-50">
+                    Total BOQ sudah pas dengan nilai kontrak.
+                  </div>
+                ) : recommendedBySmallestBobot ? (
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="rounded-xl bg-black/15 px-3 py-2">
+                      <div className="font-bold text-blue-100">Saran utama: item bobot terkecil</div>
+                      <div className="mt-1 font-semibold">{recommendedBySmallestBobot.kode} - {recommendedBySmallestBobot.uraian}</div>
+                      <div className="mt-1 text-blue-100">
+                        Bobot {Number(recommendedBySmallestBobot.bobot || 0).toFixed(3)}%,
+                        nilai menjadi Rp {formatBoqMoney(getAdjustedGrandTotal(recommendedBySmallestBobot))}
+                      </div>
+                      {getAdjustedGrandTotal(recommendedBySmallestBobot) <= 0 && (
+                        <div className="mt-2 rounded-lg bg-red-500/20 px-2 py-1 font-bold text-red-50">
+                          Selisih terlalu besar untuk item ini, gunakan alternatif nilai terbesar.
+                        </div>
+                      )}
+                    </div>
+                    {recommendedByLargestValue && recommendedByLargestValue.id !== recommendedBySmallestBobot.id && (
+                      <div className="rounded-xl bg-black/10 px-3 py-2">
+                        <div className="font-bold text-blue-100">Alternatif: item nilai terbesar</div>
+                        <div className="mt-1 font-semibold">{recommendedByLargestValue.kode} - {recommendedByLargestValue.uraian}</div>
+                        <div className="mt-1 text-blue-100">
+                          Dampak persentase biasanya lebih kecil, nilai menjadi Rp {formatBoqMoney(getAdjustedGrandTotal(recommendedByLargestValue))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
           {/* Card 2: Jumlah Item */}
@@ -1045,13 +1112,8 @@ const handleAddendumItem = async () => {
 
                       {/* JUMLAH */}
                     <td className="p-3 text-right text-gray-600">
-                      {item.jumlah
-                        ? Number(
-                            Number(item.jumlah).toFixed(2)
-                          ).toLocaleString("id-ID", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })
+                      {Number(item.jumlah_raw ?? item.jumlah ?? 0)
+                        ? formatBoqMoney(getDisplayJumlah(item))
                         : "-"}
                     </td>
 
@@ -1064,11 +1126,8 @@ const handleAddendumItem = async () => {
 
                       {/* GRAND TOTAL */}
                       <td className="p-3 text-right font-bold text-blue-600">
-                        {item.jumlah_ppn
-                          ? Number(item.jumlah_ppn).toLocaleString("id-ID", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })
+                        {Number(item.jumlah_ppn_raw ?? item.jumlah_ppn ?? 0)
+                          ? formatBoqMoney(getDisplayGrandTotal(item))
                           : "-"}
                       </td>
 
@@ -1133,13 +1192,13 @@ const handleAddendumItem = async () => {
                   </td>
 
                     <td className="p-4 text-right text-green-600">
-                    {analytics.totalJumlah.toLocaleString("id-ID")}
+                    {formatBoqMoney(totalJumlahTampil)}
                   </td>
 
                   <td className="p-4 text-center">-</td>
 
                   <td className="p-4 text-right text-blue-600">
-                     {analytics.totalGrandTotal.toLocaleString("id-ID")}
+                     {formatBoqMoney(totalGrandTotalTampil)}
                   </td>
 
                   <td className="p-4 text-right text-amber-600">
@@ -1154,11 +1213,11 @@ const handleAddendumItem = async () => {
                 {/* ========================= */}
                 <tr className=" font-bold ">
                   <td colSpan={6} className="p-3 px-6 text-right uppercase text-xs">
-                    🔸 Pembulatan
+                    Total Tidak Dibulatkan
                   </td>
 
                   <td className="p-3 text-right">
-                    {totalBulat.toLocaleString("id-ID")},00
+                    {formatBoqMoney(totalBulat)}
                   </td>
 
                   <td colSpan={2}></td>
@@ -1298,9 +1357,9 @@ const handleAddendumItem = async () => {
                   tipe: "item"
                 });
 
-                setBulkItems([
-                  { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
-                ]);
+      setBulkItems([
+        { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+      ]);
               }}>
               <m.div
                 initial={{ opacity: 0, scale: 0.7, y: 20 }}

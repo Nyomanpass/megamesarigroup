@@ -21,6 +21,7 @@ const initialForm = {
   kegiatan: "",
   sub_kegiatan: "",
   pekerjaan: "",
+  nama_import: "",
   no_kontrak: "",
   tgl_kontrak: "",
   no_spmk: "",
@@ -178,6 +179,29 @@ export default function Project() {
       maximumFractionDigits: 0
     }).format(Number(number || 0));
 
+  const formatRupiahInput = (value) => {
+    const rawValue = String(value || "").replace(/[^\d.,]/g, "");
+    const hasCommaDecimal = rawValue.includes(",");
+    const hasDotDecimal = /^\d+\.\d{1,2}$/.test(rawValue);
+    const [rawIntegerPart, decimalPart] = hasCommaDecimal
+      ? rawValue.split(",")
+      : hasDotDecimal
+        ? rawValue.split(".")
+        : [rawValue, undefined];
+    const integerPart = rawIntegerPart.replace(/\D/g, "");
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const shouldShowDecimal =
+      decimalPart !== undefined &&
+      (hasCommaDecimal || Number(decimalPart) !== 0);
+
+    return shouldShowDecimal
+      ? `${formattedInteger},${decimalPart.slice(0, 2)}`
+      : formattedInteger;
+  };
+
+  const normalizeRupiahInput = (value) =>
+    String(value || "").replace(/\./g, "").replace(",", ".");
+
   const handleFile = (e) => {
     setForm({
       ...form,
@@ -186,7 +210,11 @@ export default function Project() {
   };
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({
+      ...form,
+      [name]: name === "nilai_kontrak" ? formatRupiahInput(value) : value
+    });
   };
 
   const handleAdd = () => {
@@ -201,6 +229,7 @@ export default function Project() {
       tgl_kontrak: formatDate(project.tgl_kontrak),
       tgl_spmk: formatDate(project.tgl_spmk),
       end_date: formatDate(project.end_date),
+      nilai_kontrak: formatRupiahInput(project.nilai_kontrak),
       status: project.status || "progress",
       status_pengerjaan: project.status_pengerjaan || "berjalan"
     });
@@ -220,21 +249,30 @@ export default function Project() {
       const formData = new FormData();
 
       Object.keys(form).forEach((key) => {
-        const value = form[key];
+        const value = key === "nilai_kontrak"
+          ? normalizeRupiahInput(form[key])
+          : form[key];
         if (value === null || value === "") return;
         formData.append(key, value);
       });
 
       formData.append("type", "logo");
 
+      let savedProject = null;
+
       if (editId) {
-        await api.put(`/projects/${editId}`, formData, {
+        const res = await api.put(`/projects/${editId}`, formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
+        savedProject = res.data?.project;
       } else {
         await api.post("/projects", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
+      }
+
+      if (savedProject && selectedProject?.id === savedProject.id) {
+        setSelectedProject(savedProject);
       }
 
       setShowModal(false);
@@ -589,6 +627,10 @@ export default function Project() {
                       <input type="text" name="lokasi" value={form.lokasi} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
                     </div>
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nama File Import/Export</label>
+                      <input type="text" name="nama_import" value={form.nama_import || ""} onChange={handleChange} placeholder="Contoh: projek kuta selatan" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Status Project</label>
                       <select name="status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value, status_pengerjaan: e.target.value === "completed" ? "selesai" : "berjalan" })} className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all">
                         <option value="progress">Progress</option>
@@ -619,7 +661,7 @@ export default function Project() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Nilai Kontrak (Rp)</label>
-                      <input type="number" name="nilai_kontrak" value={form.nilai_kontrak} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
+                      <input type="text" inputMode="decimal" name="nilai_kontrak" value={form.nilai_kontrak} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-secondary/50 focus:border-secondary outline-none transition-all" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Tahun Anggaran</label>

@@ -25,6 +25,7 @@ export default function PekerjaPage() {
   const id = selectedProject?.id || paramId;
   const projectId = id;
   const navigate = useNavigate();
+  const tipe = "TENAGA";
 
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -47,6 +48,7 @@ export default function PekerjaPage() {
 
   const [masterItems, setMasterItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -191,13 +193,54 @@ export default function PekerjaPage() {
 
   const executeDelete = async () => {
     try {
-      await api.delete(`/project-items/${deleteModal.id}`);
+      if (deleteModal.deleteAll || deleteModal.ids?.length) {
+        await api.delete("/project-items/bulk", {
+          data: {
+            project_id: id,
+            tipe,
+            ids: deleteModal.ids || [],
+            delete_all: Boolean(deleteModal.deleteAll)
+          }
+        });
+        setSelectedDeleteIds([]);
+      } else {
+        await api.delete(`/project-items/${deleteModal.id}`);
+      }
       fetchData();
       setDeleteModal({ isOpen: false, id: null, itemName: "" });
     } catch (err) {
       console.error(err);
-      alert("Gagal menghapus data tenaga kerja.");
+      alert(err.response?.data?.message || "Gagal menghapus data tenaga kerja.");
     }
+  };
+
+  const toggleDeleteSelection = (itemId) => {
+    setSelectedDeleteIds((prev) =>
+      prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  const handleSelectVisibleRows = (checked) => {
+    setSelectedDeleteIds(checked ? filteredData.map((item) => item.id) : []);
+  };
+
+  const confirmBulkDelete = (deleteAll = false) => {
+    if (!deleteAll && selectedDeleteIds.length === 0) {
+      alert("Pilih minimal 1 tenaga kerja untuk dihapus");
+      return;
+    }
+
+    setDeleteModal({
+      isOpen: true,
+      id: null,
+      itemName: deleteAll
+        ? `semua tenaga kerja (${data.length} data)`
+        : `${selectedDeleteIds.length} tenaga kerja terpilih`,
+      ids: selectedDeleteIds,
+      deleteAll
+    });
   };
 
   const handleBulkCreate = async () => {
@@ -302,6 +345,32 @@ export default function PekerjaPage() {
             className="w-full pl-11 pr-4 px-2.5 py-3 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all text-sm"
           />
         </div>
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <button
+            onClick={() => confirmBulkDelete(false)}
+            disabled={selectedDeleteIds.length === 0}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-md font-bold transition-all border-2 ${
+              selectedDeleteIds.length
+                ? "bg-danger text-white border-danger hover:bg-white hover:text-danger"
+                : "bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed"
+            }`}
+          >
+            <Trash2 size={18} />
+            Hapus Pilihan ({selectedDeleteIds.length})
+          </button>
+          <button
+            onClick={() => confirmBulkDelete(true)}
+            disabled={data.length === 0}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-md font-bold transition-all border-2 ${
+              data.length
+                ? "bg-white text-danger border-danger hover:bg-danger hover:text-white"
+                : "bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed"
+            }`}
+          >
+            <Trash2 size={18} />
+            Hapus Semua
+          </button>
+        </div>
         <button
           onClick={() => openFormModal()}
           className="flex items-center gap-2 cursor-pointer bg-secondary text-white border-2 border-tranpanret hover:bg-transparent hover:text-secondary transition-all bg-border-secondary px-5 py-2.5 rounded-md font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap"
@@ -318,6 +387,13 @@ export default function PekerjaPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="p-5 font-bold w-12">
+                  <input
+                    type="checkbox"
+                    checked={filteredData.length > 0 && filteredData.every((item) => selectedDeleteIds.includes(item.id))}
+                    onChange={(e) => handleSelectVisibleRows(e.target.checked)}
+                  />
+                </th>
                 <th className="p-5 font-bold">Nama Tenaga</th>
                 <th className="p-5 font-bold w-32 border-l border-gray-100">Satuan</th>
                 <th className="p-5 font-bold w-48 text-right border-l border-gray-100">Upah Kerja (Rp)</th>
@@ -328,6 +404,13 @@ export default function PekerjaPage() {
             <tbody className="divide-y divide-gray-50 text-sm">
               {filteredData.map((item) => (
                 <tr key={item.id} className="hover:bg-accent/40 transition-colors group">
+                  <td className="p-5">
+                    <input
+                      type="checkbox"
+                      checked={selectedDeleteIds.includes(item.id)}
+                      onChange={() => toggleDeleteSelection(item.id)}
+                    />
+                  </td>
                   <td className="p-5 font-medium text-text-primary">
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-gray-400" />
@@ -367,7 +450,7 @@ export default function PekerjaPage() {
               ))}
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="p-16 text-center">
+                  <td colSpan="6" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400">
                       <div className="bg-gray-50 p-4 rounded-full mb-3">
                         <Search className="w-10 h-10 text-gray-300" />
@@ -584,7 +667,7 @@ export default function PekerjaPage() {
                 </div>
                 <h2 className="text-2xl font-semibold text-gray-900 mb-2">Hapus Data?</h2>
                 <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                  Apakah Anda yakin ingin menghapus pekerja<br />
+                  Apakah Anda yakin ingin menghapus data<br />
                   <span className="font-bold text-gray-800 text-base"> "{deleteModal.itemName}"</span>?
                 </p>
 

@@ -45,6 +45,7 @@ export default function Dashboard() {
       kegiatan: '',
       sub_kegiatan: '',
       pekerjaan: '',
+      nama_import: '',
       lokasi: '',
       tahun: '',
       no_kontrak: '',
@@ -379,6 +380,29 @@ export default function Dashboard() {
       setShowDropdown(false);
    };
 
+   const formatRupiahInput = (value) => {
+      const rawValue = String(value || "").replace(/[^\d.,]/g, "");
+      const hasCommaDecimal = rawValue.includes(",");
+      const hasDotDecimal = /^\d+\.\d{1,2}$/.test(rawValue);
+      const [rawIntegerPart, decimalPart] = hasCommaDecimal
+         ? rawValue.split(",")
+         : hasDotDecimal
+            ? rawValue.split(".")
+            : [rawValue, undefined];
+      const integerPart = rawIntegerPart.replace(/\D/g, "");
+      const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const shouldShowDecimal =
+         decimalPart !== undefined &&
+         (hasCommaDecimal || Number(decimalPart) !== 0);
+
+      return shouldShowDecimal
+         ? `${formattedInteger},${decimalPart.slice(0, 2)}`
+         : formattedInteger;
+   };
+
+   const normalizeRupiahInput = (value) =>
+      String(value || "").replace(/\./g, "").replace(",", ".");
+
    // Modal handlers
    const handleAddProject = () => {
       setEditId(null);
@@ -393,11 +417,12 @@ export default function Dashboard() {
          kegiatan: selectedProject.kegiatan || '',
          sub_kegiatan: selectedProject.sub_kegiatan || '',
          pekerjaan: selectedProject.pekerjaan || '',
+         nama_import: selectedProject.nama_import || '',
          lokasi: selectedProject.lokasi || '',
          tahun: selectedProject.tahun || '',
          no_kontrak: selectedProject.no_kontrak || '',
          tgl_kontrak: selectedProject.tgl_kontrak || '',
-         nilai_kontrak: selectedProject.nilai_kontrak || '',
+         nilai_kontrak: formatRupiahInput(selectedProject.nilai_kontrak),
          no_spmk: selectedProject.no_spmk || '',
          tgl_spmk: selectedProject.tgl_spmk || '',
          end_date: selectedProject.end_date || '',
@@ -444,6 +469,7 @@ export default function Dashboard() {
          kegiatan: '',
          sub_kegiatan: '',
          pekerjaan: '',
+         nama_import: '',
          lokasi: '',
          tahun: '',
          no_kontrak: '',
@@ -463,7 +489,10 @@ export default function Dashboard() {
 
    const handleChange = (e) => {
       const { name, value } = e.target;
-      const nextForm = { ...form, [name]: value };
+      const nextForm = {
+         ...form,
+         [name]: name === "nilai_kontrak" ? formatRupiahInput(value) : value
+      };
       setForm(nextForm);
 
       if (name === 'tgl_spmk' || name === 'end_date') {
@@ -511,7 +540,9 @@ export default function Dashboard() {
 
             formData.append(
                key,
-               form[key]
+               key === "nilai_kontrak"
+                  ? normalizeRupiahInput(form[key])
+                  : form[key]
             );
          }
       }
@@ -553,10 +584,11 @@ export default function Dashboard() {
    }
 
    try {
+         let savedProject = null;
 
          if (editId) {
 
-            await api.put(
+            const res = await api.put(
                `/projects/${editId}`,
                formData,
                {
@@ -566,6 +598,7 @@ export default function Dashboard() {
                   }
                }
             );
+            savedProject = res.data?.project;
 
          } else {
 
@@ -579,6 +612,11 @@ export default function Dashboard() {
                   }
                }
             );
+         }
+
+         if (savedProject && selectedProject?.id === savedProject.id) {
+            setSelectedProject(savedProject);
+            setProjectData(savedProject);
          }
 
          fetchProjects();
@@ -1397,6 +1435,17 @@ export default function Dashboard() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
                                  />
                               </div>
+                              <div className="mt-4">
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama File Import/Export</label>
+                                 <input
+                                    type="text"
+                                    name="nama_import"
+                                    value={form.nama_import}
+                                    onChange={handleChange}
+                                    placeholder="Contoh: projek kuta selatan"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-secondary focus:outline-none"
+                                 />
+                              </div>
                            </div>
 
                            {/* Contract Info */}
@@ -1416,7 +1465,8 @@ export default function Dashboard() {
                                  <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Nilai Kontrak</label>
                                     <input
-                                       type="number"
+                                       type="text"
+                                       inputMode="decimal"
                                        name="nilai_kontrak"
                                        value={form.nilai_kontrak}
                                        onChange={handleChange}
