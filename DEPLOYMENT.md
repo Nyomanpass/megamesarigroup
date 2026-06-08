@@ -38,6 +38,7 @@ DB_PASS=password-db-yang-kuat
 JWT_SECRET=random-secret-panjang
 JWT_EXPIRES=1d
 CLIENT_ORIGIN=http://system.bomborastudio.id
+CLIENT_ORIGINS=http://system.bomborastudio.id
 VITE_API_URL=http://api.bomborastudio.id/api
 VITE_UPLOADS_URL=http://api.bomborastudio.id/uploads
 EMAIL_USER=email@gmail.com
@@ -48,6 +49,7 @@ Kalau sudah pakai HTTPS, ubah menjadi:
 
 ```env
 CLIENT_ORIGIN=https://system.bomborastudio.id
+CLIENT_ORIGINS=https://system.bomborastudio.id,http://system.bomborastudio.id
 VITE_API_URL=https://api.bomborastudio.id/api
 VITE_UPLOADS_URL=https://api.bomborastudio.id/uploads
 ```

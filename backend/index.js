@@ -47,14 +47,23 @@ import DailyProgressPhotoRoutes from "./routes/DailyProgressPhotoRoutes.js";
 const app = express();
 const PORT = process.env.PORT || 5004; // Mengambil dari .env (5004)
 
-const allowedOrigins = [
+const splitOrigins = (value) =>
+   (value || "")
+      .split(",")
+      .map((origin) => origin.trim().replace(/\/$/, ""))
+      .filter(Boolean);
+
+const allowedOrigins = new Set([
    "http://localhost",
    "http://localhost:3000",
    "http://localhost:5173",
    "http://localhost:5174",
    "http://localhost:80",
-   process.env.CLIENT_ORIGIN,
-].filter(Boolean);
+   "https://system.bomborastudio.id",
+   "http://system.bomborastudio.id",
+   ...splitOrigins(process.env.CLIENT_ORIGIN),
+   ...splitOrigins(process.env.CLIENT_ORIGINS),
+]);
 
 const apiRoutes = [
    authRoutes,
@@ -80,20 +89,26 @@ const apiRoutes = [
    DailyProgressPhotoRoutes,
 ];
 
-app.use(
-   cors({
-      origin: function (origin, callback) {
-         if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-         } else {
-            callback(new Error("Not allowed by CORS"));
-         }
-      },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-   }),
-);
+const corsOptions = {
+   origin: function (origin, callback) {
+      const normalizedOrigin = origin?.replace(/\/$/, "");
+
+      if (!normalizedOrigin || allowedOrigins.has(normalizedOrigin)) {
+         callback(null, true);
+         return;
+      }
+
+      console.warn(`CORS blocked origin: ${normalizedOrigin}`);
+      callback(new Error("Not allowed by CORS"));
+   },
+   credentials: true,
+   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+   allowedHeaders: ["Content-Type", "Authorization"],
+   optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 
 app.get("/", (req, res) => {

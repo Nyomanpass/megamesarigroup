@@ -32,6 +32,7 @@ services:
          JWT_SECRET: ${JWT_SECRET}
          JWT_EXPIRES: ${JWT_EXPIRES:-1d}
          CLIENT_ORIGIN: ${CLIENT_ORIGIN}
+         CLIENT_ORIGINS: ${CLIENT_ORIGINS:-}
          EMAIL_USER: ${EMAIL_USER}
          EMAIL_PASS: ${EMAIL_PASS}
          PORT: 3000

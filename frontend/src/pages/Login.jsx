@@ -181,6 +181,7 @@ export default function Login() {
               <input
                 type="email"
                 name="email"
+                autoComplete="email"
                 placeholder="Masukkan email Anda"
                 value={form.email}
                 onChange={handleChange}
@@ -194,6 +195,7 @@ export default function Login() {
               <input
                 type="password"
                 name="password"
+                autoComplete="current-password"
                 placeholder="Masukkan password Anda"
                 value={form.password}
                 onChange={handleChange}
@@ -226,6 +228,8 @@ export default function Login() {
               <input
                 type="text"
                 name="code"
+                autoComplete="one-time-code"
+                inputMode="numeric"
                 placeholder="Masukkan 6 digit OTP"
                 value={form.code}
                 onChange={(e) => {
