@@ -7,7 +7,6 @@ import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import { getBoqWithBobot } from "./BoqController.js";
 import { buildWeeklyReport } from "./ReportController.js";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
-import axios from "axios";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { PythonShell } from "python-shell";
 import { Op } from "sequelize";
@@ -18,9 +17,10 @@ import { buildExportFilename } from "../utils/exportFilename.js";
 import { applyTtdCellText } from "../utils/ttdStyle.js";
 
 const CM_TO_POINTS = 28.3464567;
-const SCHEDULE_DATA_ROW_HEIGHT = 0.6 * CM_TO_POINTS;
-const WEEK_COLUMN_WIDTH = 8;
-const MARKER_COLUMN_WIDTH = 5;
+const SCHEDULE_HEADER_ROW_HEIGHT = 0.45 * CM_TO_POINTS;
+const SCHEDULE_DATA_ROW_HEIGHT = 0.48 * CM_TO_POINTS;
+const WEEK_COLUMN_WIDTH = 11;
+const MARKER_COLUMN_WIDTH = WEEK_COLUMN_WIDTH;
 const SPACER_COLUMN_WIDTH = 3;
 const KET_COLUMN_WIDTH = 8;
 
@@ -830,7 +830,7 @@ sheet.getCell(`${sheet.getColumn(ketCol).letter}${row}`).value = "KET.";
 // =========================
 for (let r = row; r <= row + 5; r++) {
   const headerRow = sheet.getRow(r);
-  headerRow.height = SCHEDULE_DATA_ROW_HEIGHT;
+  headerRow.height = SCHEDULE_HEADER_ROW_HEIGHT;
   headerRow.customHeight = true;
 
   for (let c = 2; c <= ketCol; c++) {
@@ -1500,19 +1500,26 @@ for (let c = weekStartCol; c <= weekEndCol; c++) {
 }
 
 // =========================
-// 🔥 AMBIL REALISASI DARI API
+// 🔥 AMBIL REALISASI DARI REPORT INTERNAL
 // =========================
 const includeProgressChart =
-  !currentVersion || Number(currentVersion.revision) > 0;
+  true;
 
 let realData = [];
 
 if (includeProgressChart) {
-  const chartResponse = await axios.get(
-    `http://localhost:5000/api/daily-plan/weekly-chart/${project_id}`
-  );
+  const reportRows =
+    weeklyReports.length
+      ? weeklyReports
+      : await buildWeeklyReport(project_id);
 
-  realData = chartResponse.data;
+  realData = reportRows.map(row => ({
+    ...row,
+    real: Number(row.real ?? row.real_mingguan ?? 0),
+    kum_real: Number(row.kum_real ?? row.real_kumulatif ?? 0),
+    penyesuaian_adendum:
+      Number(row.penyesuaian_adendum || 0)
+  }));
 }
 
 const firstAddendumWeek =

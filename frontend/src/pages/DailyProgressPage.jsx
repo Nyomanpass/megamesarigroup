@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
-import api from "../api";
+import api, { UPLOADS_BASE_URL } from "../api";
 import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight, Calendar, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useRef } from "react";
@@ -34,6 +34,28 @@ export default function DailyProgressPage() {
   const [photos, setPhotos] = useState([]);
   const [uploadFiles, setUploadFiles] = useState([]);
   const [editPhotoId, setEditPhotoId] = useState(null);
+
+  const getPhotoUrl = (photoUrl) => {
+    if (!photoUrl) return "";
+    if (/^https?:\/\//i.test(photoUrl)) {
+      try {
+        const url = new URL(photoUrl);
+
+        if (
+          ["localhost", "127.0.0.1"].includes(url.hostname) &&
+          url.pathname.startsWith("/uploads/")
+        ) {
+          return `${UPLOADS_BASE_URL}/${url.pathname.replace(/^\/uploads\//, "")}`;
+        }
+      } catch {
+        return photoUrl;
+      }
+
+      return photoUrl;
+    }
+
+    return `${UPLOADS_BASE_URL}/${photoUrl.replace(/^\/?(uploads\/)?/, "")}`;
+  };
 
 
   // --- States ---
@@ -1989,8 +2011,9 @@ const buildRows = () => {
                               <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-white shadow-md">
                                 
                                 <img
-                                  src={`http://localhost:3000/${item.photos[0].photo_url}`}
+                                  src={getPhotoUrl(item.photos[0].photo_url)}
                                   className="w-full h-full object-cover group-hover/photo:scale-110 transition"
+                                  alt="Foto progress"
                                 />
 
                                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/photo:opacity-100 transition flex items-center justify-center text-white text-xs font-bold">
@@ -2217,8 +2240,9 @@ const buildRows = () => {
                 >
 
                   <img
-                    src={`http://localhost:3000/${photo.photo_url}`}
+                    src={getPhotoUrl(photo.photo_url)}
                     className="w-full h-52 object-cover"
+                    alt="Foto progress"
                   />
 
                   <div className="p-3 flex gap-2">

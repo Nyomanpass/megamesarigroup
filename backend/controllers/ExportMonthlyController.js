@@ -189,11 +189,11 @@ export const exportMonthlyReportExcel = async (req, res) => {
     // =========================
     // 🔥 BOX LOGO
     // =========================
-    sheet.mergeCells("A2:E6");
-    sheet.mergeCells("F2:J6");
-    sheet.mergeCells("K2:N6");
+    sheet.mergeCells("A2:E8");
+    sheet.mergeCells("F2:J8");
+    sheet.mergeCells("K2:N8");
 
-    for (let r = 2; r <= 6; r++) {
+    for (let r = 2; r <= 8; r++) {
       sheet.getRow(r).height = LOGO_ROW_HEIGHT;
       sheet.getRow(r).customHeight = true;
     }
@@ -236,8 +236,8 @@ export const exportMonthlyReportExcel = async (req, res) => {
       extension: "png"
     });
 
-    const startRow = 2;
-    const endRow = 6;
+    const startRow = 3;
+    const endRow = 8;
     const boxW = getBoxWidthPx(startCol, endCol);
     const boxH = getBoxHeightPx(startRow, endRow);
     const offsetX = Math.max(0, (boxW - widthPx) / 2);
@@ -267,7 +267,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     // =========================
     // 🔥 BORDER HEADER
     // =========================
-    for (let r = 1; r <= 6; r++) {
+    for (let r = 1; r <= 8; r++) {
       for (let c = 1; c <= 14; c++) {
         sheet.getRow(r).getCell(c).border = {
           top: { style: "thin" },
@@ -281,7 +281,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     // =========================
     // 🔥 INFO PROJECT
     // =========================
-    let row = 8;
+    let row = 10;
 
     const formatTanggal = (date) => {
       if (!date) return "-";
@@ -373,7 +373,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
   // =========================
 
 
-  for (let r = 7; r <= row; r++) {
+  for (let r = 9; r <= row; r++) {
 
   const cell = sheet.getRow(r).getCell(1);
 
@@ -387,8 +387,8 @@ export const exportMonthlyReportExcel = async (req, res) => {
 
 }
 
-  const titleStartRow = 7;
-const titleEndRow = 10;
+  const titleStartRow = 9;
+const titleEndRow = 12;
 
 // 🔥 merge
 try {
@@ -444,7 +444,7 @@ for (let r = titleStartRow; r <= titleEndRow; r++) {
 
 }
 
-let rowRight = 10 + 2;
+let rowRight = 14;
 
 
 const angkaKeHuruf = (n) => {
@@ -524,8 +524,8 @@ const endBox = rowRight - 1;
 // 🔥 BORDER LUAR SAJA
 // =========================
 
-const startVertical = 7;
-const endVertical = 22;
+const startVertical = 9;
+const endVertical = 24;
 
 for (let r = startVertical; r <= endVertical; r++) {
 
@@ -1399,11 +1399,11 @@ export const exportMonthlyReportPDF = async (req, res) => {
     // =========================
     // 🔥 BOX LOGO
     // =========================
-    sheet.mergeCells("A2:E6");
-    sheet.mergeCells("F2:J6");
-    sheet.mergeCells("K2:N6");
+    sheet.mergeCells("A2:E8");
+    sheet.mergeCells("F2:J8");
+    sheet.mergeCells("K2:N8");
 
-    for (let r = 2; r <= 6; r++) {
+    for (let r = 2; r <= 8; r++) {
       sheet.getRow(r).height = LOGO_ROW_HEIGHT;
       sheet.getRow(r).customHeight = true;
     }
@@ -1446,8 +1446,8 @@ export const exportMonthlyReportPDF = async (req, res) => {
       extension: "png"
     });
     
-        const startRow = 2;
-        const endRow = 6;
+        const startRow = 3;
+        const endRow = 8;
         const boxW = getBoxWidthPx(startCol, endCol);
         const boxH = getBoxHeightPx(startRow, endRow);
         const offsetX = Math.max(0, (boxW - widthPx) / 2);
@@ -1478,7 +1478,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
     // =========================
     // 🔥 BORDER HEADER
     // =========================
-    for (let r = 1; r <= 6; r++) {
+    for (let r = 1; r <= 8; r++) {
       for (let c = 1; c <= 14; c++) {
         sheet.getRow(r).getCell(c).border = {
           top: { style: "thin" },
@@ -1492,7 +1492,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
     // =========================
     // 🔥 INFO PROJECT
     // =========================
-    let row = 8;
+    let row = 10;
 
     const formatTanggal = (date) => {
       if (!date) return "-";
@@ -1583,7 +1583,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
   // 🔥 INFO KANAN (ANTI ERROR)
   // =========================
 
-  for (let r = 7; r <= row; r++) {
+  for (let r = 9; r <= row; r++) {
 
   const cell = sheet.getRow(r).getCell(1);
 
@@ -1597,8 +1597,8 @@ export const exportMonthlyReportPDF = async (req, res) => {
 
 }
 
-const titleStartRow = 7;
-const titleEndRow = 10;
+const titleStartRow = 9;
+const titleEndRow = 12;
 
 // 🔥 merge
 try {
@@ -1654,7 +1654,7 @@ for (let r = titleStartRow; r <= titleEndRow; r++) {
 
 }
 
-let rowRight = 10 + 2;
+let rowRight = 14;
 
 
 const angkaKeHuruf = (n) => {
@@ -1734,8 +1734,8 @@ const endBox = rowRight - 1;
 // 🔥 BORDER LUAR SAJA
 // =========================
 
-const startVertical = 7;
-const endVertical = 22;
+const startVertical = 9;
+const endVertical = 24;
 
 for (let r = startVertical; r <= endVertical; r++) {
 

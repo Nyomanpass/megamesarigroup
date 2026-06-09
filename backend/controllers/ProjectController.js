@@ -1,5 +1,8 @@
 import { Project } from "../models/ProjectModel.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
+import { BoqVersionChange } from "../models/BoqVersionChangeModel.js";
+import { Schedule } from "../models/ScheduleModel.js";
+import { sequelize } from "../config/Database.js";
 import fs from "fs";
 import path from "path";
 // 🔥 GET ALL PROJECT (Dashboard)
@@ -471,34 +474,76 @@ export const deleteProjectVersion =
     const { id } =
       req.params;
 
-    const version =
-      await ProjectVersionModel.findByPk(id);
+    const result =
+      await sequelize.transaction(async (transaction) => {
 
-    if (!version) {
+        const version =
+          await ProjectVersionModel.findByPk(id, {
+            transaction
+          });
 
-      return res.status(404).json({
-        message:
-          "Version tidak ditemukan"
+        if (!version) {
+
+          return {
+            status: 404,
+            body: {
+              message:
+                "Version tidak ditemukan"
+            }
+          };
+
+        }
+
+        // 🔥 MC0 TIDAK BOLEH DIHAPUS
+        if (Number(version.revision) === 0) {
+
+          return {
+            status: 400,
+            body: {
+              message:
+                "MC0 tidak boleh dihapus"
+            }
+          };
+
+        }
+
+        const deletedBoqChanges =
+          await BoqVersionChange.destroy({
+            where: {
+              version_id: id
+            },
+            transaction
+          });
+
+        const deletedSchedules =
+          await Schedule.destroy({
+            where: {
+              version_id: id
+            },
+            transaction
+          });
+
+        await version.destroy({
+          transaction
+        });
+
+        return {
+          status: 200,
+          body: {
+            message:
+              "Addendum berhasil dihapus",
+            deleted: {
+              boq_version_changes:
+                deletedBoqChanges,
+              schedules:
+                deletedSchedules
+            }
+          }
+        };
+
       });
 
-    }
-
-    // 🔥 MC0 TIDAK BOLEH DIHAPUS
-    if (version.revision === 0) {
-
-      return res.status(400).json({
-        message:
-          "MC0 tidak boleh dihapus"
-      });
-
-    }
-
-    await version.destroy();
-
-    res.json({
-      message:
-        "Version berhasil dihapus"
-    });
+    res.status(result.status).json(result.body);
 
   } catch (error) {
 

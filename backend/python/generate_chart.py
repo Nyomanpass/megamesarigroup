@@ -36,6 +36,43 @@ end_data_row = ws["F4"].value
 
 include_progress_chart = bool(ws["F5"].value)
 
+CHART_WIDTH_SCALE = 1.14
+CHART_HEIGHT_SCALE = 1.04
+
+# =========================
+# UKURAN REAL DARI SHEET
+# =========================
+def column_width_to_px(width):
+    return int((width or 8.43) * 7 + 5)
+
+
+def px_to_cm(px):
+    return px * 2.54 / 96
+
+
+def points_to_cm(points):
+    return (points or 15) * 2.54 / 72
+
+
+def get_columns_width_cm(sheet, start_col, end_col):
+    total_px = 0
+    for col_idx in range(start_col, end_col + 1):
+        col_letter = get_column_letter(col_idx)
+        total_px += column_width_to_px(
+            sheet.column_dimensions[col_letter].width
+        )
+    return px_to_cm(total_px)
+
+
+def get_rows_height_cm(sheet, start_row, end_row):
+    total_cm = 0
+    for row_idx in range(start_row, end_row + 1):
+        total_cm += points_to_cm(
+            sheet.row_dimensions[row_idx].height
+            or sheet.sheet_format.defaultRowHeight
+        )
+    return total_cm
+
 # =========================
 # CHART
 # =========================
@@ -46,12 +83,19 @@ chart.title = None
 chart.style = 2
 
 # =========================
-# AUTO SIZE CHART
+# AUTO SIZE CHART SESUAI TABEL
 # =========================
-total_rows = ((end_data_row + 24) - start_data_row)
-total_weeks = (week_end_col - week_start_col) + 1
-chart.height = total_rows * 0.60
-chart.width = total_weeks * 1.55
+chart.width = get_columns_width_cm(
+    target_sheet,
+    week_start_col,
+    week_end_col
+) * CHART_WIDTH_SCALE
+
+chart.height = get_rows_height_cm(
+    target_sheet,
+    start_data_row,
+    end_data_row
+) * CHART_HEIGHT_SCALE
 
 # =========================
 # TOTAL ROW DATA
@@ -279,9 +323,7 @@ chart_col = get_column_letter(
     week_start_col
 )
 
-chart_row = start_data_row + 1
-
-print("TOTAL:", total_rows)
+chart_row = start_data_row
 
 chart.style = 2
 

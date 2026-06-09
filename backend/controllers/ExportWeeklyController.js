@@ -16,7 +16,7 @@ const CM_TO_POINTS = 28.3464567;
 const TABLE_DATA_ROW_HEIGHT = 0.5 * CM_TO_POINTS;
 const LOGO_ROW_HEIGHT = 16;
 const LOGO_WIDTH_PX = Math.round(5.57 * 96);
-const LOGO_KONSULTAN_WIDTH_PX = Math.round(5.20 * 96);
+const LOGO_KONSULTAN_WIDTH_PX = Math.round(5 * 96);
 const LOGO_HEIGHT_PX = Math.round(1.05 * 96);
 
 const getProjectExportName = (project) =>
@@ -178,11 +178,11 @@ export const exportWeeklyReportExcel = async (req, res) => {
     // =========================
     // 🔥 BOX LOGO
     // =========================
-    sheet.mergeCells("A2:E6");
-    sheet.mergeCells("F2:J6");
-    sheet.mergeCells("K2:N6");
+    sheet.mergeCells("A2:E8");
+    sheet.mergeCells("F2:J8");
+    sheet.mergeCells("K2:N8");
 
-    for (let r = 2; r <= 6; r++) {
+    for (let r = 2; r <= 8; r++) {
       sheet.getRow(r).height = LOGO_ROW_HEIGHT;
       sheet.getRow(r).customHeight = true;
     }
@@ -225,8 +225,8 @@ export const exportWeeklyReportExcel = async (req, res) => {
       extension: "png"
     });
 
-    const startRow = 2;
-    const endRow = 6;
+    const startRow = 3;
+    const endRow = 8;
     const boxW = getBoxWidthPx(startCol, endCol);
     const boxH = getBoxHeightPx(startRow, endRow);
     const offsetX = Math.max(0, (boxW - widthPx) / 2);
@@ -256,7 +256,7 @@ export const exportWeeklyReportExcel = async (req, res) => {
     // =========================
     // 🔥 BORDER HEADER
     // =========================
-    for (let r = 1; r <= 6; r++) {
+    for (let r = 1; r <= 8; r++) {
       for (let c = 1; c <= 14; c++) {
         sheet.getRow(r).getCell(c).border = {
           top: { style: "thin" },
@@ -270,7 +270,7 @@ export const exportWeeklyReportExcel = async (req, res) => {
     // =========================
     // 🔥 INFO PROJECT
     // =========================
-    let row = 8;
+    let row = 10;
 
     const formatTanggal = (date) => {
       if (!date) return "-";
@@ -362,7 +362,7 @@ const addLabel = (label, value, isMultiLine = false) => {
   // =========================
 
 
-  for (let r = 7; r <= row; r++) {
+  for (let r = 9; r <= row; r++) {
 
   const cell = sheet.getRow(r).getCell(1);
 
@@ -376,8 +376,8 @@ const addLabel = (label, value, isMultiLine = false) => {
 
 }
 
-const titleStartRow = 7;
-const titleEndRow = 10;
+const titleStartRow = 9;
+const titleEndRow = 12;
 
 // 🔥 merge
 try {
@@ -433,7 +433,7 @@ for (let r = titleStartRow; r <= titleEndRow; r++) {
 
 }
 
-let rowRight = 10 + 2;
+let rowRight = 14;
 
 
 const angkaKeHuruf = (n) => {
@@ -511,8 +511,8 @@ const endBox = rowRight - 1;
 // 🔥 BORDER LUAR SAJA
 // =========================
 
-const startVertical = 7;
-const endVertical = 22;
+const startVertical = 9;
+const endVertical = 24;
 
 for (let r = startVertical; r <= endVertical; r++) {
 
@@ -1654,11 +1654,11 @@ export const exportWeeklyReportPDF = async (req, res) => {
     // =========================
     // 🔥 BOX LOGO
     // =========================
-    sheet.mergeCells("A2:E6");
-    sheet.mergeCells("F2:J6");
-    sheet.mergeCells("K2:N6");
+    sheet.mergeCells("A2:E8");
+    sheet.mergeCells("F2:J8");
+    sheet.mergeCells("K2:N8");
 
-    for (let r = 2; r <= 6; r++) {
+    for (let r = 2; r <= 8; r++) {
       sheet.getRow(r).height = LOGO_ROW_HEIGHT;
       sheet.getRow(r).customHeight = true;
     }
@@ -1701,8 +1701,8 @@ export const exportWeeklyReportPDF = async (req, res) => {
       extension: "png"
     });
 
-    const startRow = 2;
-    const endRow = 6;
+    const startRow = 3;
+    const endRow = 8;
     const boxW = getBoxWidthPx(startCol, endCol);
     const boxH = getBoxHeightPx(startRow, endRow);
     const offsetX = Math.max(0, (boxW - widthPx) / 2);
@@ -1732,7 +1732,7 @@ export const exportWeeklyReportPDF = async (req, res) => {
     // =========================
     // 🔥 BORDER HEADER
     // =========================
-    for (let r = 1; r <= 6; r++) {
+    for (let r = 1; r <= 8; r++) {
       for (let c = 1; c <= 14; c++) {
         sheet.getRow(r).getCell(c).border = {
           top: { style: "thin" },
@@ -1746,7 +1746,7 @@ export const exportWeeklyReportPDF = async (req, res) => {
     // =========================
     // 🔥 INFO PROJECT
     // =========================
-    let row = 8;
+    let row = 10;
 
     const formatTanggal = (date) => {
       if (!date) return "-";
@@ -1835,7 +1835,7 @@ export const exportWeeklyReportPDF = async (req, res) => {
     addLabel(" TAHUN", project.tahun);
 
 
-for (let r = 7; r <= row; r++) {
+for (let r = 9; r <= row; r++) {
 
   const cell = sheet.getRow(r).getCell(1);
 
@@ -1853,8 +1853,8 @@ for (let r = 7; r <= row; r++) {
   // 🔥 INFO KANAN (ANTI ERROR)
   // =========================
 
-const titleStartRow = 7;
-const titleEndRow = 10;
+const titleStartRow = 9;
+const titleEndRow = 12;
 
 // 🔥 merge
 try {
@@ -1910,7 +1910,7 @@ for (let r = titleStartRow; r <= titleEndRow; r++) {
 
 }
 
-let rowRight = 10 + 2;
+let rowRight = 14;
 
 
 const angkaKeHuruf = (n) => {
@@ -1988,8 +1988,8 @@ const endBox = rowRight - 1;
 // 🔥 BORDER LUAR SAJA
 // =========================
 
-const startVertical = 7;
-const endVertical = 22;
+const startVertical = 9;
+const endVertical = 24;
 
 for (let r = startVertical; r <= endVertical; r++) {
 

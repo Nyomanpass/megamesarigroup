@@ -10,19 +10,131 @@ import { ProjectItem } from "../models/ProjekItem.js";
 import { Boq } from "../models/BoqModel.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
+import sharp from "sharp";
 
 const CM_TO_POINTS = 28.3464567;
-const TABLE_DATA_ROW_HEIGHT = 0.5 * CM_TO_POINTS;
+const TABLE_DATA_ROW_HEIGHT = 0.6 * CM_TO_POINTS;
 const LOGO_ROW_HEIGHT = 16;
-const LOGO_WIDTH_PX = Math.round(5.57 * 96);
-const LOGO_KONSULTAN_WIDTH_PX = Math.round(5.20 * 96);
-const LOGO_HEIGHT_PX = Math.round(1.05 * 96);
+const LOGO_BOX_PADDING_PX = 4;
+const LOGO_TARGET_HEIGHT_PX = Math.round(1.35 * 96);
+const LOGO_KONSULTAN_TL_COL = 10.05; // K = 10
+const LOGO_KONSULTAN_TL_ROW = 2; // row 3
+const LOGO_KONSULTAN_WIDTH_PX = Math.round(4.89 * 96);
+const LOGO_KONSULTAN_HEIGHT_PX = Math.round(1.24 * 96);
+const LOGO_KONTRAKTOR_TL_COL = 16.05; // Q = 16
+const LOGO_KONTRAKTOR_TL_ROW = 2; // row 3
+
 
 const getProjectExportName = (project) =>
   project?.projeknama_import ||
   project?.nama_import ||
   project?.pekerjaan ||
   "-";
+
+const getImageExtension = (filename) => {
+  const ext = path.extname(filename || "").toLowerCase();
+
+  if (ext === ".jpg" || ext === ".jpeg") {
+    return "jpeg";
+  }
+
+  if (ext === ".gif") {
+    return "gif";
+  }
+
+  return "png";
+};
+
+const getContainedImageSize = async (
+  filename,
+  maxWidth,
+  maxHeight
+) => {
+  const metadata = await sharp(filename).metadata();
+  const originalWidth = Number(metadata.width || maxWidth);
+  const originalHeight = Number(metadata.height || maxHeight);
+  const scale = Math.min(
+    maxWidth / originalWidth,
+    maxHeight / originalHeight
+  );
+
+  return {
+    width: Math.round(originalWidth * scale),
+    height: Math.round(originalHeight * scale)
+  };
+};
+
+const applyDailyReportColumnWidths = (sheet) => {
+  sheet.getColumn("A").width = 25;
+  sheet.getColumn("B").width = 4;
+  sheet.getColumn("C").width = 35;
+  sheet.getColumn("D").width = 5;
+  sheet.getColumn("E").width = 10;
+  sheet.getColumn("F").width = 10;
+  sheet.getColumn("G").width = 40;
+  sheet.getColumn("H").width = 10;
+  sheet.getColumn("I").width = 10;
+  sheet.getColumn("J").width = 10;
+  sheet.getColumn("K").width = 25;
+  sheet.getColumn("L").width = 25;
+  sheet.getColumn("M").width = 10;
+  sheet.getColumn("N").width = 10;
+  sheet.getColumn("O").width = 10;
+  sheet.getColumn("P").width = 10;
+  sheet.getColumn("Q").width = 20;
+  sheet.getColumn("R").width = 20;
+  sheet.getColumn("S").width = 20;
+  sheet.getColumn("T").width = 10;
+  sheet.getColumn("U").width = 10;
+};
+
+const getLogoOffsetX = (
+  boxWidth,
+  logoWidth,
+  shiftX = 0
+) => {
+  const maxOffset = Math.max(
+    0,
+    boxWidth - logoWidth - LOGO_BOX_PADDING_PX
+  );
+
+  return Math.min(
+    maxOffset,
+    Math.max(
+      LOGO_BOX_PADDING_PX,
+      (boxWidth - logoWidth) / 2 + shiftX
+    )
+  );
+};
+
+const getLogoMaxWidth = (
+  boxWidth,
+  shiftX = 0
+) => Math.max(
+  80,
+  boxWidth -
+    LOGO_BOX_PADDING_PX * 2 -
+    Math.abs(shiftX) * 2
+);
+
+const getLogoOffsetY = (
+  boxHeight,
+  logoHeight,
+  shiftY = 0
+) => {
+  const maxOffset = Math.max(
+    0,
+    boxHeight - logoHeight - LOGO_BOX_PADDING_PX
+  );
+
+  return Math.min(
+    maxOffset,
+    Math.max(
+      LOGO_BOX_PADDING_PX,
+      (boxHeight - logoHeight) / 2 + shiftY
+    )
+  );
+};
 
 export const exportDailyReportExcel = async (req, res) => {
   try {
@@ -63,6 +175,7 @@ export const exportDailyReportExcel = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
     sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
+    applyDailyReportColumnWidths(sheet);
 // =========================
 // 🔥 HEADER ATAS
 // =========================
@@ -213,13 +326,13 @@ for (let j = 1; j <= 9; j++) {
 // =========================
 // 🔥 JUDUL ATAS
 // =========================
-sheet.mergeCells("J1:M1"); // kiri (J-M)
-sheet.mergeCells("N1:U1"); // kanan (N-U)
+sheet.mergeCells("J1:O1"); // kiri (J-O)
+sheet.mergeCells("P1:U1"); // kanan (P-U)
 
 sheet.getCell("J1").value = "KONSULTAN PENGAWAS";
-sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
+sheet.getCell("P1").value = "KONTRAKTOR PELAKSANA";
 
-["J1", "N1"].forEach(cell => {
+["J1", "P1"].forEach(cell => {
   sheet.getCell(cell).alignment = {
     horizontal: "center",
     vertical: "middle"
@@ -230,10 +343,10 @@ sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
 // =========================
 // 🔥 BOX LOGO
 // =========================
-sheet.mergeCells("J2:M8"); // kiri FULL
-sheet.mergeCells("N2:U8"); // kanan FULL
+sheet.mergeCells("J2:O8"); // kiri FULL
+sheet.mergeCells("P2:U8"); // kanan FULL
 
-for (let r = 2; r <= 6; r++) {
+for (let r = 2; r <= 8; r++) {
   sheet.getRow(r).height = LOGO_ROW_HEIGHT;
   sheet.getRow(r).customHeight = true;
 }
@@ -248,7 +361,7 @@ const colWidthToPx = (w) => Math.floor((w || 8.43) * 7 + 5);
 // helper: konversi row height → pixel
 const rowHeightToPx = (h) => Math.floor((h || 15) * 96 / 72);
 
-// hitung lebar box J–M dalam pixel
+// hitung lebar box logo dalam pixel
 const getBoxWidthPx = (sheet, startCol, endCol) => {
   let total = 0;
   for (let c = startCol; c <= endCol; c++) {
@@ -266,66 +379,90 @@ const getBoxHeightPx = (sheet, startRow, endRow) => {
   return total;
 };
 
+const getImageTopLeft = (
+  sheet,
+  startCol,
+  startRow,
+  offsetX,
+  offsetY
+) => {
+  let col = startCol;
+  let row = startRow;
+  let remainingX = offsetX;
+  let remainingY = offsetY;
+
+  let colWidth = colWidthToPx(sheet.getColumn(col).width);
+  let rowHeight = rowHeightToPx(sheet.getRow(row).height);
+
+  while (remainingX > colWidth) {
+    remainingX -= colWidth;
+    col++;
+    colWidth = colWidthToPx(sheet.getColumn(col).width);
+  }
+
+  while (remainingY > rowHeight) {
+    remainingY -= rowHeight;
+    row++;
+    rowHeight = rowHeightToPx(sheet.getRow(row).height);
+  }
+
+  return {
+    col: col - 1 + remainingX / colWidth,
+    row: row - 1 + remainingY / rowHeight
+  };
+};
+
 // =========================
-// 🔵 LOGO KONSULTAN (CENTER J–M)
+// 🔵 LOGO KONSULTAN (CENTER J–N)
 // =========================
 if (project.logo_konsultan) {
+  const logoPath = path.join(process.cwd(), "uploads", "logos", project.logo_konsultan);
   const logoKonsultan = workbook.addImage({
-    filename: path.join(process.cwd(), "uploads", "logos", project.logo_konsultan),
-    extension: "png"
+    filename: logoPath,
+    extension: getImageExtension(logoPath)
   });
-
-  const startCol = 9; // J
-  const endCol   = 13; // M
-  const startRow = 2;
-  const endRow   = 8;
-  const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, 6);
-  const offsetX = Math.max(0, (boxW - LOGO_KONSULTAN_WIDTH_PX) / 2);
-  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKonsultan, {
   tl: {
-    col: startCol,
-    row: startRow - 1,
-    nativeColOff: Math.round(offsetX * 9525),
-    nativeRowOff: Math.round(offsetY * 9525)
+    col: LOGO_KONSULTAN_TL_COL,
+    row: LOGO_KONSULTAN_TL_ROW
   },
   ext: {
     width: LOGO_KONSULTAN_WIDTH_PX,
-    height: LOGO_HEIGHT_PX
+    height: LOGO_KONSULTAN_HEIGHT_PX
   }
 });
 }
 
 // =========================
-// 🔵 LOGO KONTRAKTOR (CENTER N–U)
+// 🔵 LOGO KONTRAKTOR (CENTER P–U)
 // =========================
 if (project.logo_kontraktor) {
+  const logoPath = path.join(process.cwd(), "uploads", "logos", project.logo_kontraktor);
   const logoKontraktor = workbook.addImage({
-    filename: path.join(process.cwd(), "uploads", "logos", project.logo_kontraktor),
-    extension: "png"
+    filename: logoPath,
+    extension: getImageExtension(logoPath)
   });
 
-  const startCol = 14; // N
-  const endCol   = 21; // U
+  const excelStartCol = 17; // Q
+  const excelEndCol   = 21; // U
   const startRow = 2;
   const endRow   = 8;
-  const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, 6);
-  const offsetX = Math.max(0, (boxW - LOGO_WIDTH_PX) / 2);
-  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
+  const boxW = getBoxWidthPx(sheet, excelStartCol, excelEndCol);
+  const logoSize = await getContainedImageSize(
+    logoPath,
+    boxW - LOGO_BOX_PADDING_PX * 2,
+    LOGO_TARGET_HEIGHT_PX
+  );
 
 sheet.addImage(logoKontraktor, {
   tl: {
-    col: startCol - 1,
-    row: startRow - 1,
-    nativeColOff: Math.round(offsetX * 9525),
-    nativeRowOff: Math.round(offsetY * 9525)
+    col: LOGO_KONTRAKTOR_TL_COL,
+    row: LOGO_KONTRAKTOR_TL_ROW
   },
   ext: {
-    width: LOGO_WIDTH_PX,
-    height: LOGO_HEIGHT_PX
+    width: logoSize.width,
+    height: logoSize.height
   }
 });
 }
@@ -520,7 +657,7 @@ for (let j = 10; j <= 21; j++) {
       fgColor: { argb: "FFD9D9D9" } // abu-abu
     };
 
-    ["A","B","G","J","O"].forEach(col => {
+    ["A","B","G","J","Q"].forEach(col => {
       const cell = sheet.getCell(`${col}${startRow}`);
 
       cell.fill = headerFill;
@@ -563,14 +700,14 @@ for (let j = 10; j <= 21; j++) {
     sheet.mergeCells(`A${startRow}:A${startRow + 1}`);
     sheet.mergeCells(`B${startRow}:F${startRow}`);
     sheet.mergeCells(`G${startRow}:I${startRow}`);
-    sheet.mergeCells(`J${startRow}:N${startRow}`);
-    sheet.mergeCells(`O${startRow}:U${startRow}`);
+    sheet.mergeCells(`J${startRow}:P${startRow}`);
+    sheet.mergeCells(`Q${startRow}:U${startRow}`);
 
     sheet.getCell(`A${startRow}`).value = "NO";
     sheet.getCell(`B${startRow}`).value = "TENAGA KERJA";
     sheet.getCell(`G${startRow}`).value = "PERALATAN";
     sheet.getCell(`J${startRow}`).value = "PENGGUNAAN MATERIAL";
-    sheet.getCell(`O${startRow}`).value = "PEKERJAAN";
+    sheet.getCell(`Q${startRow}`).value = "PEKERJAAN";
 
     // SUB HEADER
     // 🔥 JABATAN FULL LEBAR
@@ -583,14 +720,15 @@ for (let j = 10; j <= 21; j++) {
     sheet.getCell(`H${startRow + 1}`).value = "JUMLAH";
     sheet.getCell(`I${startRow + 1}`).value = "SAT";
     
+    sheet.mergeCells(`J${startRow + 1}:L${startRow + 1}`);
     sheet.getCell(`J${startRow + 1}`).value = "JENIS MATERIAL";
-    sheet.getCell(`K${startRow + 1}`).value = "VOL";
-    sheet.getCell(`L${startRow + 1}`).value = "SAT";
-    sheet.getCell(`M${startRow + 1}`).value = "DITERIMA";
-    sheet.getCell(`N${startRow + 1}`).value = "DITOLAK";
+    sheet.getCell(`M${startRow + 1}`).value = "VOL";
+    sheet.getCell(`N${startRow + 1}`).value = "SAT";
+    sheet.getCell(`O${startRow + 1}`).value = "DITERIMA";
+    sheet.getCell(`P${startRow + 1}`).value = "DITOLAK";
 
-    sheet.mergeCells(`O${startRow + 1}:S${startRow + 1}`);
-    sheet.getCell(`O${startRow + 1}`).value = "URAIAN";
+    sheet.mergeCells(`Q${startRow + 1}:S${startRow + 1}`);
+    sheet.getCell(`Q${startRow + 1}`).value = "URAIAN";
     sheet.getCell(`T${startRow + 1}`).value = "VOL";
     sheet.getCell(`U${startRow + 1}`).value = "SAT";
     
@@ -608,14 +746,14 @@ for (let j = 10; j <= 21; j++) {
     sheet.getColumn("G").width = 40;
     sheet.getColumn("H").width = 10;
     sheet.getColumn("I").width = 10;
-    sheet.getColumn("J").width = 75;
-    sheet.getColumn("K").width = 10;
-    sheet.getColumn("L").width = 10;
+    sheet.getColumn("J").width = 25;
+    sheet.getColumn("K").width = 25;
+    sheet.getColumn("L").width = 25;
 
     sheet.getColumn("M").width = 10; 
     sheet.getColumn("N").width = 10; 
-    sheet.getColumn("O").width = 5;  
-    sheet.getColumn("P").width = 5; 
+    sheet.getColumn("O").width = 10;  
+    sheet.getColumn("P").width = 10; 
     sheet.getColumn("Q").width = 20;  
     sheet.getColumn("R").width = 20;  
     sheet.getColumn("S").width = 20;  
@@ -705,7 +843,7 @@ for (let j = 10; j <= 21; j++) {
 
       sheet.getCell(`A${rowIndex}`).value = i + 1;
       sheet.mergeCells(`B${rowIndex}:D${rowIndex}`);
-      sheet.mergeCells(`O${rowIndex}:S${rowIndex}`);
+      sheet.mergeCells(`J${rowIndex}:L${rowIndex}`);
 
       // TENAGA
       if (pekerja) {
@@ -747,9 +885,9 @@ for (let j = 10; j <= 21; j++) {
       // MATERIAL
       if (material) {
         sheet.getCell(`J${rowIndex}`).value = material.nama;
-        sheet.getCell(`K${rowIndex}`).value = material.total;
-        sheet.getCell(`K${rowIndex}`).numFmt = "0.00";
-        sheet.getCell(`L${rowIndex}`).value = material.satuan;
+        sheet.getCell(`M${rowIndex}`).value = material.total;
+        sheet.getCell(`M${rowIndex}`).numFmt = "0.00";
+        sheet.getCell(`N${rowIndex}`).value = material.satuan;
       }
 
       // PEKERJAAN
@@ -776,10 +914,10 @@ for (let j = 10; j <= 21; j++) {
       pekerjaanRow++; // ⬅️ ini baris kosong
     }
 
-    sheet.getCell(`O${pekerjaanRow}`).value = parent;
-    sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
-    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    sheet.getCell(`Q${pekerjaanRow}`).value = parent;
+    sheet.getCell(`Q${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
     }
 
     pekerjaanRow++;
@@ -791,10 +929,10 @@ for (let j = 10; j <= 21; j++) {
 
   // SUBHEADER
   if (sub && sub !== lastSubParent) {
-    sheet.getCell(`O${pekerjaanRow}`).value = sub;
-    sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
-    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    sheet.getCell(`Q${pekerjaanRow}`).value = sub;
+    sheet.getCell(`Q${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
     }
 
     pekerjaanRow++;
@@ -802,10 +940,10 @@ for (let j = 10; j <= 21; j++) {
   }
 
   // ITEM
-  if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-    sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+  if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+    sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
   }
-  sheet.getCell(`O${pekerjaanRow}`).value = pekerjaan.uraian;
+  sheet.getCell(`Q${pekerjaanRow}`).value = pekerjaan.uraian;
 
   sheet.getCell(`T${pekerjaanRow}`).value = pekerjaan.volume;
   sheet.getCell(`T${pekerjaanRow}`).numFmt = "#,##0.000";
@@ -823,6 +961,17 @@ sheet.getRow(startRow + 1).height = 28;
 
 // semua data row
 const tableLastRow = Math.max(rowIndex, pekerjaanRow) - 1;
+for (let i = startRow + 2; i <= tableLastRow; i++) {
+  const isUraianPekerjaanMerged =
+    ["Q", "R", "S"].some(
+      col => sheet.getCell(`${col}${i}`).isMerged
+    );
+
+  if (!isUraianPekerjaanMerged) {
+    sheet.mergeCells(`Q${i}:S${i}`);
+  }
+}
+
 for (let i = startRow + 2; i <= tableLastRow; i++) {
   const dataRow = sheet.getRow(i);
   dataRow.height = TABLE_DATA_ROW_HEIGHT;
@@ -1382,6 +1531,7 @@ export const exportDailyReportPdf = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
     sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
+    applyDailyReportColumnWidths(sheet);
 // =========================
 // 🔥 HEADER ATAS
 // =========================
@@ -1528,13 +1678,13 @@ for (let j = 1; j <= 9; j++) {
 // =========================
 // 🔥 JUDUL ATAS
 // =========================
-sheet.mergeCells("J1:M1"); // kiri (J-M)
-sheet.mergeCells("N1:U1"); // kanan (N-U)
+sheet.mergeCells("J1:O1"); // kiri (J-O)
+sheet.mergeCells("P1:U1"); // kanan (P-U)
 
 sheet.getCell("J1").value = "KONSULTAN PENGAWAS";
-sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
+sheet.getCell("P1").value = "KONTRAKTOR PELAKSANA";
 
-["J1", "N1"].forEach(cell => {
+["J1", "P1"].forEach(cell => {
   sheet.getCell(cell).alignment = {
     horizontal: "center",
     vertical: "middle"
@@ -1545,10 +1695,10 @@ sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
 // =========================
 // 🔥 BOX LOGO
 // =========================
-sheet.mergeCells("J2:M8"); // kiri FULL
-sheet.mergeCells("N2:U8"); // kanan FULL
+sheet.mergeCells("J2:O8"); // kiri FULL
+sheet.mergeCells("P2:U8"); // kanan FULL
 
-for (let r = 2; r <= 6; r++) {
+for (let r = 2; r <= 8; r++) {
   sheet.getRow(r).height = LOGO_ROW_HEIGHT;
   sheet.getRow(r).customHeight = true;
 }
@@ -1563,7 +1713,7 @@ const colWidthToPx = (w) => Math.floor((w || 8.43) * 7 + 5);
 // helper: konversi row height → pixel
 const rowHeightToPx = (h) => Math.floor((h || 15) * 96 / 72);
 
-// hitung lebar box J–M dalam pixel
+// hitung lebar box logo dalam pixel
 const getBoxWidthPx = (sheet, startCol, endCol) => {
   let total = 0;
   for (let c = startCol; c <= endCol; c++) {
@@ -1581,66 +1731,90 @@ const getBoxHeightPx = (sheet, startRow, endRow) => {
   return total;
 };
 
+const getImageTopLeft = (
+  sheet,
+  startCol,
+  startRow,
+  offsetX,
+  offsetY
+) => {
+  let col = startCol;
+  let row = startRow;
+  let remainingX = offsetX;
+  let remainingY = offsetY;
+
+  let colWidth = colWidthToPx(sheet.getColumn(col).width);
+  let rowHeight = rowHeightToPx(sheet.getRow(row).height);
+
+  while (remainingX > colWidth) {
+    remainingX -= colWidth;
+    col++;
+    colWidth = colWidthToPx(sheet.getColumn(col).width);
+  }
+
+  while (remainingY > rowHeight) {
+    remainingY -= rowHeight;
+    row++;
+    rowHeight = rowHeightToPx(sheet.getRow(row).height);
+  }
+
+  return {
+    col: col - 1 + remainingX / colWidth,
+    row: row - 1 + remainingY / rowHeight
+  };
+};
+
 // =========================
-// 🔵 LOGO KONSULTAN (CENTER J–M)
+// 🔵 LOGO KONSULTAN (CENTER J–N)
 // =========================
 if (project.logo_konsultan) {
+  const logoPath = path.join(process.cwd(), "uploads", "logos", project.logo_konsultan);
   const logoKonsultan = workbook.addImage({
-    filename: path.join(process.cwd(), "uploads", "logos", project.logo_konsultan),
-    extension: "png"
+    filename: logoPath,
+    extension: getImageExtension(logoPath)
   });
-
-  const startCol = 9; // J
-  const endCol   = 13; // M
-  const startRow = 2;
-  const endRow   = 8;
-  const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, 6);
-  const offsetX = Math.max(0, (boxW - LOGO_KONSULTAN_WIDTH_PX) / 2);
-  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKonsultan, {
   tl: {
-    col: startCol,
-    row: startRow - 1,
-    nativeColOff: Math.round(offsetX * 9525),
-    nativeRowOff: Math.round(offsetY * 9525)
+    col: LOGO_KONSULTAN_TL_COL,
+    row: LOGO_KONSULTAN_TL_ROW
   },
   ext: {
     width: LOGO_KONSULTAN_WIDTH_PX,
-    height: LOGO_HEIGHT_PX
+    height: LOGO_KONSULTAN_HEIGHT_PX
   }
 });
 }
 
 // =========================
-// 🔵 LOGO KONTRAKTOR (CENTER N–U)
+// 🔵 LOGO KONTRAKTOR (CENTER P–U)
 // =========================
 if (project.logo_kontraktor) {
+  const logoPath = path.join(process.cwd(), "uploads", "logos", project.logo_kontraktor);
   const logoKontraktor = workbook.addImage({
-    filename: path.join(process.cwd(), "uploads", "logos", project.logo_kontraktor),
-    extension: "png"
+    filename: logoPath,
+    extension: getImageExtension(logoPath)
   });
 
-  const startCol = 14; // N
-  const endCol   = 21; // U
+  const excelStartCol = 17; // Q
+  const excelEndCol   = 21; // U
   const startRow = 2;
   const endRow   = 8;
-  const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, 6);
-  const offsetX = Math.max(0, (boxW - LOGO_WIDTH_PX) / 2);
-  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
+  const boxW = getBoxWidthPx(sheet, excelStartCol, excelEndCol);
+  const logoSize = await getContainedImageSize(
+    logoPath,
+    boxW - LOGO_BOX_PADDING_PX * 2,
+    LOGO_TARGET_HEIGHT_PX
+  );
 
 sheet.addImage(logoKontraktor, {
   tl: {
-    col: startCol - 1,
-    row: startRow - 1,
-    nativeColOff: Math.round(offsetX * 9525),
-    nativeRowOff: Math.round(offsetY * 9525)
+    col: LOGO_KONTRAKTOR_TL_COL,
+    row: LOGO_KONTRAKTOR_TL_ROW
   },
   ext: {
-    width: LOGO_WIDTH_PX,
-    height: LOGO_HEIGHT_PX
+    width: logoSize.width,
+    height: logoSize.height
   }
 });
 }
@@ -1833,7 +2007,7 @@ for (let j = 10; j <= 21; j++) {
       fgColor: { argb: "FFD9D9D9" } // abu-abu
     };
 
-    ["A","B","G","J","O"].forEach(col => {
+    ["A","B","G","J","Q"].forEach(col => {
       const cell = sheet.getCell(`${col}${startRow}`);
 
       cell.fill = headerFill;
@@ -1876,14 +2050,14 @@ for (let j = 10; j <= 21; j++) {
     sheet.mergeCells(`A${startRow}:A${startRow + 1}`);
     sheet.mergeCells(`B${startRow}:F${startRow}`);
     sheet.mergeCells(`G${startRow}:I${startRow}`);
-    sheet.mergeCells(`J${startRow}:N${startRow}`);
-    sheet.mergeCells(`O${startRow}:U${startRow}`);
+    sheet.mergeCells(`J${startRow}:P${startRow}`);
+    sheet.mergeCells(`Q${startRow}:U${startRow}`);
 
     sheet.getCell(`A${startRow}`).value = "NO";
     sheet.getCell(`B${startRow}`).value = "TENAGA KERJA";
     sheet.getCell(`G${startRow}`).value = "PERALATAN";
     sheet.getCell(`J${startRow}`).value = "PENGGUNAAN MATERIAL";
-    sheet.getCell(`O${startRow}`).value = "PEKERJAAN";
+    sheet.getCell(`Q${startRow}`).value = "PEKERJAAN";
 
     // SUB HEADER
     // 🔥 JABATAN FULL LEBAR
@@ -1896,14 +2070,15 @@ for (let j = 10; j <= 21; j++) {
     sheet.getCell(`H${startRow + 1}`).value = "JUMLAH";
     sheet.getCell(`I${startRow + 1}`).value = "SAT";
     
+    sheet.mergeCells(`J${startRow + 1}:L${startRow + 1}`);
     sheet.getCell(`J${startRow + 1}`).value = "JENIS MATERIAL";
-    sheet.getCell(`K${startRow + 1}`).value = "VOL";
-    sheet.getCell(`L${startRow + 1}`).value = "SAT";
-    sheet.getCell(`M${startRow + 1}`).value = "DITERIMA";
-    sheet.getCell(`N${startRow + 1}`).value = "DITOLAK";
+    sheet.getCell(`M${startRow + 1}`).value = "VOL";
+    sheet.getCell(`N${startRow + 1}`).value = "SAT";
+    sheet.getCell(`O${startRow + 1}`).value = "DITERIMA";
+    sheet.getCell(`P${startRow + 1}`).value = "DITOLAK";
 
-    sheet.mergeCells(`O${startRow + 1}:S${startRow + 1}`);
-    sheet.getCell(`O${startRow + 1}`).value = "URAIAN";
+    sheet.mergeCells(`Q${startRow + 1}:S${startRow + 1}`);
+    sheet.getCell(`Q${startRow + 1}`).value = "URAIAN";
     sheet.getCell(`T${startRow + 1}`).value = "VOL";
     sheet.getCell(`U${startRow + 1}`).value = "SAT";
     
@@ -1921,14 +2096,14 @@ for (let j = 10; j <= 21; j++) {
     sheet.getColumn("G").width = 40;
     sheet.getColumn("H").width = 10;
     sheet.getColumn("I").width = 10;
-    sheet.getColumn("J").width = 75;
-    sheet.getColumn("K").width = 10;
-    sheet.getColumn("L").width = 10;
+    sheet.getColumn("J").width = 5;
+    sheet.getColumn("K").width = 45;
+    sheet.getColumn("L").width = 25;
 
     sheet.getColumn("M").width = 10; 
     sheet.getColumn("N").width = 10; 
-    sheet.getColumn("O").width = 5;  
-    sheet.getColumn("P").width = 5; 
+    sheet.getColumn("O").width = 10;  
+    sheet.getColumn("P").width = 10; 
     sheet.getColumn("Q").width = 20;  
     sheet.getColumn("R").width = 20;  
     sheet.getColumn("S").width = 20;  
@@ -2018,7 +2193,7 @@ for (let j = 10; j <= 21; j++) {
 
       sheet.getCell(`A${rowIndex}`).value = i + 1;
       sheet.mergeCells(`B${rowIndex}:D${rowIndex}`);
-      sheet.mergeCells(`O${rowIndex}:S${rowIndex}`);
+      sheet.mergeCells(`J${rowIndex}:L${rowIndex}`);
 
       // TENAGA
       if (pekerja) {
@@ -2060,9 +2235,9 @@ for (let j = 10; j <= 21; j++) {
       // MATERIAL
       if (material) {
         sheet.getCell(`J${rowIndex}`).value = material.nama;
-        sheet.getCell(`K${rowIndex}`).value = material.total;
-        sheet.getCell(`K${rowIndex}`).numFmt = "0.00";
-        sheet.getCell(`L${rowIndex}`).value = material.satuan;
+        sheet.getCell(`M${rowIndex}`).value = material.total;
+        sheet.getCell(`M${rowIndex}`).numFmt = "0.00";
+        sheet.getCell(`N${rowIndex}`).value = material.satuan;
       }
 
       // PEKERJAAN
@@ -2089,10 +2264,10 @@ for (let j = 10; j <= 21; j++) {
       pekerjaanRow++; // ⬅️ ini baris kosong
     }
 
-    sheet.getCell(`O${pekerjaanRow}`).value = parent;
-    sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
-    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    sheet.getCell(`Q${pekerjaanRow}`).value = parent;
+    sheet.getCell(`Q${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
     }
 
     pekerjaanRow++;
@@ -2104,10 +2279,10 @@ for (let j = 10; j <= 21; j++) {
 
   // SUBHEADER
   if (sub && sub !== lastSubParent) {
-    sheet.getCell(`O${pekerjaanRow}`).value = sub;
-    sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
-    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    sheet.getCell(`Q${pekerjaanRow}`).value = sub;
+    sheet.getCell(`Q${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
     }
 
     pekerjaanRow++;
@@ -2115,10 +2290,10 @@ for (let j = 10; j <= 21; j++) {
   }
 
   // ITEM
-  if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
-    sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+  if (!sheet.getCell(`Q${pekerjaanRow}`).isMerged) {
+    sheet.mergeCells(`Q${pekerjaanRow}:S${pekerjaanRow}`);
   }
-  sheet.getCell(`O${pekerjaanRow}`).value = pekerjaan.uraian;
+  sheet.getCell(`Q${pekerjaanRow}`).value = pekerjaan.uraian;
 
   sheet.getCell(`T${pekerjaanRow}`).value = pekerjaan.volume;
   sheet.getCell(`T${pekerjaanRow}`).numFmt = "#,##0.000";
@@ -2136,6 +2311,17 @@ sheet.getRow(startRow + 1).height = 28;
 
 // semua data row
 const tableLastRow = Math.max(rowIndex, pekerjaanRow) - 1;
+for (let i = startRow + 2; i <= tableLastRow; i++) {
+  const isUraianPekerjaanMerged =
+    ["Q", "R", "S"].some(
+      col => sheet.getCell(`${col}${i}`).isMerged
+    );
+
+  if (!isUraianPekerjaanMerged) {
+    sheet.mergeCells(`Q${i}:S${i}`);
+  }
+}
+
 for (let i = startRow + 2; i <= tableLastRow; i++) {
   const dataRow = sheet.getRow(i);
   dataRow.height = TABLE_DATA_ROW_HEIGHT;

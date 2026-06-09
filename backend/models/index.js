@@ -47,6 +47,18 @@ Boq.hasMany(BoqVersionChange, {
   as: "version_changes"
 });
 
+ProjectVersionModel.hasMany(BoqVersionChange, {
+  foreignKey: "version_id",
+  as: "boq_changes",
+  onDelete: "CASCADE",
+  hooks: true
+});
+
+BoqVersionChange.belongsTo(ProjectVersionModel, {
+  foreignKey: "version_id",
+  as: "version"
+});
+
 // PARENT → CHILD
 DailyProgress.hasMany(DailyProgressItem, {
   foreignKey: "daily_progress_id",
@@ -273,7 +285,9 @@ ProjectVersionModel.hasMany(
   Schedule,
   {
     foreignKey: "version_id",
-    as: "schedules"
+    as: "schedules",
+    onDelete: "CASCADE",
+    hooks: true
   }
 );
 

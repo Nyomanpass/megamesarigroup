@@ -1793,7 +1793,7 @@ weeks.flatMap((w)=>{
         return (
           <td
             key={`footer-week-${w.id}-${idx}`}
-            className="p-3 border-r border-gray-200 text-center font-mono font-bold text-xs"
+            className="min-w-[92px] p-3 border-r border-gray-200 text-center font-mono font-bold text-xs"
           >
             {formatFooterNumber(value)}
           </td>
@@ -2122,6 +2122,7 @@ weeks.flatMap((w)=>{
                   <td
                     key={`week-${item.id}-${w.id}`}
                     className="
+                    min-w-[92px]
                     border-b
                     border-r
                     border-gray-100
@@ -2240,7 +2241,7 @@ weeks.flatMap((w)=>{
 
                     className={`
                         w-full
-                        h-[34px]
+                        h-[30px]
                         text-center
                         rounded-md
                         outline-none
@@ -2715,7 +2716,7 @@ weeks.flatMap((w)=>{
 
                         // 🔥 WEEK NORMAL
                         return (
-                          <th key={w.id} className="p-3 border-b border-r border-gray-100 text-center min-w-[70px] font-medium text-xs bg-gray-50/50">
+                          <th key={w.id} className="p-3 border-b border-r border-gray-100 text-center min-w-[92px] font-medium text-xs bg-gray-50/50">
                             <div className="font-bold text-blue-600">W{w.minggu_ke}</div>
                             <div className="text-[10px] text-gray-400 mt-1 whitespace-nowrap">
                               {new Date(w.start_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
