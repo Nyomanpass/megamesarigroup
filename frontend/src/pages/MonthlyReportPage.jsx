@@ -352,11 +352,11 @@ const handleExportMonthlyPDF = async () => {
                {/* REKAP DETAIL */}
                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
                   <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
-                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">Rencana Bulan Ini</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">Rencana Kumulatif Bulan Ini</p>
                     <p className="text-2xl font-black text-gray-800">{format(bulan.rencana_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
                   <div className="bg-pink-50 p-4 rounded-2xl text-center border border-pink-100">
-                    <p className="text-xs font-bold text-pink-500 uppercase mb-1">Realisasi Bulan Ini</p>
+                    <p className="text-xs font-bold text-pink-500 uppercase mb-1">Realisasi Kumulatif Bulan Ini</p>
                     <p className="text-2xl font-black text-pink-700">{format(bulan.real_kumulatif)}<span className="text-sm">%</span></p>
                   </div>
                   <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">

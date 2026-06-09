@@ -608,7 +608,7 @@ export const getMonthlyReport = async (req, res) => {
     const result = [];
 
     let kumulatifProject = 0;
-    let kumulatifRencana = 0;
+    let kumulatifRencanaSebelumnya = 0;
 
     const kumulatifPerBoq = {};
 
@@ -704,37 +704,23 @@ export const getMonthlyReport = async (req, res) => {
       // =========================
       // RENCANA BULAN
       // =========================
-
-      const mingguMap = {};
-
-      items.forEach((p) => {
-
-        if (
-          !mingguMap[
-            p.minggu_ke
-          ]
-        ) {
-
-          mingguMap[
-            p.minggu_ke
-          ] =
-            Number(
-              p.bobot_mingguan || 0
-            );
-
-        }
-
-      });
+      // Ambil dari Daily Plan, bukan penjumlahan bobot_mingguan unik.
+      // Jika bulan memotong minggu, bobot rencana tetap mengikuti kumulatif harian.
+      const rencanaKumulatif =
+        round3(
+          items[
+            items.length - 1
+          ]?.rencana_kumulatif || 0
+        );
 
       const rencanaBulanan =
-        Object.values(
-          mingguMap
-        )
-          .reduce(
-            (sum, val) =>
-              sum + val,
+        round3(
+          Math.max(
+            rencanaKumulatif -
+            kumulatifRencanaSebelumnya,
             0
-          );
+          )
+        );
 
       let totalKumulatif = 0;
       let totalBulanan = 0;
@@ -951,20 +937,10 @@ export const getMonthlyReport = async (req, res) => {
           ).toFixed(3)
         );
 
-      kumulatifRencana =
-        Number(
-          (
-            kumulatifRencana +
-            rencanaBulanan
-          ).toFixed(3)
-        );
-
       const deviasi =
-        Number(
-          (
-            kumulatifProject -
-            kumulatifRencana
-          ).toFixed(3)
+        round3(
+          kumulatifProject -
+          rencanaKumulatif
         );
 
       result.push({
@@ -1010,15 +986,13 @@ export const getMonthlyReport = async (req, res) => {
           ),
 
         rencana_bulanan:
-          Number(
-            rencanaBulanan.toFixed(3)
-          ),
+          rencanaBulanan,
 
         real_bulanan:
           realBulanan,
 
         rencana_kumulatif:
-          kumulatifRencana,
+          rencanaKumulatif,
 
         real_kumulatif:
           kumulatifProject,
@@ -1029,6 +1003,9 @@ export const getMonthlyReport = async (req, res) => {
           laporan
 
       });
+
+      kumulatifRencanaSebelumnya =
+        rencanaKumulatif;
 
     }
 
