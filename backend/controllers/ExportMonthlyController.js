@@ -8,6 +8,7 @@ import { TtdTemplate } from "../models/TtdTemplate.js";
 import { Boq } from "../models/BoqModel.js";
 import { buildExportFilename } from "../utils/exportFilename.js";
 import { applyTtdCellText } from "../utils/ttdStyle.js";
+import { getCenteredImagePlacement } from "../utils/excelLogo.js";
 
 const CM_TO_POINTS = 28.3464567;
 const TABLE_DATA_ROW_HEIGHT = 0.5 * CM_TO_POINTS;
@@ -159,16 +160,16 @@ export const exportMonthlyReportExcel = async (req, res) => {
     sheet.getColumn("D").width = 32;
     sheet.getColumn("E").width = 32;   // padding kanan client
 
-    sheet.getColumn("F").width = 10;   // padding kiri konsultan
-    sheet.getColumn("G").width = 17;
-    sheet.getColumn("H").width = 15;
-    sheet.getColumn("I").width = 15;
-    sheet.getColumn("J").width = 15;
+    sheet.getColumn("F").width = 8;   // padding kiri konsultan
+    sheet.getColumn("G").width = 20;
+    sheet.getColumn("H").width = 20;
+    sheet.getColumn("I").width = 16;
+    sheet.getColumn("J").width = 16;
 
-    sheet.getColumn("K").width = 15;   // padding kiri kontraktor
+    sheet.getColumn("K").width = 16;   // padding kiri kontraktor
     sheet.getColumn("L").width = 20;
     sheet.getColumn("M").width = 20;
-    sheet.getColumn("N").width = 35;
+    sheet.getColumn("N").width = 37;
 
     // =========================
     // 🔥 HEADER TITLE
@@ -236,25 +237,18 @@ export const exportMonthlyReportExcel = async (req, res) => {
       extension: "png"
     });
 
-    const startRow = 3;
-    const endRow = 8;
-    const boxW = getBoxWidthPx(startCol, endCol);
-    const boxH = getBoxHeightPx(startRow, endRow);
-    const offsetX = Math.max(0, (boxW - widthPx) / 2);
-    const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
-
-    sheet.addImage(imageId, {
-      tl: {
-        col: startCol - 1,
-        row: startRow - 1,
-        nativeColOff: Math.round(offsetX * 9525),
-        nativeRowOff: Math.round(offsetY * 9525)
-      },
-      ext: {
-        width: widthPx,
-        height: LOGO_HEIGHT_PX
-      }
-    });
+    sheet.addImage(
+      imageId,
+      getCenteredImagePlacement({
+        sheet,
+        startCol,
+        endCol,
+        startRow: 3,
+        endRow: 8,
+        widthPx,
+        heightPx: LOGO_HEIGHT_PX
+      })
+    );
   };
 
     // =========================
@@ -1369,16 +1363,16 @@ export const exportMonthlyReportPDF = async (req, res) => {
     sheet.getColumn("D").width = 32;
     sheet.getColumn("E").width = 32;   // padding kanan client
 
-    sheet.getColumn("F").width = 10;   // padding kiri konsultan
-    sheet.getColumn("G").width = 17;
-    sheet.getColumn("H").width = 15;
-    sheet.getColumn("I").width = 15;
-    sheet.getColumn("J").width = 15;
+    sheet.getColumn("F").width = 8;   // padding kiri konsultan
+    sheet.getColumn("G").width = 20;
+    sheet.getColumn("H").width = 20;
+    sheet.getColumn("I").width = 16;
+    sheet.getColumn("J").width = 16;
 
-    sheet.getColumn("K").width = 15;   // padding kiri kontraktor
+    sheet.getColumn("K").width = 16;   // padding kiri kontraktor
     sheet.getColumn("L").width = 20;
     sheet.getColumn("M").width = 20;
-    sheet.getColumn("N").width = 35;
+    sheet.getColumn("N").width = 37;
 
     // =========================
     // 🔥 HEADER TITLE
@@ -1446,25 +1440,18 @@ export const exportMonthlyReportPDF = async (req, res) => {
       extension: "png"
     });
     
-        const startRow = 3;
-        const endRow = 8;
-        const boxW = getBoxWidthPx(startCol, endCol);
-        const boxH = getBoxHeightPx(startRow, endRow);
-        const offsetX = Math.max(0, (boxW - widthPx) / 2);
-        const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
-    
-        sheet.addImage(imageId, {
-          tl: {
-            col: startCol - 1,
-            row: startRow - 1,
-            nativeColOff: Math.round(offsetX * 9525),
-            nativeRowOff: Math.round(offsetY * 9525)
-          },
-          ext: {
-            width: widthPx,
-            height: LOGO_HEIGHT_PX
-          }
-        });
+        sheet.addImage(
+          imageId,
+          getCenteredImagePlacement({
+            sheet,
+            startCol,
+            endCol,
+            startRow: 3,
+            endRow: 8,
+            widthPx,
+            heightPx: LOGO_HEIGHT_PX
+          })
+        );
       };
     
 

@@ -11,18 +11,15 @@ import { Boq } from "../models/BoqModel.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
 import sharp from "sharp";
+import { getCenteredImagePlacement } from "../utils/excelLogo.js";
 
 const CM_TO_POINTS = 28.3464567;
 const TABLE_DATA_ROW_HEIGHT = 0.6 * CM_TO_POINTS;
 const LOGO_ROW_HEIGHT = 16;
 const LOGO_BOX_PADDING_PX = 4;
 const LOGO_TARGET_HEIGHT_PX = Math.round(1.35 * 96);
-const LOGO_KONSULTAN_TL_COL = 10.05; // K = 10
-const LOGO_KONSULTAN_TL_ROW = 2; // row 3
 const LOGO_KONSULTAN_WIDTH_PX = Math.round(4.89 * 96);
 const LOGO_KONSULTAN_HEIGHT_PX = Math.round(1.24 * 96);
-const LOGO_KONTRAKTOR_TL_COL = 16.05; // Q = 16
-const LOGO_KONTRAKTOR_TL_ROW = 2; // row 3
 
 
 const getProjectExportName = (project) =>
@@ -74,18 +71,18 @@ const applyDailyReportColumnWidths = (sheet) => {
   sheet.getColumn("G").width = 40;
   sheet.getColumn("H").width = 10;
   sheet.getColumn("I").width = 10;
-  sheet.getColumn("J").width = 10;
+  sheet.getColumn("J").width = 17;
   sheet.getColumn("K").width = 25;
-  sheet.getColumn("L").width = 25;
+  sheet.getColumn("L").width = 34;
   sheet.getColumn("M").width = 10;
   sheet.getColumn("N").width = 10;
-  sheet.getColumn("O").width = 10;
-  sheet.getColumn("P").width = 10;
+  sheet.getColumn("O").width = 15;
+  sheet.getColumn("P").width = 15;
   sheet.getColumn("Q").width = 20;
   sheet.getColumn("R").width = 20;
-  sheet.getColumn("S").width = 20;
+  sheet.getColumn("S").width = 35;
   sheet.getColumn("T").width = 10;
-  sheet.getColumn("U").width = 10;
+  sheet.getColumn("U").width = 15;
 };
 
 const getLogoOffsetX = (
@@ -422,16 +419,18 @@ if (project.logo_konsultan) {
     extension: getImageExtension(logoPath)
   });
 
-sheet.addImage(logoKonsultan, {
-  tl: {
-    col: LOGO_KONSULTAN_TL_COL,
-    row: LOGO_KONSULTAN_TL_ROW
-  },
-  ext: {
-    width: LOGO_KONSULTAN_WIDTH_PX,
-    height: LOGO_KONSULTAN_HEIGHT_PX
-  }
-});
+sheet.addImage(
+  logoKonsultan,
+  getCenteredImagePlacement({
+    sheet,
+    startCol: 10,
+    endCol: 15,
+    startRow: 3,
+    endRow: 8,
+    widthPx: LOGO_KONSULTAN_WIDTH_PX,
+    heightPx: LOGO_KONSULTAN_HEIGHT_PX
+  })
+);
 }
 
 // =========================
@@ -455,16 +454,18 @@ if (project.logo_kontraktor) {
     LOGO_TARGET_HEIGHT_PX
   );
 
-sheet.addImage(logoKontraktor, {
-  tl: {
-    col: LOGO_KONTRAKTOR_TL_COL,
-    row: LOGO_KONTRAKTOR_TL_ROW
-  },
-  ext: {
-    width: logoSize.width,
-    height: logoSize.height
-  }
-});
+sheet.addImage(
+  logoKontraktor,
+  getCenteredImagePlacement({
+    sheet,
+    startCol: 16,
+    endCol: 21,
+    startRow: 3,
+    endRow: 8,
+    widthPx: logoSize.width,
+    heightPx: logoSize.height
+  })
+);
 }
 
 } catch (error) {
@@ -746,19 +747,19 @@ for (let j = 10; j <= 21; j++) {
     sheet.getColumn("G").width = 40;
     sheet.getColumn("H").width = 10;
     sheet.getColumn("I").width = 10;
-    sheet.getColumn("J").width = 25;
+    sheet.getColumn("J").width = 17;
     sheet.getColumn("K").width = 25;
-    sheet.getColumn("L").width = 25;
+    sheet.getColumn("L").width = 34;
 
     sheet.getColumn("M").width = 10; 
     sheet.getColumn("N").width = 10; 
-    sheet.getColumn("O").width = 10;  
-    sheet.getColumn("P").width = 10; 
+    sheet.getColumn("O").width = 15;  
+    sheet.getColumn("P").width = 15; 
     sheet.getColumn("Q").width = 20;  
     sheet.getColumn("R").width = 20;  
-    sheet.getColumn("S").width = 20;  
+    sheet.getColumn("S").width = 35;  
     sheet.getColumn("T").width = 10;  
-    sheet.getColumn("U").width = 10;   
+    sheet.getColumn("U").width = 15;   
 
     
 
@@ -1774,16 +1775,18 @@ if (project.logo_konsultan) {
     extension: getImageExtension(logoPath)
   });
 
-sheet.addImage(logoKonsultan, {
-  tl: {
-    col: LOGO_KONSULTAN_TL_COL,
-    row: LOGO_KONSULTAN_TL_ROW
-  },
-  ext: {
-    width: LOGO_KONSULTAN_WIDTH_PX,
-    height: LOGO_KONSULTAN_HEIGHT_PX
-  }
-});
+sheet.addImage(
+  logoKonsultan,
+  getCenteredImagePlacement({
+    sheet,
+    startCol: 10,
+    endCol: 15,
+    startRow: 3,
+    endRow: 8,
+    widthPx: LOGO_KONSULTAN_WIDTH_PX,
+    heightPx: LOGO_KONSULTAN_HEIGHT_PX
+  })
+);
 }
 
 // =========================
@@ -1807,16 +1810,18 @@ if (project.logo_kontraktor) {
     LOGO_TARGET_HEIGHT_PX
   );
 
-sheet.addImage(logoKontraktor, {
-  tl: {
-    col: LOGO_KONTRAKTOR_TL_COL,
-    row: LOGO_KONTRAKTOR_TL_ROW
-  },
-  ext: {
-    width: logoSize.width,
-    height: logoSize.height
-  }
-});
+sheet.addImage(
+  logoKontraktor,
+  getCenteredImagePlacement({
+    sheet,
+    startCol: 16,
+    endCol: 21,
+    startRow: 3,
+    endRow: 8,
+    widthPx: logoSize.width,
+    heightPx: logoSize.height
+  })
+);
 }
 
 } catch (error) {
@@ -2096,19 +2101,19 @@ for (let j = 10; j <= 21; j++) {
     sheet.getColumn("G").width = 40;
     sheet.getColumn("H").width = 10;
     sheet.getColumn("I").width = 10;
-    sheet.getColumn("J").width = 5;
+    sheet.getColumn("J").width = 17;
     sheet.getColumn("K").width = 45;
-    sheet.getColumn("L").width = 25;
+    sheet.getColumn("L").width = 34;
 
     sheet.getColumn("M").width = 10; 
     sheet.getColumn("N").width = 10; 
-    sheet.getColumn("O").width = 10;  
-    sheet.getColumn("P").width = 10; 
+    sheet.getColumn("O").width = 15;  
+    sheet.getColumn("P").width = 15; 
     sheet.getColumn("Q").width = 20;  
     sheet.getColumn("R").width = 20;  
-    sheet.getColumn("S").width = 20;  
+    sheet.getColumn("S").width = 35;  
     sheet.getColumn("T").width = 10;  
-    sheet.getColumn("U").width = 10;   
+    sheet.getColumn("U").width = 15;   
 
     
 
