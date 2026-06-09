@@ -169,7 +169,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     sheet.getColumn("K").width = 16;   // padding kiri kontraktor
     sheet.getColumn("L").width = 20;
     sheet.getColumn("M").width = 20;
-    sheet.getColumn("N").width = 37;
+    sheet.getColumn("N").width = 42;
 
     // =========================
     // 🔥 HEADER TITLE
@@ -1372,7 +1372,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
     sheet.getColumn("K").width = 16;   // padding kiri kontraktor
     sheet.getColumn("L").width = 20;
     sheet.getColumn("M").width = 20;
-    sheet.getColumn("N").width = 37;
+    sheet.getColumn("N").width = 42;
 
     // =========================
     // 🔥 HEADER TITLE

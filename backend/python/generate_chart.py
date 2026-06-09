@@ -4,6 +4,7 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.utils import get_column_letter
 from openpyxl.chart.text import RichText
+from openpyxl.drawing.text import Paragraph, ParagraphProperties, CharacterProperties
 import sys
 
 input_file = sys.argv[1] if len(sys.argv) > 1 else "temp_schedule.xlsx"
@@ -38,6 +39,10 @@ include_progress_chart = bool(ws["F5"].value)
 
 CHART_WIDTH_SCALE = 1.14
 CHART_HEIGHT_SCALE = 1.04
+PLAN_LINE_WIDTH = 18000
+PLAN_MARKER_SIZE = 4
+DATA_LABEL_FONT_SIZE = 700
+DATA_LABEL_BORDER_WIDTH = 8000
 
 # =========================
 # UKURAN REAL DARI SHEET
@@ -160,7 +165,7 @@ series1.graphicalProperties = GraphicalProperties()
 
 series1.graphicalProperties.line.solidFill = "CC0000"
 
-series1.graphicalProperties.line.width = 35000
+series1.graphicalProperties.line.width = PLAN_LINE_WIDTH
 
 series1.graphicalProperties.line.prstDash = "dash"
 
@@ -169,7 +174,7 @@ series1.graphicalProperties.line.prstDash = "dash"
 # =========================
 series1.marker.symbol = "circle"
 
-series1.marker.size = 6
+series1.marker.size = PLAN_MARKER_SIZE
 # warna titik hitam
 series1.graphicalProperties.line.solidFill = "CC0000"
 
@@ -194,9 +199,19 @@ series1.dLbls.showSerName = False
 
 series1.dLbls.showLegendKey = False
 
-series1.dLbls.numFmt = "0.000"
+series1.dLbls.numFmt = "0.00"
 
-series1.dLbls.txPr = RichText()
+series1.dLbls.txPr = RichText(
+    p=[
+        Paragraph(
+            pPr=ParagraphProperties(
+                defRPr=CharacterProperties(
+                    sz=DATA_LABEL_FONT_SIZE
+                )
+            )
+        )
+    ]
+)
 
 # =========================
 # BACKGROUND LABEL
@@ -213,17 +228,17 @@ series1.dLbls.spPr.line.solidFill = "000000"
 # =========================
 # GARIS
 # =========================
-series1.graphicalProperties.line.width = 40000
+series1.graphicalProperties.line.width = PLAN_LINE_WIDTH
 
 # =========================
 # TITIK
 # =========================
-series1.marker.size = 6
+series1.marker.size = PLAN_MARKER_SIZE
 
 # =========================
 # LABEL BORDER
 # =========================
-series1.dLbls.spPr.line.width = 20000
+series1.dLbls.spPr.line.width = DATA_LABEL_BORDER_WIDTH
 
 # # =========================
 # # REALISASI

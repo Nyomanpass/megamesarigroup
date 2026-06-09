@@ -19,10 +19,21 @@ import { applyTtdCellText } from "../utils/ttdStyle.js";
 const CM_TO_POINTS = 28.3464567;
 const SCHEDULE_HEADER_ROW_HEIGHT = 0.45 * CM_TO_POINTS;
 const SCHEDULE_DATA_ROW_HEIGHT = 0.48 * CM_TO_POINTS;
-const WEEK_COLUMN_WIDTH = 11;
+const WEEK_COLUMN_WIDTH = 14;
 const MARKER_COLUMN_WIDTH = WEEK_COLUMN_WIDTH;
-const SPACER_COLUMN_WIDTH = 3;
-const KET_COLUMN_WIDTH = 8;
+const SPACER_COLUMN_WIDTH = 10;
+const KET_COLUMN_WIDTH = 20;
+
+const applyScheduleSideColumnWidths = (
+  sheet,
+  spacerCol,
+  kosongCol,
+  ketCol
+) => {
+  sheet.getColumn(spacerCol).width = SPACER_COLUMN_WIDTH;
+  sheet.getColumn(kosongCol).width = SPACER_COLUMN_WIDTH;
+  sheet.getColumn(ketCol).width = KET_COLUMN_WIDTH;
+};
 
 const getProjectExportName = (project) =>
   project?.projeknama_import ||
@@ -1198,9 +1209,12 @@ if (isAddendumExport) {
   });
 }
 
-    sheet.getColumn(spacerCol).width = SPACER_COLUMN_WIDTH;
-    sheet.getColumn(kosongCol).width = SPACER_COLUMN_WIDTH;
-    sheet.getColumn(ketCol).width = KET_COLUMN_WIDTH;
+    applyScheduleSideColumnWidths(
+      sheet,
+      spacerCol,
+      kosongCol,
+      ketCol
+    );
 
     const greyFill = {
       type: "pattern",
@@ -2512,6 +2526,13 @@ chartSheet.getCell(`C${r}`).numFmt =
       path.join(os.tmpdir(), `temp_schedule_${exportId}.xlsx`);
     const finalSchedulePath =
       path.join(os.tmpdir(), `final_schedule_${exportId}.xlsx`);
+
+    applyScheduleSideColumnWidths(
+      sheet,
+      spacerCol,
+      kosongCol,
+      ketCol
+    );
 
     await workbook.xlsx.writeFile(tempSchedulePath);
 
