@@ -13,6 +13,9 @@ output_file = sys.argv[2] if len(sys.argv) > 2 else "final_schedule.xlsx"
 # LOAD FILE
 # =========================
 wb = load_workbook(input_file)
+wb.calculation.calcMode = "auto"
+wb.calculation.fullCalcOnLoad = True
+wb.calculation.forceFullCalc = True
 
 # sheet data chart
 ws = wb["CHART_DATA"]
@@ -48,7 +51,7 @@ chart.style = 2
 total_rows = ((end_data_row + 24) - start_data_row)
 total_weeks = (week_end_col - week_start_col) + 1
 chart.height = total_rows * 0.60
-chart.width = total_weeks * 3.40
+chart.width = total_weeks * 1.55
 
 # =========================
 # TOTAL ROW DATA

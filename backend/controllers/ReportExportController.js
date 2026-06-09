@@ -11,6 +11,18 @@ import { Boq } from "../models/BoqModel.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
 import { TtdTemplate } from "../models/TtdTemplate.js";
 
+const CM_TO_POINTS = 28.3464567;
+const TABLE_DATA_ROW_HEIGHT = 0.5 * CM_TO_POINTS;
+const LOGO_ROW_HEIGHT = 16;
+const LOGO_WIDTH_PX = Math.round(5.57 * 96);
+const LOGO_KONSULTAN_WIDTH_PX = Math.round(5.20 * 96);
+const LOGO_HEIGHT_PX = Math.round(1.05 * 96);
+
+const getProjectExportName = (project) =>
+  project?.projeknama_import ||
+  project?.nama_import ||
+  project?.pekerjaan ||
+  "-";
 
 export const exportDailyReportExcel = async (req, res) => {
   try {
@@ -50,6 +62,7 @@ export const exportDailyReportExcel = async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
+    sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
 // =========================
 // 🔥 HEADER ATAS
 // =========================
@@ -160,7 +173,7 @@ const addLabel = (
 
 addLabel("  KEGIATAN", project.kegiatan);
 addLabel("  SUB KEGIATAN", project.sub_kegiatan);
-addLabel("  PEKERJAAN", project.pekerjaan, true);
+addLabel("  PEKERJAAN", getProjectExportName(project), true);
 addLabel("  NOMOR KONTRAK",project.no_kontrak);
 addLabel("  TANGGAL KONTRAK",formatDate(project.tgl_kontrak));
 addLabel("  NOMOR SPMK",project.no_spmk);
@@ -220,6 +233,11 @@ sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
 sheet.mergeCells("J2:M8"); // kiri FULL
 sheet.mergeCells("N2:U8"); // kanan FULL
 
+for (let r = 2; r <= 6; r++) {
+  sheet.getRow(r).height = LOGO_ROW_HEIGHT;
+  sheet.getRow(r).customHeight = true;
+}
+
 // =========================
 // 🔥 LOGO
 // =========================
@@ -261,25 +279,22 @@ if (project.logo_konsultan) {
   const endCol   = 13; // M
   const startRow = 2;
   const endRow   = 8;
-
   const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, endRow);
-
-  const imgW = 500; // ukuran kamu (sudah pas)
-  const imgH = 80;
-
-  // offset supaya tepat di tengah
-  const offsetX = Math.max(0, (boxW - imgW) / 2 + 50);
-  const offsetY = Math.max(0, (boxH - imgH) / 2 + 10);
+  const boxH = getBoxHeightPx(sheet, startRow, 6);
+  const offsetX = Math.max(0, (boxW - LOGO_KONSULTAN_WIDTH_PX) / 2);
+  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKonsultan, {
   tl: {
-    col: startCol + 0.9, 
-    row: startRow,
-    nativeColOff: Math.round((offsetX + 20) * 9525),
+    col: startCol,
+    row: startRow - 1,
+    nativeColOff: Math.round(offsetX * 9525),
     nativeRowOff: Math.round(offsetY * 9525)
   },
-  ext: { width: imgW, height: imgH }
+  ext: {
+    width: LOGO_KONSULTAN_WIDTH_PX,
+    height: LOGO_HEIGHT_PX
+  }
 });
 }
 
@@ -296,24 +311,22 @@ if (project.logo_kontraktor) {
   const endCol   = 21; // U
   const startRow = 2;
   const endRow   = 8;
-
   const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, endRow);
-
-  const imgW = 550;
-  const imgH = 80;
-
-  const offsetX = Math.max(0, (boxW - imgW) / 2 + 50);
-  const offsetY = Math.max(0, (boxH - imgH) / 2 + 10);
+  const boxH = getBoxHeightPx(sheet, startRow, 6);
+  const offsetX = Math.max(0, (boxW - LOGO_WIDTH_PX) / 2);
+  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKontraktor, {
   tl: {
-    col: startCol,
-    row: startRow,
-    nativeColOff: Math.round((offsetX + 10) * 9525),
+    col: startCol - 1,
+    row: startRow - 1,
+    nativeColOff: Math.round(offsetX * 9525),
     nativeRowOff: Math.round(offsetY * 9525)
   },
-  ext: { width: imgW, height: imgH }
+  ext: {
+    width: LOGO_WIDTH_PX,
+    height: LOGO_HEIGHT_PX
+  }
 });
 }
 
@@ -742,10 +755,16 @@ for (let j = 10; j <= 21; j++) {
       // PEKERJAAN
        if (pekerjaan) {
 
-  if (!pekerjaan.boq_id) continue;
+  if (!pekerjaan.boq_id) {
+    rowIndex++;
+    continue;
+  }
 
   const boqItem = boqMap[pekerjaan.boq_id];
-  if (!boqItem) continue;
+  if (!boqItem) {
+    rowIndex++;
+    continue;
+  }
 
   const { parent, sub } = getHierarchy(boqMap, boqItem);
 
@@ -759,6 +778,9 @@ for (let j = 10; j <= 21; j++) {
 
     sheet.getCell(`O${pekerjaanRow}`).value = parent;
     sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    }
 
     pekerjaanRow++;
 
@@ -771,12 +793,18 @@ for (let j = 10; j <= 21; j++) {
   if (sub && sub !== lastSubParent) {
     sheet.getCell(`O${pekerjaanRow}`).value = sub;
     sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    }
 
     pekerjaanRow++;
     lastSubParent = sub;
   }
 
   // ITEM
+  if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+    sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+  }
   sheet.getCell(`O${pekerjaanRow}`).value = pekerjaan.uraian;
 
   sheet.getCell(`T${pekerjaanRow}`).value = pekerjaan.volume;
@@ -794,8 +822,11 @@ sheet.getRow(startRow).height = 30;
 sheet.getRow(startRow + 1).height = 28;
 
 // semua data row
-for (let i = startRow + 2; i <= rowIndex; i++) {
-  sheet.getRow(i).height = 20;
+const tableLastRow = Math.max(rowIndex, pekerjaanRow) - 1;
+for (let i = startRow + 2; i <= tableLastRow; i++) {
+  const dataRow = sheet.getRow(i);
+  dataRow.height = TABLE_DATA_ROW_HEIGHT;
+  dataRow.customHeight = true;
 }
 
 // =========================
@@ -814,7 +845,7 @@ sheet.eachRow((row) => {
     // =========================
     // 🔥 BORDER FULL
     // =========================
-    for (let i = startRow; i <= rowIndex; i++) {
+    for (let i = startRow; i <= tableLastRow; i++) {
       for (let j = 1; j <= 21; j++) {
         const cell = sheet.getRow(i).getCell(j);
 
@@ -1350,6 +1381,7 @@ export const exportDailyReportPdf = async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Laporan Harian");
+    sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
 // =========================
 // 🔥 HEADER ATAS
 // =========================
@@ -1460,7 +1492,7 @@ const addLabel = (
 
 addLabel("  KEGIATAN", project.kegiatan);
 addLabel("  SUB KEGIATAN", project.sub_kegiatan);
-addLabel("  PEKERJAAN", project.pekerjaan, true);
+addLabel("  PEKERJAAN", getProjectExportName(project), true);
 addLabel("  NOMOR KONTRAK",project.no_kontrak);
 addLabel("  TANGGAL KONTRAK",formatDate(project.tgl_kontrak));
 addLabel("  NOMOR SPMK",project.no_spmk);
@@ -1516,6 +1548,11 @@ sheet.getCell("N1").value = "KONTRAKTOR PELAKSANA";
 sheet.mergeCells("J2:M8"); // kiri FULL
 sheet.mergeCells("N2:U8"); // kanan FULL
 
+for (let r = 2; r <= 6; r++) {
+  sheet.getRow(r).height = LOGO_ROW_HEIGHT;
+  sheet.getRow(r).customHeight = true;
+}
+
 // =========================
 // 🔥 LOGO
 // =========================
@@ -1557,25 +1594,22 @@ if (project.logo_konsultan) {
   const endCol   = 13; // M
   const startRow = 2;
   const endRow   = 8;
-
   const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, endRow);
-
-  const imgW = 500; // ukuran kamu (sudah pas)
-  const imgH = 80;
-
-  // offset supaya tepat di tengah
-  const offsetX = Math.max(0, (boxW - imgW) / 2 + 50);
-  const offsetY = Math.max(0, (boxH - imgH) / 2 + 10);
+  const boxH = getBoxHeightPx(sheet, startRow, 6);
+  const offsetX = Math.max(0, (boxW - LOGO_KONSULTAN_WIDTH_PX) / 2);
+  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKonsultan, {
   tl: {
-    col: startCol + 0.9, 
-    row: startRow,
-    nativeColOff: Math.round((offsetX + 20) * 9525),
+    col: startCol,
+    row: startRow - 1,
+    nativeColOff: Math.round(offsetX * 9525),
     nativeRowOff: Math.round(offsetY * 9525)
   },
-  ext: { width: imgW, height: imgH }
+  ext: {
+    width: LOGO_KONSULTAN_WIDTH_PX,
+    height: LOGO_HEIGHT_PX
+  }
 });
 }
 
@@ -1592,24 +1626,22 @@ if (project.logo_kontraktor) {
   const endCol   = 21; // U
   const startRow = 2;
   const endRow   = 8;
-
   const boxW = getBoxWidthPx(sheet, startCol, endCol);
-  const boxH = getBoxHeightPx(sheet, startRow, endRow);
-
-  const imgW = 550;
-  const imgH = 80;
-
-  const offsetX = Math.max(0, (boxW - imgW) / 2 + 50);
-  const offsetY = Math.max(0, (boxH - imgH) / 2 + 10);
+  const boxH = getBoxHeightPx(sheet, startRow, 6);
+  const offsetX = Math.max(0, (boxW - LOGO_WIDTH_PX) / 2);
+  const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
 sheet.addImage(logoKontraktor, {
   tl: {
-    col: startCol,
-    row: startRow,
-    nativeColOff: Math.round((offsetX + 10) * 9525),
+    col: startCol - 1,
+    row: startRow - 1,
+    nativeColOff: Math.round(offsetX * 9525),
     nativeRowOff: Math.round(offsetY * 9525)
   },
-  ext: { width: imgW, height: imgH }
+  ext: {
+    width: LOGO_WIDTH_PX,
+    height: LOGO_HEIGHT_PX
+  }
 });
 }
 
@@ -2036,10 +2068,16 @@ for (let j = 10; j <= 21; j++) {
       // PEKERJAAN
        if (pekerjaan) {
 
-  if (!pekerjaan.boq_id) continue;
+  if (!pekerjaan.boq_id) {
+    rowIndex++;
+    continue;
+  }
 
   const boqItem = boqMap[pekerjaan.boq_id];
-  if (!boqItem) continue;
+  if (!boqItem) {
+    rowIndex++;
+    continue;
+  }
 
   const { parent, sub } = getHierarchy(boqMap, boqItem);
 
@@ -2053,6 +2091,9 @@ for (let j = 10; j <= 21; j++) {
 
     sheet.getCell(`O${pekerjaanRow}`).value = parent;
     sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    }
 
     pekerjaanRow++;
 
@@ -2065,12 +2106,18 @@ for (let j = 10; j <= 21; j++) {
   if (sub && sub !== lastSubParent) {
     sheet.getCell(`O${pekerjaanRow}`).value = sub;
     sheet.getCell(`O${pekerjaanRow}`).font = { bold: true };
+    if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+      sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+    }
 
     pekerjaanRow++;
     lastSubParent = sub;
   }
 
   // ITEM
+  if (!sheet.getCell(`O${pekerjaanRow}`).isMerged) {
+    sheet.mergeCells(`O${pekerjaanRow}:S${pekerjaanRow}`);
+  }
   sheet.getCell(`O${pekerjaanRow}`).value = pekerjaan.uraian;
 
   sheet.getCell(`T${pekerjaanRow}`).value = pekerjaan.volume;
@@ -2088,8 +2135,11 @@ sheet.getRow(startRow).height = 30;
 sheet.getRow(startRow + 1).height = 28;
 
 // semua data row
-for (let i = startRow + 2; i <= rowIndex; i++) {
-  sheet.getRow(i).height = 20;
+const tableLastRow = Math.max(rowIndex, pekerjaanRow) - 1;
+for (let i = startRow + 2; i <= tableLastRow; i++) {
+  const dataRow = sheet.getRow(i);
+  dataRow.height = TABLE_DATA_ROW_HEIGHT;
+  dataRow.customHeight = true;
 }
 
 // =========================
@@ -2108,7 +2158,7 @@ sheet.eachRow((row) => {
     // =========================
     // 🔥 BORDER FULL
     // =========================
-    for (let i = startRow; i <= rowIndex; i++) {
+    for (let i = startRow; i <= tableLastRow; i++) {
       for (let j = 1; j <= 21; j++) {
         const cell = sheet.getRow(i).getCell(j);
 

@@ -10,6 +10,7 @@ export const slugifyFilenamePart = (value) => {
 
 export const getProjectFilenameSuffix = (project) =>
   slugifyFilenamePart(
+    project?.projeknama_import ||
     project?.nama_import ||
     project?.pekerjaan ||
     project?.kegiatan ||

@@ -17,6 +17,22 @@ import path from "path";
 import { buildExportFilename } from "../utils/exportFilename.js";
 import { applyTtdCellText } from "../utils/ttdStyle.js";
 
+const CM_TO_POINTS = 28.3464567;
+const SCHEDULE_DATA_ROW_HEIGHT = 0.6 * CM_TO_POINTS;
+const WEEK_COLUMN_WIDTH = 8;
+const MARKER_COLUMN_WIDTH = 5;
+const SPACER_COLUMN_WIDTH = 3;
+const KET_COLUMN_WIDTH = 8;
+
+const getProjectExportName = (project) =>
+  project?.projeknama_import ||
+  project?.nama_import ||
+  project?.pekerjaan ||
+  "-";
+
+const roundToNearest = (value, nearest = 1000) =>
+  Math.round((Number(value) || 0) / nearest) * nearest;
+
 export const exportTimeSchedule = async (req, res) => {
   try {
     const { project_id } = req.params;
@@ -275,8 +291,10 @@ export const exportTimeSchedule = async (req, res) => {
     // 🔥 CREATE EXCEL
     // =========================
     const workbook = new ExcelJS.Workbook();
+    workbook.calcProperties.fullCalcOnLoad = true;
+    workbook.calcProperties.forceFullCalc = true;
     const sheet = workbook.addWorksheet("TIME SCHEDULE");
-    sheet.properties.defaultRowHeight = 22;
+    sheet.properties.defaultRowHeight = SCHEDULE_DATA_ROW_HEIGHT;
 
     // =========================
     // 🔥 SET COLUMN (A-N)
@@ -406,7 +424,7 @@ export const exportTimeSchedule = async (req, res) => {
 
     addLabel("KEGIATAN", project.kegiatan);
     addLabel("SUB KEGIATAN", project.sub_kegiatan);
-    addLabel("PEKERJAAN", project.pekerjaan, true);
+    addLabel("PEKERJAAN", getProjectExportName(project), true);
     addLabel("NO KONTRAK", project.no_kontrak);
     addLabel("TANGGAL KONTRAK", formatTanggal(project.tgl_kontrak));
     addLabel("NO SPMK", project.no_spmk);
@@ -811,9 +829,13 @@ sheet.getCell(`${sheet.getColumn(ketCol).letter}${row}`).value = "KET.";
 // 🔥 STYLE HEADER
 // =========================
 for (let r = row; r <= row + 5; r++) {
+  const headerRow = sheet.getRow(r);
+  headerRow.height = SCHEDULE_DATA_ROW_HEIGHT;
+  headerRow.customHeight = true;
+
   for (let c = 2; c <= ketCol; c++) {
 
-    const cell = sheet.getRow(r).getCell(c);
+    const cell = headerRow.getCell(c);
 
     cell.font = { bold: true };
 
@@ -1087,9 +1109,13 @@ const endDataRow = row - 1;
 row += 2;
 
 for (let r = startDataRow; r <= endDataRow + 2; r++) {
+  const dataRow = sheet.getRow(r);
+  dataRow.height = SCHEDULE_DATA_ROW_HEIGHT;
+  dataRow.customHeight = true;
+
   for (let c = 2; c <= ketCol; c++) {
 
-    const cell = sheet.getRow(r).getCell(c);
+    const cell = dataRow.getCell(c);
 
     // kosongkan kalau tidak ada isi
     if (cell.value === undefined) cell.value = null;
@@ -1141,7 +1167,9 @@ scheduleColumns.forEach((column, index) => {
     sheet.getColumn(weekStartCol + index);
 
   excelColumn.width =
-    column.type === "marker" ? 12 : 15;
+    column.type === "marker"
+      ? MARKER_COLUMN_WIDTH
+      : WEEK_COLUMN_WIDTH;
 });
 
 for (let i = 0; i < addendumDetailColumns.length; i++) {
@@ -1170,9 +1198,9 @@ if (isAddendumExport) {
   });
 }
 
-    sheet.getColumn(spacerCol).width = 6;   // padding setelah bobot/detail
-    sheet.getColumn(kosongCol).width = 6;   // padding sebelum ket
-    sheet.getColumn(ketCol).width = 15;
+    sheet.getColumn(spacerCol).width = SPACER_COLUMN_WIDTH;
+    sheet.getColumn(kosongCol).width = SPACER_COLUMN_WIDTH;
+    sheet.getColumn(ketCol).width = KET_COLUMN_WIDTH;
 
     const greyFill = {
       type: "pattern",
@@ -1237,6 +1265,15 @@ for (let r = ketStartRow; r <= ketEndRow; r++) {
 // =========================
 
 const footerStart = endDataRow + 3;
+const sumNumericColumn = (colNumber) => {
+  let total = 0;
+
+  for (let r = startDataRow; r <= endDataRow; r++) {
+    total += Number(sheet.getCell(r, colNumber).value || 0);
+  }
+
+  return total;
+};
 
 // =========================
 // 🔹 JUMLAH TOTAL
@@ -1245,15 +1282,19 @@ sheet.mergeCells(`B${footerStart}:I${footerStart}`);
 sheet.getCell(`B${footerStart}`).value = "JUMLAH TOTAL";
 
 const totalCell = sheet.getCell(`J${footerStart}`);
+const totalJumlahHarga = sumNumericColumn(10);
 totalCell.value = {
-  formula: `SUM(J${startDataRow}:J${endDataRow})`
+  formula: `SUM(J${startDataRow}:J${endDataRow})`,
+  result: totalJumlahHarga
 };
 totalCell.numFmt = '"Rp" * #,##0.00';
 
 // 🔹 BOBOT
 const totalBobot = sheet.getCell(`K${footerStart}`);
+const totalBobotValue = sumNumericColumn(11);
 totalBobot.value = {
-  formula: `SUM(K${startDataRow}:K${endDataRow})`
+  formula: `SUM(K${startDataRow}:K${endDataRow})`,
+  result: totalBobotValue
 };
 totalBobot.numFmt = '0.000';
 
@@ -1265,8 +1306,10 @@ sheet.mergeCells(`B${footerStart + 1}:I${footerStart + 1}`);
 sheet.getCell(`B${footerStart + 1}`).value = "PPN 11%";
 
 const ppnCell = sheet.getCell(`J${footerStart + 1}`);
+const ppnValue = totalJumlahHarga * 0.11;
 ppnCell.value = {
-  formula: `J${footerStart}*11%`
+  formula: `J${footerStart}*11%`,
+  result: ppnValue
 };
 ppnCell.numFmt = '"Rp" * #,##0.00';
 
@@ -1281,8 +1324,10 @@ sheet.mergeCells(`B${footerStart + 2}:I${footerStart + 2}`);
 sheet.getCell(`B${footerStart + 2}`).value = "JUMLAH TOTAL + PPN";
 
 const grandCell = sheet.getCell(`J${footerStart + 2}`);
+const grandValue = totalJumlahHarga + ppnValue;
 grandCell.value = {
-  formula: `J${footerStart}+J${footerStart + 1}`
+  formula: `J${footerStart}+J${footerStart + 1}`,
+  result: grandValue
 };
 grandCell.numFmt = '"Rp" * #,##0.00';
 
@@ -1294,8 +1339,10 @@ sheet.getCell(`B${footerStart + 3}`).value = "DIBULATKAN";
 
 // 🔥 pembulatan ke ribuan (1000)
 const bulatCell = sheet.getCell(`J${footerStart + 3}`);
+const bulatValue = roundToNearest(grandValue);
 bulatCell.value = {
-  formula: `ROUND(J${footerStart + 2},-3)`
+  formula: `ROUND(J${footerStart + 2},-3)`,
+  result: bulatValue
 };
 bulatCell.numFmt = '"Rp" * #,##0.00';
 
@@ -1318,9 +1365,12 @@ const addendumFooterColumns =
 addendumFooterColumns.forEach(column => {
   const totalAddendumCell =
     sheet.getCell(footerStart, column.colNumber);
+  const addendumTotalValue =
+    sumNumericColumn(column.colNumber);
 
   totalAddendumCell.value = {
-    formula: `SUM(${column.colLetter}${startDataRow}:${column.colLetter}${endDataRow})`
+    formula: `SUM(${column.colLetter}${startDataRow}:${column.colLetter}${endDataRow})`,
+    result: addendumTotalValue
   };
   totalAddendumCell.numFmt =
     column.currency
@@ -1335,21 +1385,31 @@ addendumFooterColumns.forEach(column => {
     sheet.getCell(footerStart + 3, column.colNumber);
 
   if (column.currency) {
+    const addendumPpnValue =
+      addendumTotalValue * 0.11;
+    const addendumGrandValue =
+      addendumTotalValue + addendumPpnValue;
+    const addendumRoundedValue =
+      roundToNearest(addendumGrandValue);
+
     ppnAddendumCell.value = {
-      formula: `${column.colLetter}${footerStart}*11%`
+      formula: `${column.colLetter}${footerStart}*11%`,
+      result: addendumPpnValue
     };
     ppnAddendumCell.numFmt = '"Rp" * #,##0.00';
 
     grandAddendumCell.value = {
       formula:
         `${column.colLetter}${footerStart}+` +
-        `${column.colLetter}${footerStart + 1}`
+        `${column.colLetter}${footerStart + 1}`,
+      result: addendumGrandValue
     };
     grandAddendumCell.numFmt = '"Rp" * #,##0.00';
 
     roundedAddendumCell.value = {
       formula:
-        `ROUND(${column.colLetter}${footerStart + 2},-3)`
+        `ROUND(${column.colLetter}${footerStart + 2},-3)`,
+      result: addendumRoundedValue
     };
     roundedAddendumCell.numFmt = '"Rp" * #,##0.00';
   } else {
@@ -2108,6 +2168,13 @@ if (isAddendumExport) {
 }
 
 for (let r = startDataRow; r <= deviasiRow; r++) {
+  const scheduleRow =
+    sheet.getRow(r);
+
+  scheduleRow.height =
+    SCHEDULE_DATA_ROW_HEIGHT;
+  scheduleRow.customHeight = true;
+
   [spacerCol, kosongCol].forEach(col => {
     const cell = sheet.getCell(r, col);
 

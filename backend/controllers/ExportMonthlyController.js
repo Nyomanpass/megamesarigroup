@@ -9,6 +9,19 @@ import { Boq } from "../models/BoqModel.js";
 import { buildExportFilename } from "../utils/exportFilename.js";
 import { applyTtdCellText } from "../utils/ttdStyle.js";
 
+const CM_TO_POINTS = 28.3464567;
+const TABLE_DATA_ROW_HEIGHT = 0.5 * CM_TO_POINTS;
+const LOGO_ROW_HEIGHT = 16;
+const LOGO_WIDTH_PX = Math.round(5.57 * 96);
+const LOGO_KONSULTAN_WIDTH_PX = Math.round(5.20 * 96);
+const LOGO_HEIGHT_PX = Math.round(1.05 * 96);
+
+const getProjectExportName = (project) =>
+  project?.projeknama_import ||
+  project?.nama_import ||
+  project?.pekerjaan ||
+  "-";
+
 const buildMonthlyGroupedRows = (reportRows = [], boqRows = []) => {
   if (
     reportRows.some(
@@ -85,6 +98,15 @@ const buildMonthlyGroupedRows = (reportRows = [], boqRows = []) => {
   return groupedRows.length ? groupedRows : reportRows;
 };
 
+const getMonthlyTotalBobot = (rows = []) =>
+  rows.reduce((total, row) => {
+    if (row?.tipe === "header" || row?.tipe === "subheader") {
+      return total;
+    }
+
+    return total + (Number(row?.bobot) || 0);
+  }, 0);
+
 export const exportMonthlyReportExcel = async (req, res) => {
   try {
     const { bulan } = req.query;
@@ -123,7 +145,10 @@ export const exportMonthlyReportExcel = async (req, res) => {
       buildMonthlyGroupedRows(dataBulan.data || [], boqRows);
 
     const workbook = new ExcelJS.Workbook();
+    workbook.calcProperties.fullCalcOnLoad = true;
+    workbook.calcProperties.forceFullCalc = true;
     const sheet = workbook.addWorksheet("Laporan Bulanan");
+    sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
 
     // =========================
     // 🔥 SET COLUMN (A-N)
@@ -168,6 +193,11 @@ export const exportMonthlyReportExcel = async (req, res) => {
     sheet.mergeCells("F2:J6");
     sheet.mergeCells("K2:N6");
 
+    for (let r = 2; r <= 6; r++) {
+      sheet.getRow(r).height = LOGO_ROW_HEIGHT;
+      sheet.getRow(r).customHeight = true;
+    }
+
     // =========================
     // 🔥 HELPER
     // =========================
@@ -190,7 +220,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
       return total;
     };
 
-  const placeLogo = (logoPath, startCol, endCol) => {
+  const placeLogo = (logoPath, startCol, endCol, widthPx = LOGO_WIDTH_PX) => {
     if (!logoPath) return;
 
     const resolvedLogoPath =
@@ -208,26 +238,22 @@ export const exportMonthlyReportExcel = async (req, res) => {
 
     const startRow = 2;
     const endRow = 6;
-
     const boxW = getBoxWidthPx(startCol, endCol);
     const boxH = getBoxHeightPx(startRow, endRow);
-
-    // 🔥 SAMAKAN SEMUA LOGO
-    const imgW = boxW * 1;  // 100% lebar
-    const imgH = boxH * 0.8;  // 80% tinggi
-
-    // 🔥 CENTER
-    const offsetX = (boxW - imgW) / 2;
-    const offsetY = (boxH - imgH) / 2 + 50;
+    const offsetX = Math.max(0, (boxW - widthPx) / 2);
+    const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
 
     sheet.addImage(imageId, {
       tl: {
-        col: startCol - 1 + 0.9, // sedikit geser biar tidak nempel kiri
-        row: startRow - 1 + 0.6, // sedikit geser biar tidak nempel atas
+        col: startCol - 1,
+        row: startRow - 1,
         nativeColOff: Math.round(offsetX * 9525),
         nativeRowOff: Math.round(offsetY * 9525)
       },
-      ext: { width: imgW, height: imgH }
+      ext: {
+        width: widthPx,
+        height: LOGO_HEIGHT_PX
+      }
     });
   };
 
@@ -235,7 +261,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
     // 🔥 PASANG LOGO
     // =========================
   placeLogo(project.logo_client, 2, 5);
-  placeLogo(project.logo_konsultan, 7, 10);
+  placeLogo(project.logo_konsultan, 7, 10, LOGO_KONSULTAN_WIDTH_PX);
   placeLogo(project.logo_kontraktor, 12, 14);
 
     // =========================
@@ -327,7 +353,7 @@ export const exportMonthlyReportExcel = async (req, res) => {
 
     addLabel("KEGIATAN", project.kegiatan);
     addLabel("SUB KEGIATAN", project.sub_kegiatan);
-    addLabel("PEKERJAAN", project.pekerjaan, true);
+    addLabel("PEKERJAAN", getProjectExportName(project), true);
     addLabel("NO KONTRAK", project.no_kontrak);
     addLabel("TANGGAL KONTRAK", formatTanggal(project.tgl_kontrak));
     addLabel("NO SPMK", project.no_spmk);
@@ -848,9 +874,13 @@ rowIndex++;
 // 🔥 STYLE + BORDER (FIX MERGE B–E)
 // =========================
 for (let r = startRow + 3; r < rowIndex; r++) {
+  const styledRow = sheet.getRow(r);
+  styledRow.height = styledRow.height || TABLE_DATA_ROW_HEIGHT;
+  styledRow.customHeight = true;
+
   for (let c = 1; c <= 14; c++) {
 
-    const cell = sheet.getRow(r).getCell(c);
+    const cell = styledRow.getCell(c);
 
     // =========================
     // 🔥 FIX MERGE B–E
@@ -968,9 +998,11 @@ labelCell.alignment = {
 
 // 🔥 SUM KOLOM H (BOBOT)
 const totalCell = sheet.getCell(`H${totalRow}`);
+const totalBobot = getMonthlyTotalBobot(groupedMonthlyData);
 
 totalCell.value = {
-  formula: `SUM(H${startRow + 3}:H${rowIndex - 1})`
+  formula: `SUM(H${startRow + 3}:H${rowIndex - 1})`,
+  result: totalBobot
 };
 
 totalCell.font = { bold: true };
@@ -1300,7 +1332,10 @@ export const exportMonthlyReportPDF = async (req, res) => {
       buildMonthlyGroupedRows(dataBulan.data || [], boqRows);
 
     const workbook = new ExcelJS.Workbook();
+    workbook.calcProperties.fullCalcOnLoad = true;
+    workbook.calcProperties.forceFullCalc = true;
     const sheet = workbook.addWorksheet("Laporan Bulanan");
+    sheet.properties.defaultRowHeight = TABLE_DATA_ROW_HEIGHT;
 
     sheet.pageSetup = {
       paperSize: 9,
@@ -1368,6 +1403,11 @@ export const exportMonthlyReportPDF = async (req, res) => {
     sheet.mergeCells("F2:J6");
     sheet.mergeCells("K2:N6");
 
+    for (let r = 2; r <= 6; r++) {
+      sheet.getRow(r).height = LOGO_ROW_HEIGHT;
+      sheet.getRow(r).customHeight = true;
+    }
+
     // =========================
     // 🔥 HELPER
     // =========================
@@ -1390,7 +1430,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
       return total;
     };
 
-  const placeLogo = (logoPath, startCol, endCol) => {
+  const placeLogo = (logoPath, startCol, endCol, widthPx = LOGO_WIDTH_PX) => {
     if (!logoPath) return;
 
     const resolvedLogoPath =
@@ -1408,26 +1448,22 @@ export const exportMonthlyReportPDF = async (req, res) => {
     
         const startRow = 2;
         const endRow = 6;
-    
         const boxW = getBoxWidthPx(startCol, endCol);
         const boxH = getBoxHeightPx(startRow, endRow);
-    
-        // 🔥 SAMAKAN SEMUA LOGO
-        const imgW = boxW * 0.9;  // 100% lebar
-        const imgH = boxH * 0.8;  // 80% tinggi
-    
-        // 🔥 CENTER
-        const offsetX = (boxW - imgW) / 2;
-        const offsetY = (boxH - imgH) / 2 + 50;
+        const offsetX = Math.max(0, (boxW - widthPx) / 2);
+        const offsetY = Math.max(0, (boxH - LOGO_HEIGHT_PX) / 2);
     
         sheet.addImage(imageId, {
           tl: {
-            col: startCol - 1, // sedikit geser biar tidak nempel kiri
-            row: startRow - 1 + 0.6, // sedikit geser biar tidak nempel atas
-            nativeColOff: -1000000,
+            col: startCol - 1,
+            row: startRow - 1,
+            nativeColOff: Math.round(offsetX * 9525),
             nativeRowOff: Math.round(offsetY * 9525)
           },
-          ext: { width: imgW, height: imgH }
+          ext: {
+            width: widthPx,
+            height: LOGO_HEIGHT_PX
+          }
         });
       };
     
@@ -1436,7 +1472,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
     // 🔥 PASANG LOGO
     // =========================
   placeLogo(project.logo_client, 2, 5);
-  placeLogo(project.logo_konsultan, 7, 10);
+  placeLogo(project.logo_konsultan, 7, 10, LOGO_KONSULTAN_WIDTH_PX);
   placeLogo(project.logo_kontraktor, 12, 14);
 
     // =========================
@@ -1528,7 +1564,7 @@ export const exportMonthlyReportPDF = async (req, res) => {
 
     addLabel(" KEGIATAN", project.kegiatan);
     addLabel(" SUB KEGIATAN", project.sub_kegiatan);
-    addLabel(" PEKERJAAN", project.pekerjaan, true);
+    addLabel(" PEKERJAAN", getProjectExportName(project), true);
     addLabel(" NO KONTRAK", project.no_kontrak);
     addLabel(" TANGGAL KONTRAK", formatTanggal(project.tgl_kontrak));
     addLabel(" NO SPMK", project.no_spmk);
@@ -2048,9 +2084,13 @@ rowIndex++;
 // 🔥 STYLE + BORDER (FIX MERGE B–E)
 // =========================
 for (let r = startRow + 3; r < rowIndex; r++) {
+  const styledRow = sheet.getRow(r);
+  styledRow.height = styledRow.height || TABLE_DATA_ROW_HEIGHT;
+  styledRow.customHeight = true;
+
   for (let c = 1; c <= 14; c++) {
 
-    const cell = sheet.getRow(r).getCell(c);
+    const cell = styledRow.getCell(c);
 
     // =========================
     // 🔥 FIX MERGE B–E
@@ -2168,9 +2208,11 @@ labelCell.alignment = {
 
 // 🔥 SUM KOLOM H (BOBOT)
 const totalCell = sheet.getCell(`H${totalRow}`);
+const totalBobot = getMonthlyTotalBobot(groupedMonthlyData);
 
 totalCell.value = {
-  formula: `SUM(H${startRow + 3}:H${rowIndex - 1})`
+  formula: `SUM(H${startRow + 3}:H${rowIndex - 1})`,
+  result: totalBobot
 };
 
 totalCell.font = { bold: true };
