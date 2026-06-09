@@ -3,7 +3,6 @@ import { DailyProgress } from "../models/DailyProgressModel.js";
 
 import { Boq } from "../models/BoqModel.js";
 import { DailyProgressItem } from "../models/DailyProgresItem.js";
-import { Project } from "../models/ProjectModel.js";
 
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { ProjectItem } from "../models/ProjekItem.js";
@@ -681,11 +680,34 @@ export const getProgressSummary = async (req, res) => {
 // ✅ GET ALL + RELASI
 export const getDailyProgress = async (req, res) => {
   try {
+    const { project_id } = req.query;
+    const where = {};
+
+    if (project_id) {
+      where.project_id = Number(project_id);
+    }
+
     const data = await DailyProgress.findAll({
+      where,
       include: [
-        { model: Boq, as: "boq" },
-        { model: Project, as: "project" },
-        { model: DailyProgressPhoto, as: "photos" }
+        {
+          model: Boq,
+          as: "boq",
+          attributes: [
+            "id",
+            "kode",
+            "uraian"
+          ]
+        },
+        {
+          model: DailyProgressPhoto,
+          as: "photos",
+          attributes: [
+            "id",
+            "daily_progress_id",
+            "photo_url"
+          ]
+        }
       ],
       order: [
         ["tanggal", "DESC"],

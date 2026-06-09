@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api from "../api";
@@ -22,17 +22,6 @@ const roundScheduleValue = value =>
 
 const isPlainNumber = value =>
   /^-?\d+(\.\d+)?$/.test(String(value).trim());
-
-const excelColumnToNumber = column => {
-  return String(column)
-    .toUpperCase()
-    .split("")
-    .reduce(
-      (sum, char) =>
-        sum * 26 + char.charCodeAt(0) - 64,
-      0
-    );
-};
 
 export default function SchedulePage() {
   const { id: paramId } = useParams();
@@ -159,11 +148,29 @@ const fetchVersions = async () => {
         return;
       }
 
-      const baseBoqRes = await api.get(`/boq/project/${id}/0`);
-      const boqRes = await api.get(`/boq/project/${id}/${selectedVersion?.id || 0}`);
-      const weekRes = await api.get(`/schedule/weeks/${id}`);
-      const schRes = await api.get(`/schedule/${id}/${selectedVersion?.id}`);
-      const weeklyReportRes = await api.get(`/weekly-report/${id}`);
+      const weeklyReportRequest =
+        selectedVersion?.revision > 0 &&
+        Number(selectedVersion.effective_week || 1) > 1
+          ? api.get(
+              `/weekly-report/${id}?minggu=${
+                Number(selectedVersion.effective_week || 1) - 1
+              }`
+            )
+          : Promise.resolve({ data: [] });
+
+      const [
+        baseBoqRes,
+        boqRes,
+        weekRes,
+        schRes,
+        weeklyReportRes
+      ] = await Promise.all([
+        api.get(`/boq/project/${id}/0`),
+        api.get(`/boq/project/${id}/${selectedVersion?.id || 0}`),
+        api.get(`/schedule/weeks/${id}`),
+        api.get(`/schedule/${id}/${selectedVersion?.id}`),
+        weeklyReportRequest
+      ]);
       let scheduleData =
         schRes.data || [];
 
@@ -316,10 +323,8 @@ const handleBagiRata = (item) => {
 
 const getScheduleBobotByWeek = (boqId, mingguKe) => {
   const data =
-    schedule.find(
-      s =>
-        Number(s.boq_id) === Number(boqId) &&
-        Number(s.minggu_ke) === Number(mingguKe)
+    scheduleByBoqWeek.get(
+      `${Number(boqId)}-${Number(mingguKe)}`
     );
 
   return new Decimal(data?.bobot || 0);
@@ -327,7 +332,7 @@ const getScheduleBobotByWeek = (boqId, mingguKe) => {
 
 const calculateFormulaValue = (formula, boqId, sisa) => {
   const totalTarget = new Decimal(
-    boq.find(b => b.id === boqId)?.bobot || 0
+    boqById.get(Number(boqId))?.bobot || 0
   );
 
   let expression = String(formula)
@@ -556,16 +561,11 @@ const handleSingleCellChange = (
   // =========================
   const totalTarget =
     new Decimal(
-      boq.find(
-        b => b.id === boqId
-      )?.bobot || 0
+      boqById.get(Number(boqId))?.bobot || 0
     );
 
   const selectedBoqItem =
-    boq.find(
-      b =>
-        Number(b.id) === Number(boqId)
-    );
+    boqById.get(Number(boqId));
 
   const scheduleTarget =
     isAddendumSchedule && selectedBoqItem
@@ -1132,28 +1132,152 @@ const handleSingleCellChange = (
     }
   };
 
+  const effectiveWeek =
+    Number(selectedVersion?.effective_week || 1);
+
+  const isSelectedAddendum =
+    selectedVersion?.revision > 0;
+
+  const boqById = useMemo(() => {
+    const map = new Map();
+
+    boq.forEach(item => {
+      map.set(Number(item.id), item);
+    });
+
+    return map;
+  }, [boq]);
+
+  const baseBoqMap = useMemo(() => {
+    const map = {};
+
+    baseBoq.forEach(item => {
+      map[item.id] = item;
+    });
+
+    return map;
+  }, [baseBoq]);
+
+  const tree = useMemo(() => {
+    const map = {};
+    const roots = [];
+
+    boq.forEach(item => {
+      map[item.id] = { ...item, children: [] };
+    });
+
+    boq.forEach(item => {
+      if (item.parent_id) {
+        map[item.parent_id]?.children.push(map[item.id]);
+      } else {
+        roots.push(map[item.id]);
+      }
+    });
+
+    return roots;
+  }, [boq]);
+
+  const scheduleByBoqWeek = useMemo(() => {
+    const map = new Map();
+
+    schedule.forEach(item => {
+      const key = `${Number(item.boq_id)}-${Number(item.minggu_ke)}`;
+
+      if (
+        isSelectedAddendum &&
+        Number(item.minggu_ke) >= effectiveWeek
+      ) {
+        if (Number(item.version_id) === Number(selectedVersion?.id)) {
+          map.set(key, item);
+        }
+
+        return;
+      }
+
+      map.set(key, item);
+    });
+
+    return map;
+  }, [
+    schedule,
+    isSelectedAddendum,
+    effectiveWeek,
+    selectedVersion?.id
+  ]);
+
+  const scheduleTotalByWeek = useMemo(() => {
+    const map = new Map();
+
+    schedule.forEach(item => {
+      const mingguKe = Number(item.minggu_ke);
+
+      if (
+        isSelectedAddendum &&
+        mingguKe >= effectiveWeek &&
+        Number(item.version_id) !== Number(selectedVersion?.id)
+      ) {
+        return;
+      }
+
+      map.set(
+        mingguKe,
+        (map.get(mingguKe) || new Decimal(0)).plus(
+          new Decimal(item.bobot || 0)
+        )
+      );
+    });
+
+    return map;
+  }, [
+    schedule,
+    isSelectedAddendum,
+    effectiveWeek,
+    selectedVersion?.id
+  ]);
+
+  const realByWeek = useMemo(() => {
+    const map = new Map();
+
+    realData.forEach(item => {
+      map.set(Number(item.minggu_ke), item);
+    });
+
+    return map;
+  }, [realData]);
+
+  const previousWeekReport = useMemo(() => {
+    if (!isSelectedAddendum || effectiveWeek <= 1) {
+      return null;
+    }
+
+    return weeklyReport.find(
+      item =>
+        Number(item.minggu_ke) ===
+        effectiveWeek - 1
+    );
+  }, [
+    weeklyReport,
+    isSelectedAddendum,
+    effectiveWeek
+  ]);
+
+  const previousProgressByBoq = useMemo(() => {
+    const map = new Map();
+
+    previousWeekReport?.data?.forEach(item => {
+      map.set(Number(item.boq_id), item);
+    });
+
+    return map;
+  }, [previousWeekReport]);
+
   const rencanaPerMinggu = weeks.map(w => {
 
-    return schedule
-      .filter(
-        s =>
-          Number(s.minggu_ke) ===
-          Number(w.minggu_ke)
-      )
-    .reduce(
-
-        (sum, s) =>
-
-          sum.plus(
-            new Decimal(
-              s.bobot || 0
-            )
-          ),
-
-        new Decimal(0)
-
-      )
-      .toNumber();
+    return Number(
+      scheduleTotalByWeek
+        .get(Number(w.minggu_ke))
+        ?.toNumber() || 0
+    );
   });
 
   let akumulasi = new Decimal(0);
@@ -1170,16 +1294,7 @@ const realPerMinggu =
 weeks.map((w)=>{
 
    const real =
-   realData.find(
-
-      r=>
-      Number(
-         r.minggu_ke
-      ) === Number(
-         w.minggu_ke
-      )
-
-   );
+   realByWeek.get(Number(w.minggu_ke));
 
    return Number(
       real?.real || 0
@@ -1195,16 +1310,7 @@ const realKomulatif =
 weeks.map((w)=>{
 
    const real =
-   realData.find(
-
-      r=>
-      Number(
-         r.minggu_ke
-      ) === Number(
-         w.minggu_ke
-      )
-
-   );
+   realByWeek.get(Number(w.minggu_ke));
 
    return Number(
       real?.kum_real || 0
@@ -1220,16 +1326,6 @@ weeks.map((w)=>{
     scheduleTotal > 99.9 &&
     scheduleTotal < 100.1;
 
-  const boqMap = {};
-  boq.forEach(item => {
-    boqMap[item.id] = { ...item, children: [] };
-  });
-
-  const baseBoqMap = {};
-  baseBoq.forEach(item => {
-    baseBoqMap[item.id] = item;
-  });
-
   const getBeforeEffectiveProgress = (item) => {
     if (!(selectedVersion?.revision > 0)) {
       return new Decimal(0);
@@ -1242,17 +1338,9 @@ weeks.map((w)=>{
       return new Decimal(0);
     }
 
-    const report =
-      weeklyReport.find(
-        item =>
-          Number(item.minggu_ke) === Number(previousWeek)
-      );
-
     const progressItem =
-      report?.data?.find(
-        progress =>
-          Number(progress.boq_id) ===
-          Number(item.boq_item_id || item.id)
+      previousProgressByBoq.get(
+        Number(item.boq_item_id || item.id)
       );
 
     const progressVolume =
@@ -1294,62 +1382,6 @@ weeks.map((w)=>{
     );
   };
 
-  const getAddendumSeed = () => {
-    if (!(selectedVersion?.revision > 0)) {
-      return new Decimal(0);
-    }
-
-    const previousWeek =
-      effectiveWeek - 1;
-
-    if (previousWeek <= 0) {
-      return new Decimal(0);
-    }
-
-    const report =
-      weeklyReport.find(
-        item =>
-          Number(item.minggu_ke) ===
-          Number(previousWeek)
-      );
-
-    return new Decimal(
-      report?.real_kumulatif || 0
-    );
-  };
-
-  const getAddendumRemainingFactor = () => {
-    if (!(selectedVersion?.revision > 0)) {
-      return new Decimal(1);
-    }
-
-    const rawRemainingTotal =
-      boq
-        .filter(item => item.tipe === "item")
-        .reduce(
-          (sum, item) =>
-            sum.plus(
-              getRawAddendumRemaining(item)
-            ),
-          new Decimal(0)
-        );
-
-    if (rawRemainingTotal.lte(0)) {
-      return new Decimal(1);
-    }
-
-    const targetRemaining =
-      Decimal.max(
-        new Decimal(100).minus(
-          getAddendumSeed()
-        ),
-        new Decimal(0)
-      );
-
-    return targetRemaining
-      .dividedBy(rawRemainingTotal);
-  };
-
   const getAddendumInfo = (item) => {
     const baseItem =
       baseBoqMap[item.id] || {};
@@ -1385,18 +1417,6 @@ weeks.map((w)=>{
       remaining
     };
   };
-
-  const tree = [];
-
-  boq.forEach(item => {
-      if (item.parent_id) {
-        boqMap[item.parent_id]?.children.push(boqMap[item.id]);
-      } else {
-        tree.push(boqMap[item.id]);
-      }
-  });
-
-  const effectiveWeek = Number(selectedVersion?.effective_week || 1);
 
   const activeVersionChain =
     versions
@@ -1493,28 +1513,8 @@ weeks.flatMap((w)=>{
     );
 
   const getScheduleTotalByWeek = mingguKe =>
-    schedule
-      .filter(item => {
-        const weekNumber = Number(mingguKe);
-        const itemWeek = Number(item.minggu_ke);
-
-        if (
-          selectedVersion?.revision > 0 &&
-          weekNumber >= Number(selectedVersion.effective_week || 1)
-        ) {
-          return (
-            itemWeek === weekNumber &&
-            Number(item.version_id) === Number(selectedVersion.id)
-          );
-        }
-
-        return itemWeek === weekNumber;
-      })
-      .reduce(
-        (sum, item) =>
-          sum.plus(new Decimal(item.bobot || 0)),
-        new Decimal(0)
-  );
+    scheduleTotalByWeek.get(Number(mingguKe)) ||
+    new Decimal(0);
 
   const getRealCumulativeAtWeek = mingguKe => {
     const index =
@@ -1533,11 +1533,7 @@ weeks.flatMap((w)=>{
     const previousProgress =
       getRealCumulativeAtWeek(startWeek - 1);
     const startWeekReal =
-      realData.find(
-        item =>
-          Number(item.minggu_ke) ===
-          Number(startWeek)
-      );
+      realByWeek.get(Number(startWeek));
     const addendumAdjustment =
       new Decimal(
         startWeekReal?.penyesuaian_adendum || 0
@@ -1730,9 +1726,7 @@ weeks.flatMap((w)=>{
   const chartData = weeks.map((w) => {
 
     const real =
-      realData.find(
-        r => Number(r.minggu_ke) === Number(w.minggu_ke)
-      );
+      realByWeek.get(Number(w.minggu_ke));
 
     const target =
       getActivePlanCumulative(w.minggu_ke);
@@ -2087,22 +2081,9 @@ weeks.flatMap((w)=>{
                   selectedVersion?.effective_week || 1
               );
 
-              const isAddendumEditableWeek =
-              selectedVersion?.revision > 0 &&
-              Number(w.minggu_ke) >= effectiveWeek;
-
               const cellData =
-              schedule.find(
-                  (s)=>
-                  Number(s.boq_id)===Number(item.id)
-                  &&
-                  Number(s.minggu_ke)===Number(w.minggu_ke)
-                  &&
-                  (
-                    !isAddendumEditableWeek ||
-                    Number(s.version_id) ===
-                    Number(selectedVersion?.id)
-                  )
+              scheduleByBoqWeek.get(
+                `${Number(item.id)}-${Number(w.minggu_ke)}`
               );
 
               const val =
@@ -2197,7 +2178,6 @@ weeks.flatMap((w)=>{
                           return;
                         }
 
-                        const calculatedValue =
                         handleSingleCellChange(
                         item.id,
                         w.minggu_ke,

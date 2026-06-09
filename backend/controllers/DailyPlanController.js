@@ -133,6 +133,165 @@ const normalizeAddendumWeeklyPlan = async (
   return bobotPerMinggu;
 };
 
+const buildWeeklyPlanSummary = async (
+  project_id,
+  data
+) => {
+  const result = [];
+  let kumulatif = 0;
+
+  const versions =
+    await ProjectVersionModel.findAll({
+      where: { project_id },
+      order: [["revision", "ASC"]]
+    });
+
+  const addendumVersions =
+    versions.filter(
+      version =>
+        Number(version.revision || 0) > 0
+    );
+
+  const getActiveAddendum = (weekNumber) => {
+    return addendumVersions.find((version, index) => {
+      const nextVersion =
+        addendumVersions[index + 1];
+      const startWeek =
+        Number(version.effective_week || 1);
+      const endWeek =
+        nextVersion
+          ? Number(nextVersion.effective_week || 1) - 1
+          : Infinity;
+
+      return (
+        weekNumber >= startWeek &&
+        weekNumber <= endWeek
+      );
+    });
+  };
+
+  const group = {};
+
+  data.forEach((item) => {
+    const minggu = item.minggu_ke;
+
+    if (!group[minggu]) {
+      group[minggu] = [];
+    }
+
+    group[minggu].push(item);
+  });
+
+  const schedules =
+    await getScheduleChainByProject(project_id);
+  const bobotPerMinggu = {};
+
+  schedules.forEach((schedule) => {
+    const minggu =
+      Number(schedule.minggu_ke);
+
+    bobotPerMinggu[minggu] =
+      Number(
+        (
+          Number(bobotPerMinggu[minggu] || 0) +
+          Number(schedule.bobot || 0)
+        ).toFixed(3)
+      );
+  });
+
+  for (const minggu of Object.keys(group)
+    .map(Number)
+    .sort((a, b) => a - b)) {
+    const items = group[minggu];
+    const mingguNumber =
+      Number(minggu);
+
+    const tglAwal = items[0].tanggal;
+    const tglAkhir = items[items.length - 1].tanggal;
+    const total =
+      Number(
+        bobotPerMinggu[minggu] ??
+        items[0].bobot_mingguan
+      );
+    const activeAddendum =
+      getActiveAddendum(mingguNumber);
+
+    kumulatif =
+      Number(
+        Number(
+          items[items.length - 1]
+            ?.rencana_kumulatif ??
+          Math.min(kumulatif + total, 100)
+        ).toFixed(3)
+      );
+
+    result.push({
+      minggu_ke: mingguNumber,
+      tgl_awal: tglAwal,
+      tgl_akhir: tglAkhir,
+      bobot_mingguan: Number(total.toFixed(3)),
+      kumulatif,
+      is_addendum: Boolean(activeAddendum),
+      addendum_seed: null
+    });
+  }
+
+  return result;
+};
+
+const buildMonthlyPlanSummary = (data) => {
+  const group = {};
+
+  data.forEach((item) => {
+    const bulan = item.bulan_ke;
+
+    if (!group[bulan]) {
+      group[bulan] = {
+        items: []
+      };
+    }
+
+    group[bulan].items.push(item);
+  });
+
+  const result = [];
+  let previousCumulative = 0;
+
+  Object.keys(group)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .forEach((bulan) => {
+      const dataBulan = group[bulan];
+      const items = dataBulan.items;
+      const tglAwal = items[0].tanggal;
+      const tglAkhir = items[items.length - 1].tanggal;
+      const cumulative =
+        Number(
+          items[items.length - 1]
+            ?.rencana_kumulatif || 0
+        );
+      const total =
+        Number(
+          Math.max(
+            cumulative - previousCumulative,
+            0
+          ).toFixed(3)
+        );
+
+      result.push({
+        bulan_ke: Number(bulan),
+        tgl_awal: tglAwal,
+        tgl_akhir: tglAkhir,
+        bobot_bulanan: total,
+        kumulatif: cumulative
+      });
+
+      previousCumulative = cumulative;
+    });
+
+  return result;
+};
+
 
 
 export const generateDailyPlan = async (req, res) => {
@@ -165,6 +324,21 @@ export const generateDailyPlan = async (req, res) => {
       where: { project_id }
     });
 
+    const normalizedPeriods =
+      periods.map((period) => {
+        const pStart = new Date(period.start_date);
+        const pEnd = new Date(period.end_date);
+
+        pStart.setHours(0, 0, 0, 0);
+        pEnd.setHours(0, 0, 0, 0);
+
+        return {
+          bulan_ke: period.bulan_ke,
+          start_time: pStart.getTime(),
+          end_time: pEnd.getTime()
+        };
+      });
+
     const versions = await ProjectVersionModel.findAll({
       where: { project_id },
       order: [["revision", "ASC"]]
@@ -181,10 +355,6 @@ export const generateDailyPlan = async (req, res) => {
     });
 
     const bobotPerMinggu = planTimeline.perWeek || {};
-
-    console.log("PLAN PER WEEK:", planTimeline.perWeek);
-    console.log("PLAN WEEK START:", planTimeline.weekStart);
-    console.log("PLAN CUMULATIVE:", planTimeline.cumulative);
 
     const hariPerMinggu = {};
     let tempDate = new Date(start);
@@ -299,14 +469,12 @@ export const generateDailyPlan = async (req, res) => {
       const dd = String(currentDate.getDate()).padStart(2, "0");
       const dateStr = `${yyyy}-${mm}-${dd}`;
 
-      const periodMatch = periods.find((p) => {
-        let pStart = new Date(p.start_date);
-        let pEnd = new Date(p.end_date);
-
-        pStart.setHours(0, 0, 0, 0);
-        pEnd.setHours(0, 0, 0, 0);
-
-        return currentDate >= pStart && currentDate <= pEnd;
+      const currentTime = currentDate.getTime();
+      const periodMatch = normalizedPeriods.find((p) => {
+        return (
+          currentTime >= p.start_time &&
+          currentTime <= p.end_time
+        );
       });
 
       bulkData.push({
@@ -356,6 +524,31 @@ export const getDailyPlan = async (req, res) => {
   }
 };
 
+export const getDailyPlanSummary = async (req, res) => {
+  try {
+    const project_id = Number(req.params.project_id);
+
+    const data = await DailyPlan.findAll({
+      where: { project_id },
+      order: [["tanggal", "ASC"]],
+    });
+
+    const [weekly, monthly] =
+      await Promise.all([
+        buildWeeklyPlanSummary(project_id, data),
+        Promise.resolve(buildMonthlyPlanSummary(data))
+      ]);
+
+    res.json({
+      daily: data,
+      weekly,
+      monthly
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const getWeeklyReport = async (req, res) => {
   try {
    const project_id = Number(req.params.project_id);
@@ -365,108 +558,11 @@ export const getWeeklyReport = async (req, res) => {
       order: [["tanggal", "ASC"]],
     });
 
-    const result = [];
-    let kumulatif = 0;
-
-    const versions =
-      await ProjectVersionModel.findAll({
-        where: { project_id },
-        order: [["revision", "ASC"]]
-      });
-
-    const addendumVersions =
-      versions.filter(
-        version =>
-          Number(version.revision || 0) > 0
+    const result =
+      await buildWeeklyPlanSummary(
+        project_id,
+        data
       );
-
-    const getActiveAddendum = (weekNumber) => {
-      return addendumVersions.find((version, index) => {
-        const nextVersion =
-          addendumVersions[index + 1];
-        const startWeek =
-          Number(version.effective_week || 1);
-        const endWeek =
-          nextVersion
-            ? Number(nextVersion.effective_week || 1) - 1
-            : Infinity;
-
-        return (
-          weekNumber >= startWeek &&
-          weekNumber <= endWeek
-        );
-      });
-    };
-
-    const group = {};
-
-    // grouping per minggu
-    data.forEach((item) => {
-      const minggu = item.minggu_ke;
-
-      if (!group[minggu]) {
-        group[minggu] = [];
-      }
-
-      group[minggu].push(item);
-    });
-
-    const schedules =
-      await getScheduleChainByProject(project_id);
-    const bobotPerMinggu = {};
-
-    schedules.forEach((schedule) => {
-      const minggu =
-        Number(schedule.minggu_ke);
-
-      bobotPerMinggu[minggu] =
-        Number(
-          (
-            Number(bobotPerMinggu[minggu] || 0) +
-            Number(schedule.bobot || 0)
-          ).toFixed(3)
-        );
-    });
-
-    for (const minggu of Object.keys(group)
-      .map(Number)
-      .sort((a, b) => a - b)) {
-      const items = group[minggu];
-      const mingguNumber =
-        Number(minggu);
-
-      const tglAwal = items[0].tanggal;
-      const tglAkhir = items[items.length - 1].tanggal;
-
-      // 🔥 FIX: ambil langsung bobot_mingguan
-      const total =
-        Number(
-          bobotPerMinggu[minggu] ??
-          items[0].bobot_mingguan
-        );
-
-      const activeAddendum =
-        getActiveAddendum(mingguNumber);
-
-      kumulatif =
-        Number(
-          Number(
-            items[items.length - 1]
-              ?.rencana_kumulatif ??
-            Math.min(kumulatif + total, 100)
-          ).toFixed(3)
-        );
-
-      result.push({
-        minggu_ke: mingguNumber,
-        tgl_awal: tglAwal,
-        tgl_akhir: tglAkhir,
-        bobot_mingguan: Number(total.toFixed(3)),
-        kumulatif,
-        is_addendum: Boolean(activeAddendum),
-        addendum_seed: null
-      });
-    }
 
     res.json(result);
 
@@ -484,57 +580,8 @@ export const getMonthlyReport = async (req, res) => {
       order: [["tanggal", "ASC"]],
     });
 
-    const group = {};
-
-    // 🔥 grouping per bulan
-    data.forEach((item) => {
-      const bulan = item.bulan_ke;
-
-      if (!group[bulan]) {
-        group[bulan] = {
-          items: [],
-          minggu: {}
-        };
-      }
-
-      group[bulan].items.push(item);
-
-      // 🔥 ambil bobot unik per minggu
-      if (!group[bulan].minggu[item.minggu_ke]) {
-        group[bulan].minggu[item.minggu_ke] = Number(item.bobot_mingguan);
-      }
-    });
-
-    const result = [];
-
-    Object.keys(group)
-      .map(Number)
-      .sort((a, b) => a - b)
-      .forEach((bulan) => {
-      const dataBulan = group[bulan];
-
-      const items = dataBulan.items;
-
-      // 🔥 tanggal awal & akhir
-      const tglAwal = items[0].tanggal;
-      const tglAkhir = items[items.length - 1].tanggal;
-
-      // 🔥 total bobot (unik per minggu)
-      const mingguValues = Object.values(dataBulan.minggu);
-      const total = mingguValues.reduce((a, b) => a + b, 0);
-
-      result.push({
-        bulan_ke: Number(bulan),
-        tgl_awal: tglAwal,
-        tgl_akhir: tglAkhir,
-        bobot_bulanan: Number(total.toFixed(3)),
-        kumulatif:
-          Number(
-            items[items.length - 1]
-              ?.rencana_kumulatif || 0
-          )
-      });
-    });
+    const result =
+      buildMonthlyPlanSummary(data);
 
     res.json(result);
 

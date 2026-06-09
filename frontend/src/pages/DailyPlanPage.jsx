@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
-import { ArrowLeft, CalendarDays, BarChart as BarChartIcon, Zap, Calendar as CalIcon, CalendarPlus, Clock, CalendarRange, Info } from "lucide-react";
+import { ArrowLeft, CalendarDays, Zap, CalendarRange, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
-import { m, AnimatePresence, spring } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
+
+const MotionDiv = m.div;
 
 export default function DailyPlanPage() {
   const { id: paramId } = useParams();
@@ -20,6 +22,8 @@ export default function DailyPlanPage() {
   const [weekly, setWeekly] = useState([]);
   const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [dailyPage, setDailyPage] = useState(1);
+  const dailyRowsPerPage = 30;
   const [weekSetting, setWeekSetting] = useState({
     week_mode: "static",
     week_start_day: "Senin"
@@ -40,13 +44,14 @@ export default function DailyPlanPage() {
 
   const fetchAll = async () => {
     try {
-      const dailyRes = await api.get(`/daily-plan/${projectId}`);
-      const weeklyRes = await api.get(`/daily-plan/weekly-report/${projectId}`);
-      const monthlyRes = await api.get(`/daily-plan/monthly-report/${projectId}`);
+      const res = await api.get(
+        `/daily-plan/summary/${projectId}`
+      );
 
-      setData(dailyRes.data);
-      setWeekly(weeklyRes.data);
-      setMonthly(monthlyRes.data);
+      setData(res.data.daily || []);
+      setWeekly(res.data.weekly || []);
+      setMonthly(res.data.monthly || []);
+      setDailyPage(1);
     } catch (err) {
       console.error(err);
     }
@@ -62,11 +67,17 @@ export default function DailyPlanPage() {
   };
 
   useEffect(() => {
+    const fetchInitialData = async () => {
+      await Promise.all([
+        fetchAll(),
+        fetchPeriods(),
+        fetchProjectSetting()
+      ]);
+    };
 
-    fetchAll();
-    fetchPeriods();
-    fetchProjectSetting();
+    fetchInitialData();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
 
@@ -103,7 +114,7 @@ export default function DailyPlanPage() {
       setEditId(null);
 
       fetchPeriods();
-    } catch (err) {
+    } catch {
       alert("Gagal simpan");
     }
   };
@@ -115,7 +126,7 @@ export default function DailyPlanPage() {
     try {
       await api.delete(`/project-periods/${id}`);
       fetchPeriods();
-    } catch (err) {
+    } catch {
       alert("Gagal hapus");
     }
   };
@@ -137,14 +148,41 @@ export default function DailyPlanPage() {
   };
 
   // Prepare chart data format
-  const chartDataWeekly = weekly.map(w => ({
+  const chartDataWeekly = useMemo(() => weekly.map(w => ({
     name: `M-${w.minggu_ke}`,
     Bobot: Number(w.bobot_mingguan).toFixed(2),
     Kumulatif: Number(w.kumulatif).toFixed(2)
-  }));
+  })), [weekly]);
 
   const hasAddendumWeekly =
-    weekly.some(item => item.is_addendum);
+    useMemo(
+      () => weekly.some(item => item.is_addendum),
+      [weekly]
+    );
+
+  const dailyTotalPages = Math.max(
+    1,
+    Math.ceil(data.length / dailyRowsPerPage)
+  );
+
+  const paginatedDailyRows = useMemo(() => {
+    const startIndex =
+      (dailyPage - 1) * dailyRowsPerPage;
+
+    return data.slice(
+      startIndex,
+      startIndex + dailyRowsPerPage
+    );
+  }, [data, dailyPage]);
+
+  const paginateDailyRows = (page) => {
+    setDailyPage(
+      Math.min(
+        Math.max(page, 1),
+        dailyTotalPages
+      )
+    );
+  };
 
   const fetchProjectSetting = async () => {
     try {
@@ -186,7 +224,7 @@ export default function DailyPlanPage() {
 
     setShowWeekModal(false);
 
-  } catch (err) {
+  } catch {
 
     alert("Gagal menyimpan setting");
 
@@ -408,7 +446,7 @@ export default function DailyPlanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {data.map((item) => (
+                {paginatedDailyRows.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                     <td className="py-3 px-4 font-bold text-gray-800 text-center bg-gray-50/50">{item.hari_ke}</td>
                     <td className="py-3 px-4">
@@ -430,15 +468,54 @@ export default function DailyPlanPage() {
               </tbody>
             </table>
           </div>
+          {data.length > dailyRowsPerPage && (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-t border-gray-100 bg-white px-5 py-4">
+              <div className="text-sm text-gray-500">
+                Menampilkan{" "}
+                <span className="font-bold text-gray-800">
+                  {paginatedDailyRows.length}
+                </span>{" "}
+                dari{" "}
+                <span className="font-bold text-gray-800">
+                  {data.length}
+                </span>{" "}
+                hari
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => paginateDailyRows(dailyPage - 1)}
+                  disabled={dailyPage === 1}
+                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <span className="px-3 py-2 rounded-lg bg-gray-50 text-sm font-bold text-gray-700">
+                  {dailyPage} / {dailyTotalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => paginateDailyRows(dailyPage + 1)}
+                  disabled={dailyPage === dailyTotalPages}
+                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
 
       <AnimatePresence>
         {showModal && (
-          <m.div transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40  flex items-center justify-center z-50">
+          <MotionDiv transition={{ duration: 0.1 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40  flex items-center justify-center z-50">
 
-            <m.div transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-3xl rounded-md p-6 shadow-xl border border-gray-100 animate-in zoom-in-95">
+            <MotionDiv transition={{ duration: 0.3 }} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white w-full max-w-3xl rounded-md p-6 shadow-xl border border-gray-100 animate-in zoom-in-95">
 
               {/* HEADER */}
               <div className="flex justify-between items-center mb-6">
@@ -586,8 +663,8 @@ export default function DailyPlanPage() {
                 </button>
               </div>
 
-            </m.div>
-          </m.div>
+            </MotionDiv>
+          </MotionDiv>
         )}
 
       </AnimatePresence>
@@ -596,7 +673,7 @@ export default function DailyPlanPage() {
 
         {showWeekModal && (
 
-          <m.div
+          <MotionDiv
             transition={{ duration: 0.1 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -608,7 +685,7 @@ export default function DailyPlanPage() {
             "
           >
 
-            <m.div
+            <MotionDiv
               transition={{ duration: 0.3 }}
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -723,9 +800,9 @@ export default function DailyPlanPage() {
 
               </div>
 
-            </m.div>
+            </MotionDiv>
 
-          </m.div>
+          </MotionDiv>
 
         )}
 

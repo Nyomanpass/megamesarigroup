@@ -286,10 +286,7 @@ export const getScheduleChainByProject = async (project_id) => {
       )
       .sort((a, b) => a - b)[0] || null;
 
-  const finalData = [];
-
-  for (let i = 0; i < versions.length; i++) {
-    const version = versions[i];
+  const scheduleRequests = versions.map((version, i) => {
     const nextVersion = versions[i + 1];
 
     const where = {
@@ -316,16 +313,17 @@ export const getScheduleChainByProject = async (project_id) => {
       where.minggu_ke = weekWhere;
     }
 
-    const schedules = await Schedule.findAll({
+    return Schedule.findAll({
       where,
       order: [
         ["minggu_ke", "ASC"],
         ["boq_id", "ASC"]
       ]
     });
+  });
 
-    finalData.push(...schedules);
-  }
+  const finalData =
+    (await Promise.all(scheduleRequests)).flat();
 
   return finalData;
 };
@@ -520,74 +518,67 @@ export const getScheduleByProject = async (req, res) => {
         ]
       });
 
-    const finalData = [];
+    const firstAddendumWeek =
+      versionChain
+        .filter(isAddendumVersion)
+        .map(item =>
+          Number(item.effective_week || 1)
+        )
+        .sort((a, b) => a - b)[0] || null;
 
-    for (
-      let i = 0;
-      i < versionChain.length;
-      i++
-    ) {
+    const scheduleRequests =
+      versionChain.map((version, i) => {
+        const nextVersion =
+          versionChain[i + 1];
 
-      const version =
-        versionChain[i];
+        const weekWhere = {};
 
-      const nextVersion =
-        versionChain[i + 1];
-
-      const weekWhere = {};
-
-      if (isAddendumVersion(version)) {
-        weekWhere[Op.gte] =
-          Number(
-            version.effective_week
-          );
-      } else {
-        const firstAddendumWeek =
-          versionChain
-            .filter(isAddendumVersion)
-            .map(item =>
-              Number(item.effective_week || 1)
-            )
-            .sort((a, b) => a - b)[0] || null;
-
-        if (firstAddendumWeek) {
-          weekWhere[Op.lt] =
-            firstAddendumWeek;
+        if (isAddendumVersion(version)) {
+          weekWhere[Op.gte] =
+            Number(
+              version.effective_week
+            );
+        } else {
+          if (firstAddendumWeek) {
+            weekWhere[Op.lt] =
+              firstAddendumWeek;
+          }
         }
-      }
 
-      if (
-        nextVersion &&
-        isAddendumVersion(version)
-      ) {
-        weekWhere[Op.lt] =
-          Number(
-            nextVersion.effective_week
-          );
-      }
+        if (
+          nextVersion &&
+          isAddendumVersion(version)
+        ) {
+          weekWhere[Op.lt] =
+            Number(
+              nextVersion.effective_week
+            );
+        }
 
-      const where = {
-        project_id,
-        version_id:
-          version.id
-      };
+        const where = {
+          project_id,
+          version_id:
+            version.id
+        };
 
-      if (
-        Reflect.ownKeys(weekWhere).length > 0
-      ) {
-        where.minggu_ke =
-          weekWhere;
-      }
+        if (
+          Reflect.ownKeys(weekWhere).length > 0
+        ) {
+          where.minggu_ke =
+            weekWhere;
+        }
 
-      const schedules =
-        await Schedule.findAll({
-          where
+        return Schedule.findAll({
+          where,
+          order: [
+            ["minggu_ke", "ASC"],
+            ["boq_id", "ASC"]
+          ]
         });
+      });
 
-      finalData.push(
-        ...schedules
-      );
-    }
+    const finalData =
+      (await Promise.all(scheduleRequests)).flat();
 
     // =========================
     // SORT

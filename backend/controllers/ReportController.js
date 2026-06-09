@@ -296,7 +296,10 @@ const buildAddendumPlanTimeline = async (
   };
 };
 
-export const buildWeeklyReport = async (project_id) => {
+export const buildWeeklyReport = async (
+  project_id,
+  options = {}
+) => {
     // =========================
     // 🔥 DATA
     // =========================
@@ -341,6 +344,11 @@ export const buildWeeklyReport = async (project_id) => {
         Object.keys(group).map(Number)
       );
 
+    const onlyWeeks =
+      Array.isArray(options.onlyWeeks)
+        ? options.onlyWeeks.map(Number)
+        : null;
+
     const result=[];
 
     const totalHari =
@@ -359,6 +367,13 @@ export const buildWeeklyReport = async (project_id) => {
     // 🔥 LOOP MINGGU
     // =========================
     for (const minggu in group) {
+    if (
+      onlyWeeks &&
+      !onlyWeeks.includes(Number(minggu))
+    ) {
+      continue;
+    }
+
     // ==========================================
     // 1. VERSI AKTIF BERDASARKAN MINGGU
     // ==========================================
@@ -533,8 +548,18 @@ export const getWeeklyReport = async (req, res) => {
 
     const { project_id } = req.params;
 
+    const onlyWeeks =
+      req.query?.minggu
+        ? String(req.query.minggu)
+            .split(",")
+            .map(item => Number(item.trim()))
+            .filter(Number.isFinite)
+        : null;
+
     const result =
-      await buildWeeklyReport(project_id);
+      await buildWeeklyReport(project_id, {
+        onlyWeeks
+      });
 
     res.json(result);
 

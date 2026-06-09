@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import api, { UPLOADS_BASE_URL } from "../api";
 import { ArrowLeft, TrendingUp, Save, X, Edit, Trash2, PlusCircle, CheckCircle, Search, AlertCircle, ChevronLeft, ChevronRight, Calendar, ChevronDown } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion as m, AnimatePresence } from "motion/react";
 import { useRef } from "react";
-import { m } from "framer-motion";
 import {
   Upload,
   Pencil,
   ImagePlus
 } from "lucide-react";
 
+const MotionDiv = m.div;
 
 export default function DailyProgressPage() {
   const { id: paramId } = useParams();
@@ -33,7 +33,6 @@ export default function DailyProgressPage() {
   const [selectedProgress, setSelectedProgress] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [uploadFiles, setUploadFiles] = useState([]);
-  const [editPhotoId, setEditPhotoId] = useState(null);
 
   const getPhotoUrl = (photoUrl) => {
     if (!photoUrl) return "";
@@ -83,45 +82,97 @@ export default function DailyProgressPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [showDateDropdown, setShowDateDropdown] = useState(false);
-  const itemsPerPage = 10;
-  const filteredBoq = boqList.filter(
-    b => b.tipe === "item"
-  );
-  const boqMap = {};
-  boqList.forEach(b => {
-    boqMap[b.id] = b;
-  });
+  const boqById = useMemo(() => {
+    const map = new Map();
+
+    boqList.forEach(item => {
+      map.set(Number(item.id), item);
+
+      if (item.boq_item_id) {
+        map.set(Number(item.boq_item_id), item);
+      }
+    });
+
+    return map;
+  }, [boqList]);
+
+  const dailyPlanByDay = useMemo(() => {
+    const map = new Map();
+
+    dailyPlan.forEach(item => {
+      map.set(Number(item.hari_ke), item);
+    });
+
+    return map;
+  }, [dailyPlan]);
+
+  const dailyPlanByDate = useMemo(() => {
+    const map = new Map();
+
+    dailyPlan.forEach(item => {
+      map.set(item.tanggal, item);
+    });
+
+    return map;
+  }, [dailyPlan]);
+
+  const dataById = useMemo(() => {
+    const map = new Map();
+
+    data.forEach(item => {
+      map.set(Number(item.id), item);
+    });
+
+    return map;
+  }, [data]);
+
+  const progressVolumeByBoq = useMemo(() => {
+    const map = new Map();
+
+    data.forEach(item => {
+      const boqId = Number(item.boq_id || item.boq?.id);
+
+      map.set(
+        boqId,
+        Number(map.get(boqId) || 0) +
+          Number(item.volume || 0)
+      );
+    });
+
+    return map;
+  }, [data]);
 
 
   // ================= FETCH DATA =================
   const fetchData = async () => {
     try {
       const res = await api.get(`/daily-progress?project_id=${id}`);
-      setData(res.data.filter((d) => d.project_id == id));
+      setData(res.data);
       setCurrentPage(1); // Reset to page 1 on new fetch
     } catch (err) {
       console.error("Gagal fetch progress", err);
     }
   };
 
-  const getFormWeek = () => {
+  const formWeek = useMemo(() => {
     if (modeInput === "weekly" && form.minggu_ke) {
       return Number(form.minggu_ke);
     }
 
     if (form.hari_ke) {
       const plan =
-        dailyPlan.find(
-          item =>
-            Number(item.hari_ke) ===
-            Number(form.hari_ke)
-        );
+        dailyPlanByDay.get(Number(form.hari_ke));
 
       return Number(plan?.minggu_ke || 0);
     }
 
     return 0;
-  };
+  }, [
+    modeInput,
+    form.minggu_ke,
+    form.hari_ke,
+    dailyPlanByDay
+  ]);
 
   const getActiveVersionIdByWeek = (weekNumber) => {
     if (!weekNumber || versions.length === 0) {
@@ -191,25 +242,22 @@ export default function DailyProgressPage() {
 
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     fetchVersions();
     fetchDailyPlan();
   }, [id]);
 
   useEffect(() => {
-    const weekNumber =
-      getFormWeek();
     const versionId =
-      getActiveVersionIdByWeek(weekNumber);
+      getActiveVersionIdByWeek(formWeek);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBoq(versionId);
   }, [
     id,
     versions,
-    dailyPlan,
-    form.hari_ke,
-    form.minggu_ke,
-    modeInput
+    formWeek
   ]);
 
   useEffect(() => {
@@ -218,18 +266,15 @@ export default function DailyProgressPage() {
     }
 
     const boq =
-      boqList.find(
-        b =>
-          Number(b.id) === Number(form.boq_id) ||
-          Number(b.boq_item_id) === Number(form.boq_id)
-      );
+      boqById.get(Number(form.boq_id));
 
     if (boq) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchBoqQuery(
         `${boq.kode ? boq.kode + " - " : ""}${boq.uraian}`
       );
     }
-  }, [boqList, form.boq_id]);
+  }, [boqById, form.boq_id]);
 
 
 
@@ -237,7 +282,7 @@ export default function DailyProgressPage() {
     try {
       if (!boq_id) return;
 
-      const boq = boqList.find(b => b.id == boq_id);
+      const boq = boqById.get(Number(boq_id));
       if (!boq || !boq.analisa_id) return;
 
       const res = await api.get(`/project-analisa-detail/${boq.analisa_id}`);
@@ -275,16 +320,16 @@ export default function DailyProgressPage() {
 
 
   useEffect(() => {
-    if (form.boq_id) {
+    if (showPreview && form.boq_id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadPreviewAnalisa(form.boq_id, form.volume);
     }
-  }, [form.boq_id, form.volume]);
+  }, [form.boq_id, form.volume, showPreview]);
 
   const handleCopy = (item) => {
     
-    const plan = dailyPlan.find(
-      (d) => d.tanggal === item.tanggal
-    );
+    const plan =
+      dailyPlanByDate.get(item.tanggal);
 
     setForm({
       boq_id: item.boq_id,
@@ -298,7 +343,8 @@ export default function DailyProgressPage() {
     
     setEditId(null);
 
-    const boq = boqList.find(b => b.id === item.boq_id);
+    const boq =
+      boqById.get(Number(item.boq_id));
 
     if (boq) {
       setSearchBoqQuery(
@@ -316,11 +362,11 @@ export default function DailyProgressPage() {
     setEditId(item.id);
 
     // cari hari_ke dari dailyPlan berdasarkan tanggal
-    const plan = dailyPlan.find(
-      (d) => d.tanggal === item.tanggal
-    );
+    const plan =
+      dailyPlanByDate.get(item.tanggal);
 
-      const boq = boqList.find(b => b.id == item.boq_id);
+      const boq =
+        boqById.get(Number(item.boq_id));
 
     setForm({
       boq_id: item.boq_id,
@@ -354,7 +400,7 @@ export default function DailyProgressPage() {
       alert("✅ Berhasil dihapus");
 
       fetchData(); // refresh data
-    } catch (err) {
+    } catch {
       alert("❌ Gagal hapus");
     }
   };
@@ -459,18 +505,12 @@ export default function DailyProgressPage() {
 
     const boqIdFix =
       form.boq_id ||
-      data.find(
-        d => d.id === editId
-      )?.boq_id;
+      dataById.get(Number(editId))?.boq_id;
 
     if (!boqIdFix) return null;
 
       const selectedBoq =
-        boqList.find(
-        b =>
-          Number(b.id) === Number(boqIdFix) ||
-          Number(b.boq_item_id) === Number(boqIdFix)
-        );
+        boqById.get(Number(boqIdFix));
 
     if (!selectedBoq) return null;
 
@@ -478,9 +518,7 @@ export default function DailyProgressPage() {
       parseFloat(form.volume || 0);
 
     const currentItem =
-      data.find(
-        d => d.id === editId
-      );
+      dataById.get(Number(editId));
 
     const volumeLama =
       parseFloat(
@@ -489,16 +527,8 @@ export default function DailyProgressPage() {
 
     // 🔥 total progress existing
    const totalSemua =
-      data
-      .filter(
-      d =>
-      Number(d.boq_id) === Number(boqIdFix) ||
-      Number(d.boq?.id) === Number(boqIdFix)
-      )
-      .reduce(
-      (sum,item)=>
-      sum + Number(item.volume || 0),
-      0
+      Number(
+        progressVolumeByBoq.get(Number(boqIdFix)) || 0
       );
 
     // 🔥 edit atau create
@@ -560,11 +590,7 @@ export default function DailyProgressPage() {
   const summary = getSummary();
 
   const selectedFormBoq =
-    boqList.find(
-      b =>
-        Number(b.id) === Number(form.boq_id) ||
-        Number(b.boq_item_id) === Number(form.boq_id)
-    );
+    boqById.get(Number(form.boq_id));
 
   const isWholeNumber = (value) =>
     Math.abs(Number(value) - Math.round(Number(value))) < 0.0000001;
@@ -592,22 +618,12 @@ export default function DailyProgressPage() {
     const target = Number(selectedFormBoq.volume || 0);
 
     const totalSemua =
-      data
-        .filter(
-          d =>
-            Number(d.boq_id) === Number(boqIdFix) ||
-            Number(d.boq?.id) === Number(boqIdFix)
-        )
-        .reduce(
-          (sum, item) =>
-            sum + Number(item.volume || 0),
-          0
-        );
+      Number(
+        progressVolumeByBoq.get(Number(boqIdFix)) || 0
+      );
 
     const currentItem =
-      data.find(
-        d => d.id === editId
-      );
+      dataById.get(Number(editId));
 
     const volumeLama =
       Number(currentItem?.volume || 0);
@@ -657,29 +673,37 @@ export default function DailyProgressPage() {
   };
 
 // ================= GROUP BY TANGGAL =================
-const groupedByTanggal = {};
+const groupedByTanggal = useMemo(() => {
+  const grouped = {};
 
-data.forEach(item => {
-  const key = new Date(item.tanggal).toDateString(); // 🔥 fix pakai tanggal
+  data.forEach(item => {
+    const key =
+      new Date(item.tanggal).toDateString();
 
-  if (!groupedByTanggal[key]) {
-    groupedByTanggal[key] = [];
-  }
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
 
-  groupedByTanggal[key].push(item);
-});
+    grouped[key].push(item);
+  });
 
-// 🔥 urut terbaru di atas
-const tanggalKeys = Object.keys(groupedByTanggal).sort(
-  (a, b) => new Date(b) - new Date(a)
-);
+  return grouped;
+}, [data]);
 
-// 🔥 ambil current
-const currentTanggal = tanggalKeys[currentPage - 1] || null;
+const tanggalKeys = useMemo(() => {
+  return Object.keys(groupedByTanggal).sort(
+    (a, b) => new Date(b) - new Date(a)
+  );
+}, [groupedByTanggal]);
 
-const currentItems = currentTanggal
-  ? groupedByTanggal[currentTanggal]
-  : [];
+const currentTanggal =
+  tanggalKeys[currentPage - 1] || null;
+
+const currentItems = useMemo(() => {
+  return currentTanggal
+    ? groupedByTanggal[currentTanggal] || []
+    : [];
+}, [groupedByTanggal, currentTanggal]);
 
 const totalPages = tanggalKeys.length;
 
@@ -699,6 +723,7 @@ const totalPages = tanggalKeys.length;
         allOpen[b.id] = true;
       }
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpanded(allOpen);
   }
 }, [isBoqDropdownOpen]);
@@ -751,10 +776,13 @@ const filterTree = (nodes, query) => {
     .filter(Boolean);
 };
 
-  const boqTree = buildTree(boqList);
-
-  // 🔥 TARUH DI SINI
-  const filteredTree = filterTree(boqTree, searchBoqQuery);
+  const filteredTree = useMemo(
+    () => filterTree(
+      buildTree(boqList),
+      searchBoqQuery
+    ),
+    [boqList, searchBoqQuery]
+  );
 
 const renderTree = (nodes, level = 0) => {
   return nodes.map(node => {
@@ -827,29 +855,26 @@ const renderTree = (nodes, level = 0) => {
 };
 
 
-const groupedByWeek = {};
+const groupedByWeek = useMemo(() => {
+  const grouped = {};
 
-dailyPlan.forEach((d) => {
-  // 🔥 hitung minggu (1 minggu = 7 hari)
-  const week = Math.ceil(d.hari_ke / 7);
+  dailyPlan.forEach((d) => {
+    const week = Math.ceil(d.hari_ke / 7);
 
-  if (!groupedByWeek[week]) {
-    groupedByWeek[week] = [];
-  }
+    if (!grouped[week]) {
+      grouped[week] = [];
+    }
 
-  groupedByWeek[week].push(d);
-});
+    grouped[week].push(d);
+  });
 
-const buildRows = () => {
+  return grouped;
+}, [dailyPlan]);
+
+const tableRows = useMemo(() => {
 
   // 🔥 PAKAI currentItems
   if (!currentItems.length) return [];
-
-  const map = {};
-
-  boqList.forEach((b) => {
-    map[Number(b.id)] = b;
-  });
 
   const getParent = (boq) => {
 
@@ -869,7 +894,7 @@ const buildRows = () => {
       }
 
       current =
-        map[Number(current.parent_id)];
+        boqById.get(Number(current.parent_id));
 
     }
 
@@ -884,10 +909,10 @@ const buildRows = () => {
   const sortedData = [...currentItems].sort((a, b) => {
 
     const aKode =
-      map[Number(a.boq_id)]?.kode || "";
+      boqById.get(Number(a.boq_id))?.kode || "";
 
     const bKode =
-      map[Number(b.boq_id)]?.kode || "";
+      boqById.get(Number(b.boq_id))?.kode || "";
 
     return aKode.localeCompare(
       bKode,
@@ -905,7 +930,7 @@ const buildRows = () => {
   sortedData.forEach((item) => {
 
     const boq =
-      map[Number(item.boq_id)];
+      boqById.get(Number(item.boq_id));
 
     if (!boq) return;
 
@@ -998,7 +1023,7 @@ const buildRows = () => {
 
   return rows;
 
-};
+}, [currentItems, boqById]);
 
 
   const handleOpenPhotos =
@@ -1674,7 +1699,7 @@ const buildRows = () => {
 
          <AnimatePresence>
           {isBoqDropdownOpen && (
-            <m.div
+            <MotionDiv
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -1682,7 +1707,7 @@ const buildRows = () => {
               className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4"
             >
 
-              <m.div
+              <MotionDiv
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -1723,8 +1748,8 @@ const buildRows = () => {
                   {renderTree(filteredTree)}
                 </div>
 
-              </m.div>
-            </m.div>
+              </MotionDiv>
+            </MotionDiv>
           )}
         </AnimatePresence>
 
@@ -1930,7 +1955,7 @@ const buildRows = () => {
                 </tr>
               </thead>
              <tbody className="divide-y divide-gray-50">
-                {buildRows().map((row, i) => {
+                {tableRows.map((row, i) => {
 
                     // ================= HEADER =================
                     if (row.type === "header") {
@@ -2106,16 +2131,16 @@ const buildRows = () => {
                           : "Pilih Tanggal"}
                       </span>
                     </div>
-                    <motion.div animate={{ rotate: showDateDropdown ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <MotionDiv animate={{ rotate: showDateDropdown ? 180 : 0 }} transition={{ duration: 0.2 }}>
                       <ChevronDown size={15} />
-                    </motion.div>
+                    </MotionDiv>
                   </button>
 
                   <AnimatePresence>
                     {showDateDropdown && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowDateDropdown(false)} />
-                        <motion.div
+                        <MotionDiv
                           initial={{ opacity: 0, y: 8, scale: 0.97 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -2139,7 +2164,7 @@ const buildRows = () => {
                               {new Date(tgl).toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "long", year: "numeric" })}
                             </button>
                           ))}
-                        </motion.div>
+                        </MotionDiv>
                       </>
                     )}
                   </AnimatePresence>
