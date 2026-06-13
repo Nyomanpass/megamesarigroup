@@ -28,11 +28,6 @@ export const ProjectItem = sequelize.define("ProjectItem", {
     allowNull: false 
   },
 
-  harga: {
-    type: DataTypes.DECIMAL(15, 8),
-    allowNull: false
-  },
-
   category: {
     type: DataTypes.STRING,
     allowNull: true

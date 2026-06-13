@@ -1,13 +1,8 @@
 import { Boq } from "../models/BoqModel.js";
-import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
-import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-import { ProjectItem } from "../models/ProjekItem.js";
 import { BoqVersionChange } from "../models/BoqVersionChangeModel.js";
 import { generateBobot } from "../utils/generateBobot.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
 import { Op } from "sequelize"; 
-import Decimal from "decimal.js";
-import { applyPriceFormula } from "../utils/priceFormula.js";
 
 // 🔥 ROMAWI → TEXT
 const toRoman = (num) => {
@@ -44,11 +39,7 @@ const formatRupiah = (num) => {
   });
 };
 
-const getHargaSatuanFromAnalisa = (analisaResult) => {
-  return Number(analisaResult?.harga_satuan_pekerjaan ?? analisaResult?.pembulatan ?? analisaResult?.grandTotal ?? 0);
-};
-
-const shouldUsePembulatan = (value) => value !== false && value !== 0 && value !== "0";
+const getBoqHargaSatuan = (boq, change = null) => Number(change?.harga_satuan ?? boq?.harga_satuan ?? 0);
 
 const calculateBoqAmounts = ({ harga_satuan, volume, ppn }) => {
   const jumlahRaw = Number(harga_satuan || 0) * Number(volume || 0);
@@ -197,13 +188,8 @@ export const generateBobotInternal = async (project_id) => {
     // =========================
     for (const boq of data) {
 
-      if (boq.tipe === "item" && boq.analisa_id) {
-
-        const analisaResult =
-          await hitungAnalisa(boq.analisa_id);
-
-        const harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
-
+      if (boq.tipe === "item") {
+        const harga_satuan = getBoqHargaSatuan(boq);
         const volume =
           Number(boq.volume || 0);
 
@@ -263,47 +249,6 @@ export const generateBobotInternal = async (project_id) => {
   }
 };
 
-export const hitungAnalisa = async (analisa_id) => {
-  const analisa = await ProjectAnalisa.findByPk(analisa_id);
-
-  const details = await ProjectAnalisaDetail.findAll({
-    where: { project_analisa_id: analisa_id },
-    include: [
-      {
-        model: ProjectItem,
-        as: "item"
-      }
-    ]
-  });
-
-  let total = new Decimal(0);
-
-  details.forEach((d) => {
-    const harga = applyPriceFormula(d.item?.harga || 0, d.rumus_harga);
-    const koef = new Decimal(d.koefisien || 0);
-
-    total = total.plus(koef.mul(harga));
-  });
-
-  const persen = new Decimal(analisa?.overhead_persen || 0);
-  const overhead = total.mul(persen).div(100);
-
-  const grandTotal = total.plus(overhead);
-  const pembulatan = Number(grandTotal.floor().toString());
-  const usePembulatan = shouldUsePembulatan(analisa?.use_pembulatan);
-  const hargaSatuanPekerjaan = usePembulatan ? pembulatan : Number(grandTotal.toString());
-
-  return {
-    total: Number(total.toString()),
-    overhead: Number(overhead.toString()),
-    grandTotal: Number(grandTotal.toString()),
-    pembulatan,
-    use_pembulatan: usePembulatan,
-    harga_satuan_pekerjaan: hargaSatuanPekerjaan
-  };
-};
-
-
 export const createBulkBoq = async (req, res) => {
   try {
     const { project_id, parent_id, items } = req.body;
@@ -316,21 +261,14 @@ export const createBulkBoq = async (req, res) => {
     let counter = 0;
 
     for (const item of items) {
-      let { uraian, satuan, volume, analisa_id, ppn } = item;
-
-      if (!analisa_id) {
-        return res.status(400).json({ message: "Analisa wajib dipilih untuk item!" });
-      }
+      let { uraian, satuan, volume, ppn } = item;
 
       // 🔥 generate kode
       const baseKode = await generateKode(parent_id, "item");
       const kode = String(Number(baseKode) + counter);
       counter++;
 
-      // 🔥 AMBIL HASIL ANALISA
-      const analisaResult = await hitungAnalisa(analisa_id);
-
-      const harga_satuan = getHargaSatuanFromAnalisa(analisaResult); // 🔥 INI KUNCI
+      const harga_satuan = Number(item.harga_satuan || 0);
 
       const vol = Number(volume) || 0;
       const persenPPN = Number(ppn) || 11;
@@ -344,7 +282,6 @@ export const createBulkBoq = async (req, res) => {
       const newItem = await Boq.create({
         project_id,
         parent_id,
-        analisa_id,
         kode: kode.trim(),
         uraian,
         satuan,
@@ -562,12 +499,9 @@ else{
         const change = changeMap[boq.id];
         const finalVolume = Number(change?.volume ?? boq.volume) || 0;
 
-        // Jika berupa item pekerjaan utama dan memiliki analisa harga satuan (AHS)
-        if (boq.tipe === "item" && boq.analisa_id) {
-          const analisaResult = await hitungAnalisa(boq.analisa_id);
-
+        if (boq.tipe === "item") {
           harga_satuan = parseFloat(
-            Number(change?.harga_satuan ?? getHargaSatuanFromAnalisa(analisaResult) ?? boq.harga_satuan ?? 0).toFixed(6)
+            Number(getBoqHargaSatuan(boq, change)).toFixed(6)
           );
 
           const ppn = Number(boq.ppn) || 0;
@@ -666,11 +600,8 @@ export const getBoqStructured = async (project_id) => {
       let jumlah = 0;
       let jumlah_ppn = 0;
 
-      if (boq.tipe === "item" && boq.analisa_id) {
-        const analisaResult = await hitungAnalisa(boq.analisa_id);
-
-        harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
-
+      if (boq.tipe === "item") {
+        harga_satuan = getBoqHargaSatuan(boq);
         const volume = Number(boq.volume) || 0;
         const ppn = Number(boq.ppn) || 0;
         const calculatedAmount = calculateBoqAmounts({
@@ -723,7 +654,6 @@ export const updateBoq = async (req, res) => {
       satuan,
       volume,
       harga_satuan,
-      analisa_id,
       ppn
     } = req.body;
 
@@ -744,7 +674,6 @@ export const updateBoq = async (req, res) => {
       harga_satuan = null;
       jumlah = null;
       jumlah_ppn = null;
-      analisa_id = null;
     }
 
     // =========================
@@ -763,13 +692,9 @@ export const updateBoq = async (req, res) => {
         kode = item.kode; // tetap
       }
 
-      if (analisa_id) {
-          const analisaResult = await hitungAnalisa(analisa_id);
+      harga_satuan = Number(harga_satuan ?? item.harga_satuan ?? 0);
 
-          harga_satuan = getHargaSatuanFromAnalisa(analisaResult); // 🔥 ambil dari analisa
-        }
-
-        if (volume && harga_satuan) {
+        if (volume !== null && volume !== undefined) {
           const calculatedAmount = calculateBoqAmounts({
             harga_satuan,
             volume,
@@ -792,7 +717,6 @@ export const updateBoq = async (req, res) => {
       harga_satuan,
       jumlah,
       jumlah_ppn,
-      analisa_id: analisa_id ?? item.analisa_id,
       ppn: ppn ?? item.ppn,
       tipe: tipe ?? item.tipe
     });
@@ -857,51 +781,9 @@ export const deleteBoq = async (req, res) => {
 
 
 export const linkAnalisaBoq = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { analisa_id } = req.body;
-
-    const item = await Boq.findByPk(id);
-
-    if (!item) {
-      return res.status(404).json({ message: "BOQ tidak ditemukan" });
-    }
-
-    if (!analisa_id) {
-      return res.status(400).json({ message: "Analisa wajib dipilih!" });
-    }
-
-    // 🔥 pakai 1 sumber perhitungan
-    const analisaResult = await hitungAnalisa(analisa_id);
-
-    const harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
-
-    const volume = Number(item.volume) || 0;
-    const ppn = Number(item.ppn) || 11;
-
-    const { jumlah, jumlah_ppn } = calculateBoqAmounts({
-      harga_satuan,
-      volume,
-      ppn
-    });
-
-    await item.update({
-      analisa_id,
-      harga_satuan,
-      jumlah,
-      jumlah_ppn
-    });
-
-
-    res.json({
-      message: "Berhasil link analisa",
-      data: item
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
-  }
+  return res.status(410).json({
+    message: "BOQ tidak lagi memakai link analisa"
+  });
 };
 
 // =========================
@@ -1200,7 +1082,7 @@ export const createBoqAddendumItem = async (req, res) => {
             uraian,
             satuan,
             volume,
-            analisa_id,
+            harga_satuan: hargaSatuanInput,
             ppn
         } = req.body;
 
@@ -1220,11 +1102,7 @@ export const createBoqAddendumItem = async (req, res) => {
         // ==========================================
         const kode = await generateKode(parent_id, "item");
         
-        let harga_satuan = 0;
-        if (analisa_id) {
-            const analisaResult = await hitungAnalisa(analisa_id);
-            harga_satuan = getHargaSatuanFromAnalisa(analisaResult);
-        }
+        const harga_satuan = Number(hargaSatuanInput || 0);
 
         // Konversi tipe data & kalkulasi nilai
         const vol = Number(volume) || 0;
@@ -1241,7 +1119,6 @@ export const createBoqAddendumItem = async (req, res) => {
         const newBoq = await Boq.create({
             project_id,
             parent_id,
-            analisa_id,
             kode,
             uraian,
             satuan,

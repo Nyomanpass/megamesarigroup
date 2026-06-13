@@ -122,19 +122,6 @@ ProjectAnalisa.belongsTo(Project, {
 });
 
 
-//relasi analisa dan boq
-// 🔥 BOQ → ANALISA
-Boq.belongsTo(ProjectAnalisa, {
-  foreignKey: "analisa_id",
-  as: "analisa"
-});
-
-// 🔥 ANALISA → BOQ
-ProjectAnalisa.hasMany(Boq, {
-  foreignKey: "analisa_id",
-  as: "boq_items"
-});
-
 // analisa projek relation
 ProjectAnalisaDetail.belongsTo(ProjectItem, {
   foreignKey: "item_id",

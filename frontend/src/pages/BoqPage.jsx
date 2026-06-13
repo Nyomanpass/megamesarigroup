@@ -16,9 +16,8 @@ export default function BoqPage() {
   const { selectedProject } = useProject();
   const id = selectedProject?.id || paramId;
   const navigate = useNavigate();
-  const [analisaList, setAnalisaList] = useState([]);
   const [bulkItems, setBulkItems] = useState([
-    { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+    { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
   ]);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -49,10 +48,6 @@ export default function BoqPage() {
     tipe: "item"
   });
 
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [selectedBoq, setSelectedBoq] = useState(null);
-  const [selectedAnalisa, setSelectedAnalisa] = useState("");
-  const [searchAnalisa, setSearchAnalisa] = useState("");
   const [collapsedHeaders, setCollapsedHeaders] = useState(new Set());
 
   const [versions, setVersions] = useState([]);
@@ -175,37 +170,8 @@ export default function BoqPage() {
     });
   };
 
-  const openLinkAnalisa = (item) => {
-    setSelectedBoq(item);
-    setSelectedAnalisa(item.analisa_id || "");
-    setShowLinkModal(true);
-  };
-
-  const handleLinkAnalisa = async () => {
-    try {
-      if (!selectedAnalisa) {
-        alert("Pilih analisa dulu!");
-        return;
-      }
-
-      await api.patch(`/boq/${selectedBoq.id}/link-analisa`, {
-        analisa_id: selectedAnalisa
-      });
-
-      setShowLinkModal(false);
-      setSelectedAnalisa("");
-      setSelectedBoq(null);
-
-      fetchBoq(selectedVersion?.id); // 🔥 refresh tabel
-
-    } catch (err) {
-      console.error(err);
-      alert("Gagal link analisa");
-    }
-  };
-
   const addBulkRow = () => {
-    setBulkItems([...bulkItems, { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }]);
+    setBulkItems([...bulkItems, { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }]);
   };
 
   const handleBulkChange = (index, field, value) => {
@@ -222,11 +188,11 @@ export default function BoqPage() {
       }
 
       const itemsToSubmit = bulkItems.filter(
-        item => item.uraian.trim() !== "" && item.analisa_id
+        item => item.uraian.trim() !== ""
       );
 
       if (itemsToSubmit.length === 0) {
-        alert("Isi minimal satu uraian & pilih analisa!");
+        alert("Isi minimal satu uraian!");
         return;
       }
 
@@ -237,7 +203,7 @@ export default function BoqPage() {
           uraian: item.uraian,
           satuan: item.satuan,
           volume: Number(item.volume) || 0,
-          analisa_id: item.analisa_id, // 🔥 WAJIB
+          harga_satuan: Number(item.harga_satuan) || 0,
           ppn: Number(item.ppn) || 11
         }))
       });
@@ -246,7 +212,7 @@ export default function BoqPage() {
 
       // 🔥 reset
       setBulkItems([
-        { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+        { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
       ]);
 
       fetchBoq(selectedVersion?.id);
@@ -298,14 +264,6 @@ export default function BoqPage() {
       setIsEdit(true);
       setEditId(id);
 
-      // 🔥 ambil harga dari analisa
-      let harga_preview = null;
-
-      if (item.analisa_id) {
-        const analisaRes = await api.get(`/project-analisa-detail/${item.analisa_id}`);
-        harga_preview = analisaRes.data.harga_satuan_pekerjaan ?? analisaRes.data.pembulatan ?? analisaRes.data.grandTotal;
-      }
-
       setForm({
         parent_id: item.parent_id || "",
         kode: item.kode || "",
@@ -321,9 +279,8 @@ export default function BoqPage() {
           uraian: item.uraian || "",
           satuan: item.satuan || "",
           volume: item.volume || "",
-          analisa_id: item.analisa_id || "",
-          ppn: item.ppn || 11,
-          harga_preview // 🔥 INI KUNCI
+          harga_satuan: item.harga_satuan || "",
+          ppn: item.ppn || 11
         }
       ]);
 
@@ -375,7 +332,7 @@ export default function BoqPage() {
             uraian: item.uraian,
             satuan: item.satuan,
             volume: Number(item.volume) || 0,
-            analisa_id: item.analisa_id || null,
+            harga_satuan: Number(item.harga_satuan) || 0,
             ppn: Number(item.ppn) || 11,
             parent_id: form.parent_id || null,
             tipe: "item"
@@ -421,12 +378,6 @@ export default function BoqPage() {
       alert(err.response?.data?.message || "Gagal menyimpan data");
     }
   };
-
-  const fetchAnalisa = async () => {
-    const res = await api.get(`/project-analisa?project_id=${id}`);
-    setAnalisaList(res.data);
-  };
-
 
   const fetchProject = async () => {
     const res = await api.get(`/projects/${id}`);
@@ -475,16 +426,6 @@ const fetchBoq =
 
     });
 
-  };
-
-  const handleSelectAnalisa = async (index, analisa_id) => {
-    const res = await api.get(`/project-analisa-detail/${analisa_id}`);
-
-    const updated = [...bulkItems];
-    updated[index].analisa_id = analisa_id;
-    updated[index].harga_preview = res.data.harga_satuan_pekerjaan ?? res.data.pembulatan ?? res.data.grandTotal; // 🔥 hanya preview
-
-    setBulkItems(updated);
   };
 
   const round2 = (num) => Math.round(num * 100) / 100;
@@ -628,8 +569,6 @@ const fetchBoq =
 
     useEffect(() => {
     fetchProject();
- 
-    fetchAnalisa();
     fetchVersions();
   }, [id]);
 
@@ -682,7 +621,7 @@ const handleAddendumItem = async () => {
             alert("Pilih parent");
             return;
         }
-        const validItems = bulkItems.filter(x => x.uraian && x.analisa_id);
+        const validItems = bulkItems.filter(x => x.uraian);
 
         if (validItems.length === 0) {
             alert("Tidak ada item valid untuk ditambahkan");
@@ -698,7 +637,7 @@ const handleAddendumItem = async () => {
                     uraian: item.uraian,
                     satuan: item.satuan,
                     volume: Number(item.volume) || 0,
-                    analisa_id: item.analisa_id,
+                    harga_satuan: Number(item.harga_satuan) || 0,
                     ppn: Number(item.ppn) || 0
                 })
             )
@@ -1143,13 +1082,6 @@ const handleAddendumItem = async () => {
                       {/* AKSI */}
                       <td className="p-3 text-center group-hover:opacity-100 opacity-0 transition-all">
                         <div className="flex gap-2 justify-center">
-                          <button
-                            onClick={() => openLinkAnalisa(item)}
-                            className="bg-purple-100 text-purple-600 px-2 py-1 rounded text-xs cursor-pointer hover:bg-purple-200 transition-colors"
-                          >
-                            Link
-                          </button>
-
                           {selectedVersion?.revision > 0 && !versionChanges.some(v => v.boq_item_id === item.id && v.action === "new") && (
                               <button
                                   onClick={() => openVersionModal(item)}
@@ -1228,113 +1160,6 @@ const handleAddendumItem = async () => {
           </div>
         </div>
 
-        {showLinkModal && (
-          <AnimatePresence>
-            <m.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-neutral-600/40 flex items-center justify-center z-50 p-4">
-
-              <m.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ type: "spring", duration: 0.3 }}
-                className="bg-white rounded-md w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
-
-                {/* HEADER */}
-                <div className="px-5 py-4 border-b border-muted-gray flex justify-between items-center">
-                  <div></div>
-                  <h2 className="font-bold text-gray-800 text-lg">Link Analisa</h2>
-                  <button
-                    onClick={() => setShowLinkModal(false)}
-                    className="text-gray-400 hover:text-red-500"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* BODY */}
-                <div className="p-5">
-
-                  {/* 🔍 SEARCH */}
-                  <input
-                    type="text"
-                    placeholder="Cari analisa..."
-                    value={searchAnalisa || ""}
-                    onChange={(e) => setSearchAnalisa(e.target.value)}
-                    className="w-full border-2 border-gray-200 p-2.5 rounded-xl mb-4 focus:border-blue-500 outline-none"
-                  />
-
-                  {/* 📋 LIST ANALISA */}
-                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-
-                    {analisaList
-                      .filter(a =>
-                        a.nama.toLowerCase().includes((searchAnalisa || "").toLowerCase())
-                      )
-                      .map((a) => (
-                        <div
-                          key={a.id}
-                          onClick={() => setSelectedAnalisa(a.id)}
-                          className={`p-3 rounded border cursor-pointer transition-all
-                  ${selectedAnalisa == a.id
-                              ? "bg-blue-50 border-blue-400"
-                              : "bg-white border-gray-200 hover:bg-gray-50"}
-                `}
-                        >
-                          <div className="text-sm font-semibold text-gray-800">
-                            {a.kode ? `${a.kode} - ` : ""}{a.nama}
-                          </div>
-
-                          <div className="text-xs text-gray-400">
-                            ID: {a.id}
-                          </div>
-                          <span className="text-[10px] text-gray-400">
-                            Harga Analisa
-                          </span>
-
-                          <div className="text-xs text-green-600 font-bold">
-                            Rp {a.grandTotal_rp.toLocaleString("id-ID")}
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* kosong */}
-                    {analisaList.length === 0 && (
-                      <div className="text-center text-gray-400 text-sm py-6">
-                        Tidak ada analisa
-                      </div>
-                    )}
-
-                  </div>
-
-                </div>
-
-                {/* FOOTER */}
-                <div className="px-5 py-4 border-t border-muted-gray flex justify-end gap-2">
-
-                  <button
-                    onClick={() => setShowLinkModal(false)}
-                    className="px-5 py-2.5 bg-gray-200 rounded-md font-semibold cursor-pointer hover:bg-gray-200/80 active:scale-95 "
-                  >
-                    Batal
-                  </button>
-
-                  <button
-                    onClick={handleLinkAnalisa}
-                    className="px-5 py-2.5 text-white rounded-md font-semibold cursor-pointer bg-secondary hover:bg-secondary/80 active:scale-95"
-                  >
-                    Simpan
-                  </button>
-
-                </div>
-
-              </m.div>
-            </m.div>
-          </AnimatePresence>
-        )}
         {/* 🔥 MODALS */}
         <AnimatePresence>
           {showModal && (
@@ -1358,7 +1183,7 @@ const handleAddendumItem = async () => {
                 });
 
       setBulkItems([
-        { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+        { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
       ]);
               }}>
               <m.div
@@ -1395,7 +1220,7 @@ const handleAddendumItem = async () => {
                       });
 
                       setBulkItems([
-                        { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+                        { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
                       ]);
                     }}
                     className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"
@@ -1502,36 +1327,6 @@ const handleAddendumItem = async () => {
                               />
                             </div>
 
-                            <div>
-                              <label className="text-[10px] uppercase text-gray-500 font-bold mb- block">
-                                Analisa
-                              </label>
-
-                              <div className="mb-3">
-                                <select
-                                  className="w-full border-2 border-gray-200 p-2.5 pr-10 text-sm rounded-xl 
-                                        bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 
-                                        font-medium text-gray-700 appearance-none transition-all"
-                                  value={item.analisa_id}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-
-                                    handleBulkChange(index, "analisa_id", value);
-                                    handleSelectAnalisa(index, value);
-                                  }}
-                                >
-                                  <option value="" className="text-gray-400">
-                                    Pilih Analisa
-                                  </option>
-
-                                  {analisaList.map((a) => (
-                                    <option key={a.id} value={a.id}>
-                                      {a.kode ? `${a.kode} - ` : ""}{a.nama}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
                             <div className="grid grid-cols-4 gap-3">
                               <div>
                                 <label className="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Satuan</label>
@@ -1567,25 +1362,13 @@ const handleAddendumItem = async () => {
                                   Harga Satuan
                                 </label>
 
-                                <div className="relative">
-                                  <input
-                                    value={
-                                      item.harga_preview
-                                        ? "Rp " + Number(item.harga_preview).toLocaleString("id-ID")
-                                        : "-"
-                                    }
-                                    disabled
-                                    className={`w-full border-2 p-2.5 text-sm rounded-xl font-bold tracking-wide
-                                    ${item.harga_preview
-                                        ? "bg-green-50 border-green-200 text-green-700"
-                                        : "bg-gray-100 border-gray-200 text-gray-400"}
-                                    cursor-not-allowed shadow-inner`}
-                                  />
-
-                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
-                                    Auto
-                                  </span>
-                                </div>
+                                <input
+                                  type="number"
+                                  className="w-full border-2 border-gray-200 p-2 text-sm rounded-lg outline-none focus:border-blue-500"
+                                  placeholder="Harga kontrak"
+                                  value={item.harga_satuan}
+                                  onChange={(e) => handleBulkChange(index, "harga_satuan", e.target.value)}
+                                />
                               </div>
                             </div>
                           </div>
@@ -1625,7 +1408,7 @@ const handleAddendumItem = async () => {
 
                       // 🔥 reset bulk juga (opsional tapi bagus)
                       setBulkItems([
-                        { uraian: "", satuan: "", volume: "", analisa_id: "", ppn: 11 }
+                        { uraian: "", satuan: "", volume: "", harga_satuan: "", ppn: 11 }
                       ]);
                     }}
                     className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded hover:bg-gray-50 transition-all cursor-pointer active:scale-95"

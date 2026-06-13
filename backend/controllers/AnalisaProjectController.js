@@ -1,34 +1,9 @@
 import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
-import { generateBobotInternal } from "./BoqController.js";
-import { Boq } from "../models/BoqModel.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-import { ProjectItem } from "../models/ProjekItem.js";
 import { Op } from "sequelize";
-import Decimal from "decimal.js";
-import { applyPriceFormula } from "../utils/priceFormula.js";
-
-const toDecimal = (value) => new Decimal(value || 0);
-const toNumber = (value) => Number(value.toString());
-const toPembulatan = (value) => Number(value.floor().toString());
-const shouldUsePembulatan = (value) => value !== false && value !== 0 && value !== "0";
 
 const getUsedProjectAnalisaIds = async (ids = []) => {
-  if (!ids.length) return [];
-
-  const boqRows = await Boq.findAll({
-    where: {
-      analisa_id: ids
-    },
-    attributes: ["analisa_id"]
-  });
-
-  return [
-    ...new Set(
-      boqRows
-        .map(row => Number(row.analisa_id))
-        .filter(Boolean)
-    )
-  ];
+  return [];
 };
 
 const sendUsedAnalisaError = async (res, usedIds = []) => {
@@ -46,7 +21,7 @@ const sendUsedAnalisaError = async (res, usedIds = []) => {
 // CREATE
 export const createProjectAnalisa = async (req, res) => {
   try {
-    const { project_id, kode, nama, satuan, overhead_persen, use_pembulatan } = req.body;
+    const { project_id, kode, nama, satuan } = req.body;
 
     if (!project_id || !kode || !nama || !satuan) {
       return res.status(400).json({ message: "Field wajib diisi!" });
@@ -56,25 +31,13 @@ export const createProjectAnalisa = async (req, res) => {
       project_id,
       kode,
       nama,
-      satuan,
-      overhead_persen,
-      use_pembulatan: use_pembulatan ?? true
+      satuan
     });
 
     res.status(201).json(data);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-};
-
-
-const formatRupiah = (angka) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(Number(angka || 0));
 };
 
 export const getProjectAnalisa = async (req, res) => {
@@ -96,49 +59,11 @@ export const getProjectAnalisa = async (req, res) => {
 
     for (let analisa of analisaList) {
 
-      // 🔥 ambil detail
-      const details = await ProjectAnalisaDetail.findAll({
-        where: { project_analisa_id: analisa.id }
-      });
-
-      let total = new Decimal(0);
-
-      // 🔥 hitung total dari detail
-      for (let d of details) {
-        const item = await ProjectItem.findByPk(d.item_id);
-
-        if (!item) continue;
-
-        const harga = applyPriceFormula(item.harga, d.rumus_harga);
-        const koef = toDecimal(d.koefisien);
-
-        total = total.plus(koef.mul(harga));
-      }
-
-      // 🔥 ambil overhead dari ANALISA (INI YANG PENTING)
-      const persen = toDecimal(analisa.overhead_persen);
-
-      const overhead = total.mul(persen).div(100);
-
-      const grandTotal = total.plus(overhead);
-      const pembulatan = toPembulatan(grandTotal);
-      const usePembulatan = shouldUsePembulatan(analisa.use_pembulatan);
-      const hargaSatuanPekerjaan = usePembulatan ? pembulatan : toNumber(grandTotal);
-
       result.push({
         id: analisa.id,
         nama: analisa.nama,
         kode: analisa.kode,
-        satuan: analisa.satuan,
-
-        total: toNumber(total),
-        overhead_persen: toNumber(persen),
-        overhead: toNumber(overhead),
-        grandTotal: toNumber(grandTotal),
-        pembulatan,
-        use_pembulatan: usePembulatan,
-        harga_satuan_pekerjaan: hargaSatuanPekerjaan,
-        grandTotal_rp: formatRupiah(hargaSatuanPekerjaan),
+        satuan: analisa.satuan
       });
     }
 
@@ -170,7 +95,7 @@ export const getProjectAnalisaById = async (req, res) => {
 
 export const updateProjectAnalisa = async (req, res) => {
   try {
-    const { kode, nama, satuan, overhead_persen, use_pembulatan } = req.body;
+    const { kode, nama, satuan } = req.body;
 
     const data = await ProjectAnalisa.findByPk(req.params.id);
 
@@ -182,53 +107,11 @@ export const updateProjectAnalisa = async (req, res) => {
     if (kode !== undefined) updatePayload.kode = kode;
     if (nama !== undefined) updatePayload.nama = nama;
     if (satuan !== undefined) updatePayload.satuan = satuan;
-    if (overhead_persen !== undefined) updatePayload.overhead_persen = overhead_persen;
-    if (use_pembulatan !== undefined) updatePayload.use_pembulatan = use_pembulatan;
 
     await data.update(updatePayload);
 
-    console.log("✅ Analisa updated:", data.id);
-
-    // =========================
-    // 🔥 AMBIL BOQ TERKAIT
-    // =========================
-    const boqList = await Boq.findAll({
-      where: { 
-        analisa_id: data.id,
-        tipe: "item"
-      }
-    });
-
-    console.log("📦 BOQ ditemukan:", boqList.length);
-
-    if (boqList.length === 0) {
-      console.log("❗ Tidak ada BOQ terkait analisa ini");
-      return res.json({
-        message: "Analisa berhasil diupdate (tanpa BOQ terkait)",
-        data
-      });
-    }
-
-    const projectIds = [...new Set(
-      boqList.map(b => b.project_id)
-    )];
-
-    console.log("📊 PROJECT IDS:", projectIds);
-
-    // =========================
-    // 🔥 GENERATE BOBOT
-    // =========================
-    for (let pid of projectIds) {
-      try {
-        console.log("🔥 GENERATE BOBOT PROJECT:", pid);
-        await generateBobotInternal(pid);
-      } catch (err) {
-        console.error("❌ ERROR GENERATE:", err);
-      }
-    }
-
     res.json({
-      message: "Berhasil update + bobot otomatis",
+      message: "Analisa berhasil diupdate",
       data
     });
 

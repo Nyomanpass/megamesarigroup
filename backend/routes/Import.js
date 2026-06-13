@@ -10,8 +10,6 @@ import { ProjectAnalisa } from "../models/ProjekAnalisa.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
 import { parseNumber } from "../utils/parseNumber.js";
 import { generateBobotInternal } from "../controllers/BoqController.js";
-import { hitungAnalisa } from "../controllers/BoqController.js";
-import { applyPriceFormula } from "../utils/priceFormula.js";
 
 const router = express.Router();
 
@@ -47,73 +45,31 @@ const normalizeKey = (obj) => {
   return newObj;
 };
 
-const parsePercentValue = (value) => {
+const getFirstValue = (row, keys = []) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+      return row[key];
+    }
+  }
+
+  const normalizedKeys = keys.map((key) => normalizeText(key));
+  const foundKey = Object.keys(row).find((key) => {
+    const normalizedKey = normalizeText(key);
+    return normalizedKeys.some((candidate) => normalizedKey.includes(candidate));
+  });
+
+  if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && row[foundKey] !== "") {
+    return row[foundKey];
+  }
+
+  return "";
+};
+
+const parseOptionalNumber = (value) => {
   if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
 
-  let clean = String(value).trim();
-  if (!clean) return null;
-
-  clean = clean.replace(/%/g, "").trim();
-
-  const matches = clean.match(/-?\d+(?:[.,]\d+)?/g);
-  if (matches?.length) {
-    clean = matches[matches.length - 1];
-  }
-
-  if (clean.includes(",") && clean.includes(".")) {
-    clean = clean.indexOf(",") > clean.indexOf(".")
-      ? clean.replace(/\./g, "").replace(",", ".")
-      : clean.replace(/,/g, "");
-  } else if (clean.includes(",")) {
-    clean = clean.replace(",", ".");
-  }
-
-  const number = Number(clean);
-  return Number.isFinite(number) ? number : null;
-};
-
-const isValidPercent = (value) => value !== null && value >= 0 && value <= 100;
-
-const hasOverheadLabel = (value) => {
-  const text = String(value || "").toLowerCase();
-  return (
-    text.includes("overhead") ||
-    text.includes("over head") ||
-    text.includes("profit") ||
-    /\boh\b/.test(text) ||
-    /\bo\/h\b/.test(text)
-  );
-};
-
-const getOverheadFromRow = (row) => {
-  const overheadIndex = row.findIndex(hasOverheadLabel);
-
-  if (overheadIndex === -1) return null;
-
-  for (let i = overheadIndex + 1; i < row.length; i++) {
-    const value = parsePercentValue(row[i]);
-    if (isValidPercent(value)) return value;
-  }
-
-  for (const cell of row) {
-    const value = parsePercentValue(cell);
-    if (isValidPercent(value)) return value;
-  }
-
-  return null;
-};
-
-const getHeaderOverheadFromRow = (row) => {
-  const explicitOverhead = getOverheadFromRow(row);
-  if (explicitOverhead !== null) return explicitOverhead;
-
-  for (let i = 5; i < row.length; i++) {
-    const value = parsePercentValue(row[i]);
-    if (isValidPercent(value)) return value;
-  }
-
-  return 10;
+  const parsed = parseNumber(value);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 router.post("/import-boq", upload.single("file"), async (req, res) => {
@@ -137,32 +93,13 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-    // 🔥 ambil semua analisa project
-    const analisaList = await ProjectAnalisa.findAll({
-      where: { project_id: projectId }
-    });
-
-    // 🔥 mapping kode → analisa_id (ANTI ERROR CASE)
-    const analisaMap = {};
-    analisaList.forEach(a => {
-      if (a.kode) {
-        analisaMap[a.kode.trim().toUpperCase()] = a.id;
-      }
-    });
-
-    // 🔥 cache biar cepat
-    const analisaCache = {};
-
     let currentHeaderId = null;
     let currentSubHeaderId = null;
-
-    const missingKode = new Set();
 
     for (let i = 0; i < data.length; i++) {
       const row = normalizeKey(data[i]);
 
       const no = String(row.no || "").trim();
-      const kodeAnalisa = String(row.kode || "").trim().toUpperCase();
 
       const uraian = row["uraian pekerjaan"];
       const satuan = row.sat || row["sat."] || "";
@@ -182,47 +119,27 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
         parent_id = currentSubHeaderId || currentHeaderId;
       }
 
-      // =========================
-      // 🔥 ANALISA
-      // =========================
-      let analisa_id = null;
-      let harga_satuan = null;
+      const hargaSatuanRaw = getFirstValue(row, [
+        "harga satuan",
+        "harga_satuan",
+        "harga",
+        "hargasatuan",
+        "hs"
+      ]);
+      let harga_satuan = tipe === "item" ? parseOptionalNumber(hargaSatuanRaw) : null;
       let jumlah = null;
       let jumlah_ppn = null;
       let ppn = 11;
 
-      // 🔥 ambil analisa_id
-      if (kodeAnalisa && tipe === "item") {
-        if (analisaMap[kodeAnalisa]) {
-          analisa_id = analisaMap[kodeAnalisa];
-        } else {
-          missingKode.add(kodeAnalisa);
-        }
-      }
-
-      // 🔥 hitung analisa (PAKAI CACHE)
-      if (analisa_id && tipe === "item") {
-        try {
-          if (!analisaCache[analisa_id]) {
-            analisaCache[analisa_id] = await hitungAnalisa(analisa_id);
-          }
-
-          const analisaResult = analisaCache[analisa_id];
-
-          harga_satuan =
-            Number(analisaResult.harga_satuan_pekerjaan ?? analisaResult.pembulatan ?? analisaResult.grandTotal) || 0;
-
-          const vol = Number(volume) || 0;
+      if (tipe === "item") {
+        const vol = Number(volume) || 0;
+        harga_satuan = Number(harga_satuan || 0);
 
         jumlah =
           Math.floor(Number(harga_satuan) * vol);
 
         jumlah_ppn =
           Math.floor(jumlah + (jumlah * ppn / 100));
-
-        } catch (err) {
-          console.error("Gagal hitung analisa:", err.message);
-        }
       }
 
       // =========================
@@ -236,7 +153,6 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
         volume: tipe === "item" ? volume : null,
         tipe,
         parent_id,
-        analisa_id,
         harga_satuan,
         jumlah,
         jumlah_ppn,
@@ -256,15 +172,6 @@ router.post("/import-boq", upload.single("file"), async (req, res) => {
 
     // 🔥 hitung ulang bobot
     await generateBobotInternal(projectId);
-
-    // 🔥 response warning
-    if (missingKode.size > 0) {
-      return res.json({
-        message: "Import selesai dengan warning",
-        warning: true,
-        missingKode: [...missingKode]
-      });
-    }
 
     res.json({
       message: "Import BOQ berhasil!",
@@ -340,19 +247,11 @@ router.post("/import", upload.single("file"), async (req, res) => {
 
       const nama = row.nama || row["nama material"];
       const satuan = row.satuan;
-      const hargaRaw = row.harga;
       const kategori = row.kategori || row.category;
 
       // ❌ VALIDASI
-      if (!nama || !satuan || !hargaRaw) {
+      if (!nama || !satuan) {
         throw new Error(`Data tidak lengkap di baris ${index + 2}`);
-      }
-
-      // 🔥 FORMAT HARGA
-      const harga = parseNumber(hargaRaw);
-
-      if (isNaN(harga)) {
-        throw new Error(`Harga tidak valid di baris ${index + 2}`);
       }
 
       return {
@@ -360,7 +259,6 @@ router.post("/import", upload.single("file"), async (req, res) => {
         nama: nama.trim(),
         tipe: tipe.toUpperCase(),
         satuan: satuan.trim(),
-        harga,
         category: tipe === "BAHAN" ? kategori : null,
         terbilang:
           tipe === "TENAGA" || tipe === "ALAT"
@@ -506,13 +404,14 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
     const analisaList = {};
     const detailBuffer = [];
     const errors = [];
-    let overheadImportedCount = 0;
 
     const normalizeText = (text) =>
       String(text || "").toLowerCase().trim();
 
     // 🔥 ambil semua item
-    const allItems = await ProjectItem.findAll();
+    const allItems = await ProjectItem.findAll({
+      where: { project_id }
+    });
     const itemMap = {};
 
     allItems.forEach(item => {
@@ -546,37 +445,18 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       if (textAnalisa) {
         const kode = textAnalisa.split(" ")[0];
         const nama = textAnalisa.replace(kode, "").trim();
-        const overheadPersen = getHeaderOverheadFromRow(row);
-
-        if (overheadPersen !== 10) {
-          overheadImportedCount++;
-        }
 
         currentAnalisa = {
           project_id,
           kode,
           nama,
-          satuan: colE || "",
-          overhead_persen: overheadPersen
+          satuan: colE || ""
         };
 
         analisaList[kode] = { ...currentAnalisa };
         currentTipe = null;
 
         console.log("SET ANALISA:", kode);
-        continue;
-      }
-
-      // =========================
-      // 🔥 DETEKSI OVERHEAD / PROFIT
-      // =========================
-      const overheadPersen = getOverheadFromRow(row);
-      if (currentAnalisa && overheadPersen !== null) {
-        currentAnalisa.overhead_persen = overheadPersen;
-        analisaList[currentAnalisa.kode].overhead_persen = overheadPersen;
-        overheadImportedCount++;
-
-        console.log("SET OVERHEAD:", currentAnalisa.kode, overheadPersen);
         continue;
       }
 
@@ -622,21 +502,10 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
 
       console.log("✅ ITEM:", item.nama);
 
-      const rumusHarga = colD ? String(colD).trim() : null;
-      if (rumusHarga) {
-        try {
-          applyPriceFormula(item.harga, rumusHarga);
-        } catch (error) {
-          errors.push(`${itemName} rumus harga tidak valid: ${error.message}`);
-          continue;
-        }
-      }
-
       detailBuffer.push({
         kode: currentAnalisa.kode,
         item_id: item.id,
-        koefisien: koef,
-        rumus_harga: rumusHarga
+        koefisien: koef
       });
     }
 
@@ -672,8 +541,7 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
       await ProjectAnalisaDetail.create({
         project_analisa_id: analisaMap[row.kode],
         item_id: row.item_id,
-        koefisien: row.koefisien,
-        rumus_harga: row.rumus_harga
+        koefisien: row.koefisien
       });
     }
 
@@ -683,8 +551,7 @@ router.post("/import-analisa-multi", upload.single("file"), async (req, res) => 
     res.json({
       message: "Import berhasil!",
       total_analisa: Object.keys(analisaList).length,
-      total_detail: detailBuffer.length,
-      total_overhead_import: overheadImportedCount
+      total_detail: detailBuffer.length
     });
 
   } catch (err) {

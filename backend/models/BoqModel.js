@@ -20,16 +20,6 @@ export const Boq = sequelize.define(
       }
     },
 
-    // 🔥 relasi analisa
-    analisa_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "project_analisa",
-        key: "id"
-      }
-    },
-
     parent_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -60,7 +50,6 @@ export const Boq = sequelize.define(
       allowNull: true
     },
 
-    // 🔥 dari analisa awal
     harga_satuan: {
       type: DataTypes.DECIMAL(20,2),
       allowNull: true

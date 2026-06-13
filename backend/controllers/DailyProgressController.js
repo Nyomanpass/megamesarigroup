@@ -4,8 +4,6 @@ import { DailyProgress } from "../models/DailyProgressModel.js";
 import { Boq } from "../models/BoqModel.js";
 import { DailyProgressItem } from "../models/DailyProgresItem.js";
 
-import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-import { ProjectItem } from "../models/ProjekItem.js";
 import { DailyPlan } from "../models/DailyPlanModel.js";
 import { DailyProgressPhoto } from "../models/DailyProgressPhotos.js";
 import { ProjectVersionModel } from "../models/ProjectVersionModel.js";
@@ -77,9 +75,6 @@ const getActiveBoqForProgress = async (
         : activeBoq
     ),
     id: activeBoq.boq_item_id || activeBoq.id,
-    analisa_id:
-      activeBoq.analisa_id ??
-      masterBoq?.analisa_id,
     volume:
       activeBoq.volume ??
       masterBoq?.volume
@@ -125,20 +120,7 @@ export const createDailyProgress = async (req, res) => {
         plan.minggu_ke
       );
 
-    if (!boq.analisa_id) {
-      throw new Error("BOQ belum punya analisa!");
-    }
-
-    // =========================
-    // 🔥 AMBIL ANALISA DETAIL
-    // =========================
-    const analisaDetails = await ProjectAnalisaDetail.findAll({
-      where: { project_analisa_id: boq.analisa_id },
-      include: {
-        model: ProjectItem,
-        as: "item"
-      }
-    });
+    const analisaDetails = [];
 
     // =========================
     // ✅ SIMPAN HEADER (UPDATED)
@@ -376,20 +358,7 @@ export const createDailyProgressWeekly =
     // =========================
     // AMBIL ANALISA
     // =========================
-    const analisaDetails =
-      await ProjectAnalisaDetail.findAll({
-
-        where: {
-          project_analisa_id:
-            boq.analisa_id
-        },
-
-        include: {
-          model: ProjectItem,
-          as: "item"
-        }
-
-      });
+    const analisaDetails = [];
 
     // =========================
     // LOOP HARI
@@ -572,20 +541,7 @@ export const updateDailyProgress = async (req, res) => {
         plan.minggu_ke
       );
 
-    if (!boq.analisa_id) {
-      throw new Error("BOQ belum punya analisa!");
-    }
-
-    // =========================
-    // 🔥 AMBIL ANALISA DETAIL
-    // =========================
-    const analisaDetails = await ProjectAnalisaDetail.findAll({
-      where: { project_analisa_id: boq.analisa_id },
-      include: {
-        model: ProjectItem,
-        as: "item"
-      }
-    });
+    const analisaDetails = [];
 
     // =========================
     // 🔥 UPDATE HEADER (UPDATED)

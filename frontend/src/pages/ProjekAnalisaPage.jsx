@@ -27,9 +27,7 @@ const ProjectAnalisaPage = () => {
   const [formMaster, setFormMaster] = useState({
     kode: "",
     nama: "",
-    satuan: "",
-    overhead_persen: 10,
-    use_pembulatan: true
+    satuan: ""
   });
 
   const [showAnalisaModal, setShowAnalisaModal] = useState(false);
@@ -89,9 +87,7 @@ const ProjectAnalisaPage = () => {
       setFormMaster({
         kode: item.kode,
         nama: item.nama,
-        satuan: item.satuan,
-        overhead_persen: item.overhead_persen,
-        use_pembulatan: item.use_pembulatan ?? true
+        satuan: item.satuan
       });
       setEditId(item.id);
       setIsEdit(true);
@@ -99,9 +95,7 @@ const ProjectAnalisaPage = () => {
       setFormMaster({
         kode: "",
         nama: "",
-        satuan: "",
-        overhead_persen: 10,
-        use_pembulatan: true
+        satuan: ""
       });
       setEditId(null);
       setIsEdit(false);
@@ -312,7 +306,7 @@ const ProjectAnalisaPage = () => {
               AHSP Proyek
             </h1>
             <p className="text-sm text-gray-500 max-w-xl">
-              Kelola data standar Analisa Harga Satuan Pekerjaan khusus untuk project ini.
+              Kelola data standar analisa pekerjaan khusus untuk project ini.
             </p>
           </div>
         </div>
@@ -382,9 +376,6 @@ const ProjectAnalisaPage = () => {
                 <th className="p-5 font-bold w-32">Kode</th>
                 <th className="p-5 font-bold">Nama Pekerjaan</th>
                 <th className="p-5 font-bold w-32">Satuan</th>
-                <th className="p-5 font-bold w-32 text-center">Overhead (%)</th>
-                <th className="p-5 font-bold w-36 text-center">Harga Dipakai</th>
-                <th className="p-5 font-bold w-32 text-center">Grantotal</th>
                 <th className="p-5 font-bold text-center w-64">Aksi</th>
               </tr>
             </thead>
@@ -410,21 +401,6 @@ const ProjectAnalisaPage = () => {
                     </div>
                   </td>
                   <td className="p-5 text-gray-600 font-medium">{a.satuan}</td>
-                  <td className="p-5 text-center text-gray-600 font-medium">
-                    <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
-                      {a.overhead_persen}%
-                    </span>
-                  </td>
-                  <td className="p-5 text-center text-gray-600 font-medium">
-                    <span className={`px-2.5 py-1 rounded-md font-bold border ${a.use_pembulatan ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
-                      {a.use_pembulatan ? "Pembulatan" : "Asli"}
-                    </span>
-                  </td>
-                   <td className="p-5 text-center text-gray-600 font-medium">
-                    <span className="bg-blue-50 text-info px-2.5 py-1 rounded-md font-bold border border-blue-100">
-                      {a.grandTotal_rp}
-                    </span>
-                  </td>
                   <td className="p-5">
                     <div className="flex justify-center items-center gap-2">
 
@@ -639,37 +615,6 @@ const ProjectAnalisaPage = () => {
                       className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Persentase Overhead (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      name="overhead_persen"
-                      placeholder="Contoh: 10 atau 15"
-                      value={formMaster.overhead_persen}
-                      onChange={handleChangeMaster}
-                      className="w-full border border-gray-200 p-3.5 rounded-md focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all text-sm font-medium"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">Masukan persentase tambahan (Overhead, Jasa, Profit, dll) yang dibebankan pada master analisa ini.</p>
-                  </div>
-
-                  <label className="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="use_pembulatan"
-                      checked={Boolean(formMaster.use_pembulatan)}
-                      onChange={handleChangeMaster}
-                      className="mt-1 h-4 w-4 accent-secondary"
-                    />
-                    <span>
-                      <span className="block text-sm font-bold text-gray-700">Gunakan harga pembulatan</span>
-                      <span className="block text-xs text-gray-500 mt-1">
-                        Jika aktif, BOQ memakai nilai Pembulatan. Jika mati, BOQ memakai Harga Satuan Pekerjaan (D + E) asli.
-                      </span>
-                    </span>
-                  </label>
 
                 </div>
 

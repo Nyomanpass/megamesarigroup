@@ -28,17 +28,6 @@ export const ProjectAnalisa = sequelize.define("ProjectAnalisa", {
     allowNull: false 
   },
 
-  overhead_persen: { 
-    type: DataTypes.DECIMAL(10, 8),
-    defaultValue: 10 
-  },
-
-  use_pembulatan: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: true
-  }
-
 }, {
   tableName: "project_analisa",
   timestamps: true

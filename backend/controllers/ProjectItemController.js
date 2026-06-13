@@ -1,8 +1,6 @@
 import { ProjectItem } from "../models/ProjekItem.js";
 import { ItemCategory } from "../models/ItemCategory.js";
-import { generateBobotInternal } from "./BoqController.js";
 import { ProjectAnalisaDetail } from "../models/ProjekAnalisaDetail.js";
-import { Boq } from "../models/BoqModel.js";
 import { DailyProgressItem } from "../models/DailyProgresItem.js";
 import { Op } from "sequelize";
 
@@ -84,7 +82,6 @@ export const createProjectItem = async (req, res) => {
     let { 
       nama, 
       satuan, 
-      harga, 
       category, 
       project_id, 
       tipe,
@@ -115,7 +112,6 @@ export const createProjectItem = async (req, res) => {
       nama,
       tipe,
       satuan,
-      harga,
       project_id,
       category: category || null,
       terbilang // 🔥 masuk sini
@@ -132,7 +128,7 @@ export const createProjectItem = async (req, res) => {
 // 🔹 UPDATE
 export const updateProjectItem = async (req, res) => {
   try {
-    let { nama, satuan, harga, category, tipe, terbilang } = req.body;
+    let { nama, satuan, category, tipe, terbilang } = req.body;
 
     const data = await ProjectItem.findByPk(req.params.id);
 
@@ -151,44 +147,13 @@ export const updateProjectItem = async (req, res) => {
     await data.update({
       nama,
       satuan,
-      harga,
       tipe,
       category: category || null,
       terbilang
     });
 
-    // =========================
-    // 🔥 AUTO UPDATE BOBOT
-    // =========================
-
-    // 1. cari analisa yang pakai item ini
-    const analisaDetails = await ProjectAnalisaDetail.findAll({
-      where: { item_id: data.id }
-    });
-
-    const analisaIds = [...new Set(
-      analisaDetails.map(d => d.project_analisa_id)
-    )];
-
-    if (analisaIds.length > 0) {
-
-      // 2. cari BOQ yang pakai analisa tersebut
-      const boqList = await Boq.findAll({
-        where: { analisa_id: analisaIds }
-      });
-
-      const projectIds = [...new Set(
-        boqList.map(b => b.project_id)
-      )];
-
-      // 3. update bobot per project
-      for (let pid of projectIds) {
-        await generateBobotInternal(pid);
-      }
-    }
-
     res.json({
-      message: "Berhasil update + bobot otomatis",
+      message: "Berhasil update",
       data
     });
 
@@ -210,7 +175,6 @@ export const bulkCreateProjectItems = async (req, res) => {
       project_id,
       nama: item.nama,
       satuan: item.satuan,
-      harga: item.harga || 0, // 🔥 INI KUNCINYA
       category: item.category,
       tipe: item.tipe,
       terbilang: item.terbilang 

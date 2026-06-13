@@ -46,7 +46,6 @@ export default function MaterialPage() {
   const [form, setForm] = useState({
     nama: "",
     satuan: "",
-    harga: "",
     category: ""
   });
 
@@ -145,7 +144,6 @@ export default function MaterialPage() {
       setForm({
         nama: item.nama,
         satuan: item.satuan,
-        harga: item.harga || "",
         category: item.category || "" // 🔥 ganti ini
       });
       setEditId(item.id);
@@ -154,7 +152,6 @@ export default function MaterialPage() {
       setForm({
         nama: "",
         satuan: "",
-        harga: "",
         category: "" // 🔥 ganti ini juga
       });
       setEditId(null);
@@ -404,7 +401,6 @@ export default function MaterialPage() {
                 <th className="p-5 font-bold">Nama Material</th>
                 <th className="p-5 font-bold w-48 border-l border-gray-100">Kategori</th>
                 <th className="p-5 font-bold w-32 border-l border-gray-100">Satuan</th>
-                <th className="p-5 font-bold w-48 text-right border-l border-gray-100">Harga Jual (Rp)</th>
                 <th className="p-5 font-bold text-center w-32 border-l border-gray-100">Aksi</th>
               </tr>
             </thead>
@@ -432,9 +428,6 @@ export default function MaterialPage() {
                       {item.satuan}
                     </span>
                   </td>
-                  <td className="p-5 text-right font-medium text-gray-700">
-                    {Number(item.harga || 0).toLocaleString("id-ID")}
-                  </td>
                   <td className="p-5">
                     <div className="flex justify-center items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button
@@ -457,7 +450,7 @@ export default function MaterialPage() {
               ))}
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center">
+                  <td colSpan="5" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400">
                       <div className="bg-gray-50 p-4 rounded-full mb-3">
                         <Search className="w-10 h-10 text-gray-300" />
@@ -499,19 +492,18 @@ export default function MaterialPage() {
                     <span className="text-xs">All</span>
                   </div>
                   {/* HEADER */}
-                  <div className="grid grid-cols-5 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600">
+                  <div className="grid grid-cols-4 gap-2 bg-gray-100 p-2 text-xs font-bold text-gray-600">
                     <div></div>
                     <div>Nama</div>
                     <div>Kategori</div>
                     <div>Satuan</div>
-                    <div className="text-right">Harga</div>
                   </div>
 
                   {/* DATA */}
                   {filteredMasterItems.map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-5 gap-2 p-2 border-t items-center text-sm hover:bg-gray-50"
+                      className="grid grid-cols-4 gap-2 p-2 border-t items-center text-sm hover:bg-gray-50"
                     >
                       {/* CHECKBOX */}
                       <input
@@ -539,10 +531,6 @@ export default function MaterialPage() {
                       {/* SATUAN */}
                       <div>{item.satuan}</div>
 
-                      {/* HARGA */}
-                      <div className="text-right font-medium">
-                        Rp {Number(item.harga || 0).toLocaleString("id-ID")}
-                      </div>
                     </div>
                   ))}
 
@@ -630,21 +618,6 @@ export default function MaterialPage() {
                         value={form.satuan}
                         onChange={handleChange}
                         className="w-full border border-gray-200 bg-gray-50 p-3 rounded focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-transparent outline-none transition-all text-sm font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Harga Material / Dasar</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-gray-400">Rp</span>
-                      <input
-                        type="number"
-                        name="harga"
-                        placeholder="0"
-                        value={form.harga}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 bg-gray-50 p-3 pl-12 rounded focus:ring-2 focus:ring-secondary/30 focus:border-secondary focus:bg-white outline-none transition-all text-sm font-medium"
                       />
                     </div>
                   </div>

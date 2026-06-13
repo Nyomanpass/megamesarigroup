@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
-import { Plus, Trash2, Edit2, ArrowLeft, AlertTriangle, X, Users, Blocks, Wrench, Calculator } from "lucide-react";
+import { Plus, Trash2, Edit2, ArrowLeft, AlertTriangle, X, Users, Blocks, Wrench } from "lucide-react";
 import api from "../api";
 import { m, AnimatePresence } from 'framer-motion';
 
@@ -10,14 +10,6 @@ const formatDecimal = (value, maximumFractionDigits = 8) => {
   return number.toLocaleString("id-ID", {
     minimumFractionDigits: 0,
     maximumFractionDigits
-  });
-};
-
-const formatMoney = (value) => {
-  const number = Number(value || 0);
-  return number.toLocaleString("id-ID", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
   });
 };
 
@@ -40,8 +32,7 @@ const ProjectAnalisaDetailPage = () => {
 
   const [form, setForm] = useState({
     item_id: "",
-    koefisien: "",
-    rumus_harga: ""
+    koefisien: ""
   });
 
   const [searchItemQuery, setSearchItemQuery] = useState("");
@@ -78,14 +69,13 @@ const ProjectAnalisaDetailPage = () => {
     if (item) {
       setForm({
         item_id: item.item_id || item.id, // Pastikan id item benar dari respons API
-        koefisien: item.koefisien,
-        rumus_harga: item.rumus_harga || ""
+        koefisien: item.koefisien
       });
       setEditId(item.detail_id || item.id); // Tergantung struktur ID dari backend untuk row analisa-detail
       setSearchItemQuery(item.nama || "");
       setIsEdit(true);
     } else {
-      setForm({ item_id: "", koefisien: "", rumus_harga: "" });
+      setForm({ item_id: "", koefisien: "" });
       setEditId(null);
       setSearchItemQuery("");
       setIsEdit(false);
@@ -110,18 +100,6 @@ const ProjectAnalisaDetailPage = () => {
     });
   };
 
-  const handleTogglePembulatan = async () => {
-    try {
-      await api.put(`/project-analisa/${analisaId}`, {
-        use_pembulatan: !data.use_pembulatan
-      });
-      fetchDetail();
-    } catch (err) {
-      console.error(err);
-      alert("Gagal mengubah pilihan pembulatan analisa.");
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.item_id || !form.koefisien) {
@@ -134,16 +112,14 @@ const ProjectAnalisaDetailPage = () => {
         // Update
         await api.put(`/project-analisa-detail/${editId}`, {
           item_id: form.item_id,
-          koefisien: form.koefisien,
-          rumus_harga: form.rumus_harga
+          koefisien: form.koefisien
         });
       } else {
         // Create
         await api.post("/project-analisa-detail", {
           project_analisa_id: analisaId,
           item_id: form.item_id,
-          koefisien: form.koefisien,
-          rumus_harga: form.rumus_harga
+          koefisien: form.koefisien
         });
       }
 
@@ -213,8 +189,6 @@ const ProjectAnalisaDetailPage = () => {
                 <th className="p-4 font-semibold">Uraian / Nama Item</th>
                 <th className="p-4 font-semibold text-center w-24">Satuan</th>
                 <th className="p-4 font-semibold text-center w-32">Koefisien</th>
-                <th className="p-4 font-semibold text-right w-40">Harga Satuan (Rp)</th>
-                <th className="p-4 font-semibold text-right w-48">Jumlah Harga (Rp)</th>
                 <th className="p-4 font-semibold text-center w-28">Aksi</th>
               </tr>
             </thead>
@@ -222,7 +196,7 @@ const ProjectAnalisaDetailPage = () => {
 
               {/* ================= TENAGA ================= */}
               <tr className="bg-gray-50/80 group">
-                <td colSpan="5" className="p-4">
+                <td colSpan="3" className="p-4">
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2 font-bold text-secondary text-base">
                       <Users className="w-5 h-5" />
@@ -244,16 +218,9 @@ const ProjectAnalisaDetailPage = () => {
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
                   <td className="p-4 pl-10 font-medium text-gray-800">
                     <div>{item.nama}</div>
-                    {item.rumus_harga && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
-                      </div>
-                    )}
                   </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
                   <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
-                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
-                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("TENAGA", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Tenaga"><Edit2 className="w-4 h-4" /></button>
@@ -264,19 +231,14 @@ const ProjectAnalisaDetailPage = () => {
               ))}
               {(!data.tenaga || data.tenaga.length === 0) && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian tenaga kerja.</td>
+                  <td colSpan="4" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian tenaga kerja.</td>
                 </tr>
               )}
-              <tr className="bg-blue-50/50">
-                <td colSpan="4" className="p-3 pr-4 text-right font-bold text-blue-900 border-t border-blue-100 uppercase text-xs">Jumlah Harga Tenaga (A)</td>
-                <td className="p-3 text-right font-bold text-blue-700 border-t border-blue-100 text-[15px]">{formatMoney(data.totalTenaga)}</td>
-                <td className="border-t border-blue-100"></td>
-              </tr>
 
 
               {/* ================= BAHAN ================= */}
               <tr className="bg-gray-50/80 group">
-                <td colSpan="5" className="p-4 border-t border-gray-200">
+                <td colSpan="3" className="p-4 border-t border-gray-200">
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2 font-bold text-secondary text-base">
                       <Blocks className="w-5 h-5" />
@@ -298,16 +260,9 @@ const ProjectAnalisaDetailPage = () => {
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
                   <td className="p-4 pl-10 font-medium text-gray-800">
                     <div>{item.nama}</div>
-                    {item.rumus_harga && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
-                      </div>
-                    )}
                   </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
                   <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
-                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
-                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("BAHAN", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Bahan"><Edit2 className="w-4 h-4" /></button>
@@ -318,19 +273,14 @@ const ProjectAnalisaDetailPage = () => {
               ))}
               {(!data.bahan || data.bahan.length === 0) && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian bahan material.</td>
+                  <td colSpan="4" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian bahan material.</td>
                 </tr>
               )}
-              <tr className="bg-green-50/50">
-                <td colSpan="4" className="p-3 pr-4 text-right font-bold text-green-900 border-t border-green-100 uppercase text-xs">Jumlah Harga Bahan (B)</td>
-                <td className="p-3 text-right font-bold text-green-700 border-t border-green-100 text-[15px]">{formatMoney(data.totalBahan)}</td>
-                <td className="border-t border-green-100"></td>
-              </tr>
 
 
               {/* ================= ALAT ================= */}
               <tr className="bg-gray-50/80 group">
-                <td colSpan="5" className="p-4 border-t border-gray-200">
+                <td colSpan="3" className="p-4 border-t border-gray-200">
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2 font-bold text-secondary text-base">
                       <Wrench className="w-5 h-5" />
@@ -352,16 +302,9 @@ const ProjectAnalisaDetailPage = () => {
                 <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
                   <td className="p-4 pl-10 font-medium text-gray-800">
                     <div>{item.nama}</div>
-                    {item.rumus_harga && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        Harga dasar {formatMoney(item.harga_dasar)} - Rumus {item.rumus_harga}
-                      </div>
-                    )}
                   </td>
                   <td className="p-4 text-center text-gray-500">{item.satuan}</td>
                   <td className="p-4 text-center font-bold text-gray-700">{formatDecimal(item.koefisien)}</td>
-                  <td className="p-4 text-right">{formatMoney(item.harga)}</td>
-                  <td className="p-4 text-right font-medium">{formatMoney(item.jumlah)}</td>
                   <td className="p-4 text-center">
                     <div className="flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openModal("ALAT", item)} className="p-2 text-info bg-info/5 hover:bg-info/15 hover:scale-105 rounded-lg transition-all border border-info/10" title="Edit Alat"><Edit2 className="w-4 h-4" /></button>
@@ -372,57 +315,9 @@ const ProjectAnalisaDetailPage = () => {
               ))}
               {(!data.alat || data.alat.length === 0) && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian peralatan.</td>
+                  <td colSpan="4" className="p-8 text-center text-gray-400 italic font-medium bg-white">Belum ada rincian peralatan.</td>
                 </tr>
               )}
-              <tr className="bg-yellow-50/50">
-                <td colSpan="4" className="p-3 pr-4 text-right font-bold text-yellow-900 border-t border-yellow-200 uppercase text-xs">Jumlah Harga Alat (C)</td>
-                <td className="p-3 text-right font-bold text-yellow-700 border-t border-yellow-200 text-[15px]">{formatMoney(data.totalAlat)}</td>
-                <td className="border-t border-yellow-200"></td>
-              </tr>
-
-
-              {/* ================= SUMMARY SECTION ================= */}
-              <tr className="bg-white font-bold border-t-2 border-gray-300">
-                <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Jumlah Harga Tenaga, Bahan dan Alat (A + B + C)</td>
-                <td className="p-4 text-right text-[15px] text-gray-800">{formatMoney(data.total)}</td>
-                <td></td>
-              </tr>
-              <tr className="bg-white font-bold border-t border-gray-200">
-                <td colSpan="4" className="p-4 text-right uppercase text-xs text-gray-700">Overhead & Profit</td>
-                <td className="p-4 text-right text-[15px] text-gray-800">{formatMoney(data.overhead)}</td>
-                {/* <td></td> */}
-              </tr>
-              <tr className="bg-secondary/70 text-white font-bold ">
-                <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">F. Harga Satuan Pekerjaan (D + E)</td>
-                <td className="p-4 text-right text-lg">{formatMoney(data.grandTotal)}</td>
-                <td></td>
-              </tr>
-              <tr className="bg-secondary/70 text-white font-bold">
-                <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">Pembulatan</td>
-                <td className="p-4 text-right text-lg">{formatMoney(data.pembulatan)}</td>
-                <td></td>
-              </tr>
-              <tr className="bg-gray-900 text-white font-bold">
-                <td colSpan="4" className="p-4 text-right uppercase tracking-wider text-sm">
-                  Harga Satuan Dipakai BOQ
-                </td>
-                <td className="p-4 text-right text-lg">
-                  {formatMoney(data.harga_satuan_pekerjaan)}
-                  <div className="text-[11px] font-semibold text-gray-300">
-                    {data.use_pembulatan ? "Menggunakan pembulatan" : "Menggunakan nilai asli D + E"}
-                  </div>
-                </td>
-                <td className="p-4 text-center">
-                  <button
-                    type="button"
-                    onClick={handleTogglePembulatan}
-                    className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/20"
-                  >
-                    {data.use_pembulatan ? "Pakai Asli" : "Pakai Pembulatan"}
-                  </button>
-                </td>
-              </tr>
 
             </tbody>
           </table>
@@ -496,7 +391,6 @@ const ProjectAnalisaDetailPage = () => {
                             <div className="font-bold text-gray-800 text-sm">{item.nama}</div>
                             <div className="text-xs text-gray-500 mt-1 flex gap-2">
                               <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">Satuan: {item.satuan}</span>
-                              <span className="text-gray-400 font-medium">Rp {formatMoney(item.harga)}</span>
                             </div>
                           </div>
                         ))}
@@ -535,18 +429,6 @@ const ProjectAnalisaDetailPage = () => {
                       value={form.koefisien}
                       onChange={handleChange}
                       className="w-full border border-gray-200  p-3.5 rounded focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Rumus Harga Satuan</label>
-                    <input
-                      type="text"
-                      name="rumus_harga"
-                      placeholder="Kosong = harga asli, contoh: /2 atau 300/40"
-                      value={form.rumus_harga}
-                      onChange={handleChange}
-                      className="w-full border border-gray-200 p-3.5 rounded focus:ring-2 focus:ring-secondary/30 focus:border-secondary bg-white outline-none transition-all font-medium"
                     />
                   </div>
 

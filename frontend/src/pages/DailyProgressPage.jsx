@@ -278,44 +278,8 @@ export default function DailyProgressPage() {
 
 
 
-  const loadPreviewAnalisa = async (boq_id, volume) => {
-    try {
-      if (!boq_id) return;
-
-      const boq = boqById.get(Number(boq_id));
-      if (!boq || !boq.analisa_id) return;
-
-      const res = await api.get(`/project-analisa-detail/${boq.analisa_id}`);
-      const analisa = res.data;
-
-      const allItems = [
-        ...(analisa.tenaga || []),
-        ...(analisa.bahan || []),
-        ...(analisa.alat || [])
-      ];
-
-      const result = allItems.map(item => {
-        let rawKoef = item.koefisien;
-        if (!rawKoef) rawKoef = item.koef;
-        const koef = parseFloat(String(rawKoef).replace(",", ".")) || 0;
-        const volNum = parseFloat(volume) || 0;
-
-        const hasil = koef * volNum;
-
-        return {
-          nama: item.nama,
-          tipe: item.tipe,
-          satuan: item.satuan,
-          koef,
-          hasil: hasil.toFixed(3)
-        };
-      });
-
-      setPreviewItems(result);
-
-    } catch (err) {
-      console.log("Preview error", err);
-    }
+  const loadPreviewAnalisa = async () => {
+    setPreviewItems([]);
   };
 
 

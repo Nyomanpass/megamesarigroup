@@ -31,12 +31,6 @@ export const ProjectAnalisaDetail = sequelize.define("ProjectAnalisaDetail", {
     allowNull: false 
   },
 
-  rumus_harga: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-
-
 }, {
   tableName: "project_analisa_detail",
   timestamps: true
